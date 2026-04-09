@@ -3,7 +3,8 @@
     "allow": [
       "Bash(go vet:*)",
       "Bash(go test:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(go mod:*)"
     ]
   }
 }
