@@ -25,26 +25,32 @@ export default function ProfilePage() {
         )}
 
         <div className="mb-6">
-          <label className="block text-sm font-medium text-slate-200 mb-2">
+          <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-2">
             Email
           </label>
           <input
+            id="email"
+            name="email"
             type="email"
             value={user?.email || ''}
             disabled
+            autoComplete="email"
             className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-400 cursor-not-allowed"
           />
           <p className="text-xs text-slate-500 mt-1">Email cannot be changed here</p>
         </div>
 
         <div className="mb-6">
-          <label className="block text-sm font-medium text-slate-200 mb-2">
+          <label htmlFor="display-name" className="block text-sm font-medium text-slate-200 mb-2">
             Display Name
           </label>
           <input
+            id="display-name"
+            name="display-name"
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
+            autoComplete="name"
             className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
             placeholder="Your name"
           />

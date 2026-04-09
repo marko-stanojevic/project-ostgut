@@ -16,8 +16,10 @@ export default function SettingsPage() {
           <h2 className="text-xl font-bold text-white mb-4">Notifications</h2>
 
           <div className="space-y-4">
-            <label className="flex items-center cursor-pointer">
+            <label htmlFor="email-notifications" className="flex items-center cursor-pointer">
               <input
+                id="email-notifications"
+                name="email-notifications"
                 type="checkbox"
                 checked={emailNotifications}
                 onChange={(e) => setEmailNotifications(e.target.checked)}
@@ -26,8 +28,10 @@ export default function SettingsPage() {
               <span className="ml-3 text-slate-300">Email notifications</span>
             </label>
 
-            <label className="flex items-center cursor-pointer">
+            <label htmlFor="api-access-notifications" className="flex items-center cursor-pointer">
               <input
+                id="api-access-notifications"
+                name="api-access-notifications"
                 type="checkbox"
                 checked={apiAccess}
                 onChange={(e) => setApiAccess(e.target.checked)}
@@ -44,20 +48,20 @@ export default function SettingsPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
+              <label htmlFor="theme" className="block text-sm font-medium text-slate-200 mb-2">
                 Theme
               </label>
-              <select className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
+              <select id="theme" name="theme" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
                 <option>Dark (Default)</option>
                 <option>Light</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
+              <label htmlFor="language" className="block text-sm font-medium text-slate-200 mb-2">
                 Language
               </label>
-              <select className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
+              <select id="language" name="language" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
                 <option>English</option>
                 <option>Spanish</option>
                 <option>German</option>
