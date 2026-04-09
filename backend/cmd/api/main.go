@@ -11,10 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/config"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/db"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/handler"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
 func main() {
@@ -26,33 +29,48 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Connect to Postgres
+	pool, err := db.New(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+	logger.Info("database connected")
+
+	userStore := store.NewUserStore(pool)
+	h := handler.New(userStore, logger)
+
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	router := gin.New()
 	router.Use(gin.Recovery())
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     cfg.AllowedOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
 
-	// Public routes (no auth required)
+	// Public routes
 	router.GET("/health", handler.Health)
 	router.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
+	router.POST("/auth/login", h.Login)
+	router.POST("/auth/register", h.Register)
+	router.POST("/auth/forgot-password", h.ForgotPassword)
+	router.POST("/auth/reset-password", h.ResetPassword)
 	router.POST("/auth/verify", handler.AuthVerify)
 
-	// Protected routes (auth required)
-	// For now, auth middleware uses a placeholder JWT secret
-	// In production, fetch Supabase JWKS for RS256 verification
-	jwtSecret := os.Getenv("SUPABASE_ANON_KEY")
-	if jwtSecret == "" {
-		jwtSecret = "placeholder-secret" // Development only
-	}
-
+	// Protected routes (JWT required)
 	protected := router.Group("/")
-	protected.Use(middleware.AuthMiddleware(logger, jwtSecret))
+	protected.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
 	{
-		protected.GET("/users/me", handler.GetProfile)
-		protected.PUT("/users/me", handler.UpdateProfile)
+		protected.GET("/users/me", h.GetProfile)
+		protected.PUT("/users/me", h.UpdateProfile)
 	}
 
 	srv := &http.Server{
@@ -60,7 +78,6 @@ func main() {
 		Handler: router,
 	}
 
-	// Graceful shutdown
 	go func() {
 		logger.Info("server starting", "port", cfg.Port, "env", cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

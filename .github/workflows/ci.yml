@@ -99,9 +99,8 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_API_URL: http://localhost:8080
+          AUTH_SECRET: ci-build-secret-not-for-production
 
   # ──────────────────────────────────────────────────────────────────────────
   # Frontend – Docker image build (no push, validates multi-stage Dockerfile)
@@ -125,9 +124,8 @@ jobs:
           push: false
           tags: frontend:${{ github.sha }}
           build-args: |
-            NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy-anon-key-for-ci-build
             NEXT_PUBLIC_API_URL=http://localhost:8080
+            AUTH_SECRET=ci-build-secret-not-for-production
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

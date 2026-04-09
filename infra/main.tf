@@ -134,37 +134,32 @@ resource "azurerm_container_app" "backend" {
         port      = 8080
       }
 
-      # Environment variables — Supabase credentials are injected as secrets.
       env {
         name  = "ENV"
         value = var.environment
       }
       env {
-        name        = "SUPABASE_URL"
-        secret_name = "supabase-url"
+        name  = "ALLOWED_ORIGINS"
+        value = var.allowed_origins
       }
       env {
-        name        = "SUPABASE_ANON_KEY"
-        secret_name = "supabase-anon-key"
+        name        = "DATABASE_URL"
+        secret_name = "database-url"
       }
       env {
-        name        = "SUPABASE_SERVICE_KEY"
-        secret_name = "supabase-service-key"
+        name        = "JWT_SECRET"
+        secret_name = "jwt-secret"
       }
     }
   }
 
   secret {
-    name  = "supabase-url"
-    value = var.supabase_url
+    name  = "database-url"
+    value = var.database_url
   }
   secret {
-    name  = "supabase-anon-key"
-    value = var.supabase_anon_key
-  }
-  secret {
-    name  = "supabase-service-key"
-    value = var.supabase_service_key
+    name  = "jwt-secret"
+    value = var.jwt_secret
   }
 
   ingress {

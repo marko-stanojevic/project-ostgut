@@ -167,6 +167,70 @@
       }
     },
     {
+      "label": "DB: Start",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "up", "-d", "--wait"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "DB: Stop",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "down"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "DB: Reset",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "down", "-v"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "DB: psql",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "exec", "postgres", "psql", "-U", "postgres", "-d", "ostgut"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "new"
+      }
+    },
+    {
       "label": "Setup: Frontend Dependencies",
       "type": "shell",
       "command": "sh",
@@ -212,7 +276,8 @@
     },
     {
       "label": "All: Dev (Frontend + Backend)",
-      "dependsOn": ["Frontend: Dev Server", "Backend: Run"],
+      "dependsOn": ["DB: Start", "Frontend: Dev Server", "Backend: Run"],
+      "dependsOrder": "sequence",
       "problemMatcher": [],
       "presentation": {
         "echo": true,

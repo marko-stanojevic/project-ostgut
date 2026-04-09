@@ -71,7 +71,7 @@ export default function AccountPage() {
                 Created
               </label>
               <p className="text-white">
-                {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+                {'—'}
               </p>
             </div>
           </div>

@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Config holds all runtime configuration for the service.
@@ -11,14 +12,16 @@ type Config struct {
 	// Port is the TCP port the HTTP server listens on.
 	Port string
 
-	// SupabaseURL is the base REST URL for the Supabase project.
-	SupabaseURL string
+	// DatabaseURL is the PostgreSQL connection string.
+	DatabaseURL string
 
-	// SupabaseAnonKey is the anonymous / public API key used for Supabase.
-	SupabaseAnonKey string
+	// JWTSecret is the secret used to validate Auth.js HS256 tokens.
+	// Must match AUTH_SECRET in the frontend.
+	JWTSecret string
 
-	// SupabaseServiceKey is the privileged service-role key (keep secret).
-	SupabaseServiceKey string
+	// AllowedOrigins is the list of origins permitted by the CORS middleware.
+	// Comma-separated, e.g. "http://localhost:3000,https://app.example.com"
+	AllowedOrigins []string
 
 	// Env is the deployment environment (local | staging | production).
 	Env string
@@ -28,22 +31,28 @@ type Config struct {
 // required values are absent.
 func Load() (*Config, error) {
 	port := getEnv("PORT", "8080")
-	supabaseURL := os.Getenv("SUPABASE_URL")
-	if supabaseURL == "" {
-		return nil, fmt.Errorf("SUPABASE_URL must be set")
+
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		return nil, fmt.Errorf("DATABASE_URL must be set")
 	}
 
-	supabaseAnonKey := os.Getenv("SUPABASE_ANON_KEY")
-	if supabaseAnonKey == "" {
-		return nil, fmt.Errorf("SUPABASE_ANON_KEY must be set")
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		return nil, fmt.Errorf("JWT_SECRET must be set")
 	}
+
+	allowedOrigins := strings.Split(
+		getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
+		",",
+	)
 
 	return &Config{
-		Port:               port,
-		SupabaseURL:        supabaseURL,
-		SupabaseAnonKey:    supabaseAnonKey,
-		SupabaseServiceKey: os.Getenv("SUPABASE_SERVICE_KEY"),
-		Env:                getEnv("ENV", "local"),
+		Port:           port,
+		DatabaseURL:    databaseURL,
+		JWTSecret:      jwtSecret,
+		AllowedOrigins: allowedOrigins,
+		Env:            getEnv("ENV", "local"),
 	}, nil
 }
 

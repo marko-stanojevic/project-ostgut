@@ -4,11 +4,11 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { supabase } from '@/lib/supabase'
+import { signIn } from 'next-auth/react'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { signIn } = useAuth()
+  const { signIn: credentialsSignIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      await signIn(email, password)
+      await credentialsSignIn(email, password)
       router.push('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -31,12 +31,7 @@ export default function LoginPage() {
 
   const handleOAuthLogin = async (provider: 'github' | 'google') => {
     try {
-      await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
+      await signIn(provider, { callbackUrl: '/dashboard' })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'OAuth login failed')
     }

@@ -1,24 +1,31 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const token = searchParams.get('token')
+
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [tokenValid, setTokenValid] = useState(true)
 
-  useEffect(() => {
-    const hash = window.location.hash
-    if (!hash) {
-      setTokenValid(false)
-      setError('Invalid or expired reset link')
-    }
-  }, [])
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center px-4">
+        <div className="bg-slate-700 rounded-lg border border-slate-600 p-8 w-full max-w-md text-center">
+          <div className="text-4xl mb-4">✗</div>
+          <h1 className="text-3xl font-bold text-white mb-4">Invalid Link</h1>
+          <p className="text-slate-300 mb-6">
+            This password reset link is invalid or has expired. Please request a new one.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,28 +44,22 @@ export default function ResetPasswordPage() {
     setLoading(true)
 
     try {
-      const { error } = await supabase.auth.updateUser({ password })
-      if (error) throw error
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+      const res = await fetch(`${apiUrl}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to reset password')
+      }
       router.push('/auth/login?message=Password updated successfully')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset password')
     } finally {
       setLoading(false)
     }
-  }
-
-  if (!tokenValid) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center px-4">
-        <div className="bg-slate-700 rounded-lg border border-slate-600 p-8 w-full max-w-md text-center">
-          <div className="text-4xl mb-4">✗</div>
-          <h1 className="text-3xl font-bold text-white mb-4">Invalid Link</h1>
-          <p className="text-slate-300 mb-6">
-            This password reset link is invalid or has expired. Please request a new one.
-          </p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -112,5 +113,13 @@ export default function ResetPasswordPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense>
+      <ResetPasswordForm />
+    </Suspense>
   )
 }

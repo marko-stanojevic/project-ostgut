@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { getSession } from 'next-auth/react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -8,16 +8,14 @@ async function apiRequest<T = any>(
 ): Promise<T> {
   const url = `${API_URL}${endpoint}`
 
-  // Get current session to extract JWT token
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
+  const session = await getSession()
+  const token = session?.accessToken
 
   const headers = new Headers({
     'Content-Type': 'application/json',
     ...options?.headers,
   })
 
-  // Add JWT token to Authorization header if available
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
@@ -57,4 +55,3 @@ export const apiClient = {
       }),
   },
 }
-
