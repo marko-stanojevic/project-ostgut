@@ -116,7 +116,7 @@ resource "azurerm_container_app" "backend" {
 
     container {
       name   = "backend"
-      image  = "${azurerm_container_registry.main.login_server}/backend:${var.image_tag}"
+      image  = "${azurerm_container_registry.main.login_server}/backend:${var.backend_image_tag}"
       cpu    = 0.5
       memory = "1Gi"
 

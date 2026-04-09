@@ -43,11 +43,17 @@ variable "project" {
 }
 
 # ──────────────────────────────────────────────
-# Container image
+# Container images
 # ──────────────────────────────────────────────
-variable "image_tag" {
+variable "backend_image_tag" {
   type        = string
-  description = "Docker image tag to deploy (usually the Git SHA or semver tag)."
+  description = "Docker image tag for backend container (usually the Git SHA or semver tag)."
+  default     = "latest"
+}
+
+variable "frontend_image_tag" {
+  type        = string
+  description = "Docker image tag for frontend container (usually the Git SHA or semver tag)."
   default     = "latest"
 }
 
