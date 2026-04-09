@@ -20,8 +20,7 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
+# Go workspace sum (auto-generated, commit go.work but optionally ignore go.work.sum)
 go.work.sum
 
 # env file
@@ -30,3 +29,11 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# OpenTofu / Terraform state and plan files (never commit these)
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+.terraform/
+.terraform.lock.hcl
