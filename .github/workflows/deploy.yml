@@ -104,9 +104,8 @@ jobs:
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-            NEXT_PUBLIC_API_URL=http://localhost:8080
+            NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
+            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -162,9 +161,9 @@ jobs:
             -var="environment=${{ github.event.inputs.environment || 'staging' }}" \
             -var="backend_image_tag=${{ needs.build-push.outputs.backend_image_tag }}" \
             -var="frontend_image_tag=${{ needs.build-push.outputs.frontend_image_tag }}" \
-            -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
-            -var="supabase_anon_key=${{ secrets.SUPABASE_ANON_KEY }}" \
-            -var="supabase_service_key=${{ secrets.SUPABASE_SERVICE_KEY }}"
+            -var="database_url=${{ secrets.DATABASE_URL }}" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}"
 
       - name: tofu apply
         run: tofu apply -auto-approve tfplan

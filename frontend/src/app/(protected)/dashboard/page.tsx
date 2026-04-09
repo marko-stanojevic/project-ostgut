@@ -23,7 +23,7 @@ export default function DashboardPage() {
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
           <p className="text-slate-400 text-sm mb-2">Member Since</p>
           <p className="text-lg font-semibold text-white">
-            {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+            {'—'}
           </p>
         </div>
       </div>

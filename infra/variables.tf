@@ -58,22 +58,21 @@ variable "frontend_image_tag" {
 }
 
 # ──────────────────────────────────────────────
-# Supabase (external managed service)
+# Auth / database
 # ──────────────────────────────────────────────
-variable "supabase_url" {
+variable "database_url" {
   type        = string
-  description = "Supabase project REST URL."
+  description = "PostgreSQL connection string for the backend."
   sensitive   = true
 }
 
-variable "supabase_anon_key" {
+variable "jwt_secret" {
   type        = string
-  description = "Supabase anonymous / public API key."
+  description = "Shared secret for Auth.js HS256 tokens (must match AUTH_SECRET in frontend)."
   sensitive   = true
 }
 
-variable "supabase_service_key" {
+variable "allowed_origins" {
   type        = string
-  description = "Supabase service-role (privileged) key."
-  sensitive   = true
+  description = "Comma-separated list of allowed CORS origins, e.g. https://app.example.com"
 }

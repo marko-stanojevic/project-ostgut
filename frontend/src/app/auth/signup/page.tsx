@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { supabase } from '@/lib/supabase'
+import { signIn } from 'next-auth/react'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -47,12 +47,7 @@ export default function SignupPage() {
 
   const handleOAuthSignup = async (provider: 'github' | 'google') => {
     try {
-      await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
+      await signIn(provider, { callbackUrl: '/dashboard' })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'OAuth signup failed')
     }
@@ -63,11 +58,10 @@ export default function SignupPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center px-4">
         <div className="bg-slate-700 rounded-lg border border-slate-600 p-8 w-full max-w-md text-center">
           <div className="text-4xl mb-4">✓</div>
-          <h1 className="text-3xl font-bold text-white mb-4">Check your email</h1>
+          <h1 className="text-3xl font-bold text-white mb-4">Account created!</h1>
           <p className="text-slate-300 mb-4">
-            We&apos;ve sent you a confirmation link. Please verify your email to complete signup.
+            Your account has been created. Redirecting to login...
           </p>
-          <p className="text-slate-400 text-sm">Redirecting to login...</p>
         </div>
       </div>
     )

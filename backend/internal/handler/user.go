@@ -1,57 +1,63 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
-// UserProfile represents user profile information
-type UserProfile struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-}
-
-// GetProfile returns the authenticated user's profile
+// GetProfile returns the authenticated user's profile.
 // GET /users/me
-func GetProfile(c *gin.Context) {
+func (h *Handler) GetProfile(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	email := middleware.GetUserEmail(c)
-
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	profile := UserProfile{
-		ID:    userID,
-		Email: email,
+	u, err := h.store.GetByID(c.Request.Context(), userID)
+	if errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	if err != nil {
+		h.log.Error("get profile", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
 	}
 
-	c.JSON(http.StatusOK, profile)
+	c.JSON(http.StatusOK, gin.H{
+		"id":    u.ID,
+		"email": u.Email,
+		"name":  u.Name,
+	})
 }
 
-// UpdateProfile updates the authenticated user's profile
+// UpdateProfile updates the authenticated user's display name.
 // PUT /users/me
-func UpdateProfile(c *gin.Context) {
+func (h *Handler) UpdateProfile(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	var req map[string]interface{}
+	var req struct {
+		Name string `json:"name" binding:"required"`
+	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
-	// In a real implementation, you would validate and save the updates
-	// For now, we just return success
-	c.JSON(http.StatusOK, gin.H{
-		"message": "profile updated successfully",
-		"user_id": userID,
-	})
+	if err := h.store.UpdateName(c.Request.Context(), userID, req.Name); err != nil {
+		h.log.Error("update profile", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "profile updated"})
 }
