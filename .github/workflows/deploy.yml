@@ -45,6 +45,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v3
+        with:
+          versionSpec: '6.x'
+
+      - name: Determine version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v3
+        with:
+          useConfigFile: true
 
       # ── OIDC login to Azure ──────────────────────────────────────────────
       # No client secret is stored; GitHub exchanges the OIDC JWT for a
@@ -69,7 +82,7 @@ jobs:
         with:
           images: ${{ steps.login-acr.outputs.registry }}/backend
           tags: |
-            type=sha,format=short
+            type=raw,value=${{ steps.gitversion.outputs.semVer }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Docker metadata (frontend)
@@ -78,7 +91,7 @@ jobs:
         with:
           images: ${{ steps.login-acr.outputs.registry }}/frontend
           tags: |
-            type=sha,format=short
+            type=raw,value=${{ steps.gitversion.outputs.semVer }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Set up Docker Buildx
