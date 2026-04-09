@@ -2,7 +2,10 @@ module github.com/marko-stanojevic/project-ostgut/backend
 
 go 1.25.0
 
-require github.com/gin-gonic/gin v1.12.0
+require (
+	github.com/gin-gonic/gin v1.12.0
+	github.com/golang-jwt/jwt/v5 v5.2.0
+)
 
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect

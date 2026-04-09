@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/config"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/handler"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
 )
 
 func main() {
@@ -32,11 +33,27 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
-	// Routes
+	// Public routes (no auth required)
 	router.GET("/health", handler.Health)
 	router.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
+	router.POST("/auth/verify", handler.AuthVerify)
+
+	// Protected routes (auth required)
+	// For now, auth middleware uses a placeholder JWT secret
+	// In production, fetch Supabase JWKS for RS256 verification
+	jwtSecret := os.Getenv("SUPABASE_ANON_KEY")
+	if jwtSecret == "" {
+		jwtSecret = "placeholder-secret" // Development only
+	}
+
+	protected := router.Group("/")
+	protected.Use(middleware.AuthMiddleware(logger, jwtSecret))
+	{
+		protected.GET("/users/me", handler.GetProfile)
+		protected.PUT("/users/me", handler.UpdateProfile)
+	}
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
