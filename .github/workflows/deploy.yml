@@ -103,6 +103,10 @@ jobs:
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_API_URL=http://localhost:8080
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -121,9 +125,9 @@ jobs:
 
     env:
       # Pass OIDC vars so the azurerm provider can request its own token.
-      ARM_USE_OIDC:       "true"
-      ARM_CLIENT_ID:      ${{ secrets.AZURE_CLIENT_ID }}
-      ARM_TENANT_ID:      ${{ secrets.AZURE_TENANT_ID }}
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     steps:

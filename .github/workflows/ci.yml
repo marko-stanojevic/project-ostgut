@@ -124,6 +124,10 @@ jobs:
           file: frontend/Dockerfile
           push: false
           tags: frontend:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy-anon-key-for-ci-build
+            NEXT_PUBLIC_API_URL=http://localhost:8080
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
