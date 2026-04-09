@@ -1,6 +1,6 @@
 module github.com/marko-stanojevic/project-ostgut/backend
 
-go 1.25.0
+go 1.25.9
 
 require (
 	github.com/gin-gonic/gin v1.12.0
