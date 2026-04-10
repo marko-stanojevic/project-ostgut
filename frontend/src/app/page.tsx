@@ -45,7 +45,7 @@ export default function Home() {
           Build your SaaS faster
         </h1>
         <p className="text-xl text-slate-300 mb-12 max-w-2xl mx-auto">
-          A complete full-stack starter with Next.js frontend, Go backend, Supabase auth, and enterprise-ready infrastructure.
+          A complete full-stack starter with Next.js frontend, Go backend, Auth.js authentication, and enterprise-ready infrastructure.
         </p>
 
         {!user && (
@@ -81,7 +81,7 @@ export default function Home() {
             <div className="text-4xl mb-4">🔐</div>
             <h3 className="text-xl font-semibold text-white mb-2">Secure Auth</h3>
             <p className="text-slate-300">
-              Supabase authentication with email, password, and OAuth providers built-in.
+              Auth.js authentication with email, password, and OAuth providers (GitHub, Google) built-in.
             </p>
           </div>
 

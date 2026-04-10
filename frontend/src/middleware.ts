@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 
 export default auth(function middleware(req) {
-  const isAuthenticated = !!req.auth
+  const isAuthenticated = !!req.auth?.user?.email
   const { pathname } = req.nextUrl
 
   const protectedRoutes = ['/dashboard', '/profile', '/settings', '/account']
