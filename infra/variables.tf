@@ -60,9 +60,15 @@ variable "frontend_image_tag" {
 # ──────────────────────────────────────────────
 # Auth / database
 # ──────────────────────────────────────────────
-variable "database_url" {
+variable "db_admin_username" {
   type        = string
-  description = "PostgreSQL connection string for the backend."
+  description = "Administrator login name for the PostgreSQL Flexible Server."
+  default     = "ostgutadmin"
+}
+
+variable "db_admin_password" {
+  type        = string
+  description = "Administrator password for the PostgreSQL Flexible Server."
   sensitive   = true
 }
 

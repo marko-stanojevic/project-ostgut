@@ -7,6 +7,9 @@ locals {
     environment = var.environment
     managed_by  = "opentofu"
   }
+
+  # Constructed after the server is created so no secret is stored in variables.
+  database_url = "postgres://${var.db_admin_username}:${var.db_admin_password}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${var.project}?sslmode=require"
 }
 
 # ──────────────────────────────────────────────
@@ -16,6 +19,101 @@ resource "azurerm_resource_group" "main" {
   name     = "rg-${local.prefix}"
   location = var.location
   tags     = local.common_tags
+}
+
+# ──────────────────────────────────────────────
+# Virtual Network + Subnets
+# ──────────────────────────────────────────────
+resource "azurerm_virtual_network" "main" {
+  name                = "vnet-${local.prefix}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  address_space       = ["10.0.0.0/16"]
+  tags                = local.common_tags
+}
+
+# Container Apps Environment requires a dedicated /23 subnet minimum.
+resource "azurerm_subnet" "container_apps" {
+  name                 = "snet-container-apps"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.0.0.0/23"]
+
+  delegation {
+    name = "aca-delegation"
+    service_delegation {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+
+# PostgreSQL Flexible Server requires its own delegated subnet.
+resource "azurerm_subnet" "postgresql" {
+  name                 = "snet-postgresql"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.0.2.0/24"]
+
+  delegation {
+    name = "postgresql-delegation"
+    service_delegation {
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
+
+# ──────────────────────────────────────────────
+# Private DNS Zone for PostgreSQL
+# Required for VNet-integrated Flexible Server to be resolvable.
+# ──────────────────────────────────────────────
+resource "azurerm_private_dns_zone" "postgresql" {
+  name                = "psql-${local.prefix}.private.postgres.database.azure.com"
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = local.common_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "postgresql" {
+  name                  = "vnet-link-postgresql"
+  resource_group_name   = azurerm_resource_group.main.name
+  private_dns_zone_name = azurerm_private_dns_zone.postgresql.name
+  virtual_network_id    = azurerm_virtual_network.main.id
+  tags                  = local.common_tags
+}
+
+# ──────────────────────────────────────────────
+# PostgreSQL Flexible Server
+# ──────────────────────────────────────────────
+resource "azurerm_postgresql_flexible_server" "main" {
+  name                   = "psql-${local.prefix}"
+  resource_group_name    = azurerm_resource_group.main.name
+  location               = azurerm_resource_group.main.location
+  version                = "16"
+  administrator_login    = var.db_admin_username
+  administrator_password = var.db_admin_password
+
+  # Private access — no public endpoint, traffic stays inside the VNet.
+  delegated_subnet_id = azurerm_subnet.postgresql.id
+  private_dns_zone_id = azurerm_private_dns_zone.postgresql.id
+
+  # B_Standard_B1ms: 1 vCore burstable, 2 GB RAM — cheapest tier, good for staging.
+  sku_name   = "B_Standard_B1ms"
+  storage_mb = 32768 # 32 GB
+
+  backup_retention_days        = 7
+  geo_redundant_backup_enabled = false
+
+  tags = local.common_tags
+
+  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgresql]
+}
+
+resource "azurerm_postgresql_flexible_server_database" "main" {
+  name      = var.project
+  server_id = azurerm_postgresql_flexible_server.main.id
+  collation = "en_US.utf8"
+  charset   = "UTF8"
 }
 
 # ──────────────────────────────────────────────
@@ -56,7 +154,14 @@ resource "azurerm_container_app_environment" "main" {
   resource_group_name        = azurerm_resource_group.main.name
   location                   = azurerm_resource_group.main.location
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
-  tags                       = local.common_tags
+
+  # VNet injection — Container Apps share a subnet with the database VNet,
+  # so egress to PostgreSQL never leaves Azure's private network.
+  # internal_load_balancer_enabled = false (default) keeps external ingress
+  # on Container Apps working for the public API endpoint.
+  infrastructure_subnet_id = azurerm_subnet.container_apps.id
+
+  tags = local.common_tags
 }
 
 # ──────────────────────────────────────────────
@@ -155,7 +260,7 @@ resource "azurerm_container_app" "backend" {
 
   secret {
     name  = "database-url"
-    value = var.database_url
+    value = local.database_url
   }
   secret {
     name  = "jwt-secret"
