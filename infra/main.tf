@@ -98,6 +98,10 @@ resource "azurerm_postgresql_flexible_server" "main" {
   delegated_subnet_id           = azurerm_subnet.postgresql.id
   private_dns_zone_id           = azurerm_private_dns_zone.postgresql.id
 
+  # Pin to zone 1 — must be explicit to prevent OpenTofu from trying to
+  # change the auto-assigned zone on every apply, which Azure rejects.
+  zone = "1"
+
   # B_Standard_B1ms: 1 vCore burstable, 2 GB RAM — cheapest tier, good for staging.
   sku_name   = "B_Standard_B1ms"
   storage_mb = 32768 # 32 GB
