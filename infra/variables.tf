@@ -82,3 +82,22 @@ variable "allowed_origins" {
   type        = string
   description = "Comma-separated list of allowed CORS origins, e.g. https://app.example.com"
 }
+
+# ──────────────────────────────────────────────
+# Frontend
+# ──────────────────────────────────────────────
+variable "api_url" {
+  type        = string
+  description = "Server-side URL the frontend uses to call the backend (Auth.js credentials provider)."
+}
+
+variable "auth_github_id" {
+  type        = string
+  description = "GitHub OAuth App client ID for Auth.js."
+}
+
+variable "auth_github_secret" {
+  type        = string
+  description = "GitHub OAuth App client secret for Auth.js."
+  sensitive   = true
+}

@@ -92,6 +92,9 @@ jobs:
             -var="db_admin_password=${{ secrets.DB_ADMIN_PASSWORD }}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
             -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}" \
+            -var="api_url=${{ vars.API_URL }}" \
+            -var="auth_github_id=${{ secrets.AUTH_GITHUB_ID }}" \
+            -var="auth_github_secret=${{ secrets.AUTH_GITHUB_SECRET }}" \
             -target=azurerm_resource_group.main \
             -target=azurerm_virtual_network.main \
             -target=azurerm_subnet.container_apps \
@@ -104,7 +107,9 @@ jobs:
             -target=azurerm_log_analytics_workspace.main \
             -target=azurerm_container_app_environment.main \
             -target=azurerm_user_assigned_identity.backend \
-            -target=azurerm_role_assignment.acr_pull
+            -target=azurerm_role_assignment.acr_pull \
+            -target=azurerm_user_assigned_identity.frontend \
+            -target=azurerm_role_assignment.acr_pull_frontend
 
       - name: Read tofu outputs
         id: tofu-output
@@ -252,5 +257,8 @@ jobs:
             -var="db_admin_password=${{ secrets.DB_ADMIN_PASSWORD }}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
             -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}" \
+            -var="api_url=${{ vars.API_URL }}" \
+            -var="auth_github_id=${{ secrets.AUTH_GITHUB_ID }}" \
+            -var="auth_github_secret=${{ secrets.AUTH_GITHUB_SECRET }}" \
             -var="backend_image_tag=${{ needs.build-push.outputs.backend_image_tag }}" \
             -var="frontend_image_tag=${{ needs.build-push.outputs.frontend_image_tag }}"

@@ -297,3 +297,105 @@ resource "azurerm_container_app" "backend" {
 
   depends_on = [azurerm_role_assignment.acr_pull]
 }
+
+# ──────────────────────────────────────────────
+# Frontend Container App
+# ──────────────────────────────────────────────
+resource "azurerm_user_assigned_identity" "frontend" {
+  name                = "id-${local.prefix}-frontend"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  tags                = local.common_tags
+}
+
+resource "azurerm_role_assignment" "acr_pull_frontend" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.frontend.principal_id
+}
+
+resource "azurerm_container_app" "frontend" {
+  name                         = "ca-${local.prefix}-frontend"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
+  registry {
+    server   = azurerm_container_registry.main.login_server
+    identity = azurerm_user_assigned_identity.frontend.id
+  }
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.frontend.id]
+  }
+
+  template {
+    min_replicas = 0
+    max_replicas = 10
+
+    custom_scale_rule {
+      name             = "http-scaling"
+      custom_rule_type = "http"
+      metadata = {
+        concurrentRequests = "100"
+      }
+    }
+
+    container {
+      name   = "frontend"
+      image  = "${azurerm_container_registry.main.login_server}/frontend:${var.frontend_image_tag}"
+      cpu    = 0.5
+      memory = "1Gi"
+
+      liveness_probe {
+        transport = "HTTP"
+        path      = "/"
+        port      = 3000
+      }
+
+      readiness_probe {
+        transport = "HTTP"
+        path      = "/"
+        port      = 3000
+      }
+
+      # NEXT_PUBLIC_API_URL and AUTH_SECRET are baked into the image at build time.
+      # These are the runtime-only vars that can't be baked in.
+      env {
+        name  = "API_URL"
+        value = var.api_url
+      }
+      env {
+        name        = "AUTH_GITHUB_ID"
+        secret_name = "auth-github-id"
+      }
+      env {
+        name        = "AUTH_GITHUB_SECRET"
+        secret_name = "auth-github-secret"
+      }
+    }
+  }
+
+  secret {
+    name  = "auth-github-id"
+    value = var.auth_github_id
+  }
+  secret {
+    name  = "auth-github-secret"
+    value = var.auth_github_secret
+  }
+
+  ingress {
+    external_enabled = true
+    target_port      = 3000
+
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+
+  depends_on = [azurerm_role_assignment.acr_pull_frontend]
+}

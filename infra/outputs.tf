@@ -13,6 +13,11 @@ output "container_app_fqdn" {
   value       = azurerm_container_app.backend.latest_revision_fqdn
 }
 
+output "frontend_fqdn" {
+  description = "Fully-qualified domain name of the Frontend Container App."
+  value       = azurerm_container_app.frontend.latest_revision_fqdn
+}
+
 output "container_app_environment_id" {
   description = "Resource ID of the Container Apps Environment."
   value       = azurerm_container_app_environment.main.id
