@@ -164,7 +164,11 @@ resource "azurerm_container_app_environment" "main" {
   # so egress to PostgreSQL never leaves Azure's private network.
   # internal_load_balancer_enabled = false (default) keeps external ingress
   # on Container Apps working for the public API endpoint.
-  infrastructure_subnet_id = azurerm_subnet.container_apps.id
+  infrastructure_subnet_id             = azurerm_subnet.container_apps.id
+
+  # Pin the managed resource group name Azure auto-assigns — without this
+  # OpenTofu detects drift on every apply and forces a replacement.
+  infrastructure_resource_group_name   = "ME_cae-${local.prefix}_rg-${local.prefix}_${var.location}"
 
   tags = local.common_tags
 }
