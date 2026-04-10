@@ -13,11 +13,15 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/config"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/db"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/handler"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
+	"github.com/marko-stanojevic/project-ostgut/backend/migrations"
 )
 
 func main() {
@@ -37,6 +41,12 @@ func main() {
 	}
 	defer pool.Close()
 	logger.Info("database connected")
+
+	// Run migrations before starting the server.
+	if err := runMigrations(logger, cfg.DatabaseURL); err != nil {
+		logger.Error("failed to run migrations", "error", err)
+		os.Exit(1)
+	}
 
 	userStore := store.NewUserStore(pool)
 	h := handler.New(userStore, logger)
@@ -99,4 +109,25 @@ func main() {
 		logger.Error("server forced to shutdown", "error", err)
 	}
 	logger.Info("server exited")
+}
+
+func runMigrations(logger *slog.Logger, databaseURL string) error {
+	src, err := iofs.New(migrations.FS, ".")
+	if err != nil {
+		return err
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", src, databaseURL)
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return err
+	}
+
+	version, _, _ := m.Version()
+	logger.Info("migrations applied", "version", version)
+	return nil
 }

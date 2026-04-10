@@ -10,7 +10,9 @@
       "Read(//usr/local/**)",
       "Bash(docker exec:*)",
       "Bash(chmod +x /Users/mstanojevic/Projects/Git/project-ostgut/scripts/bootstrap.sh)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Bash(grep -h \"uses:\" /Users/mstanojevic/Projects/Git/project-ostgut/.github/workflows/*.yml)",
+      "Bash(gh api:*)"
     ]
   }
 }
