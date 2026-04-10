@@ -100,6 +100,12 @@ export default function LoginPage() {
 
         <div className="space-y-2">
           <button
+            onClick={() => handleOAuthLogin('github')}
+            className="w-full bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded-lg transition"
+          >
+            GitHub
+          </button>
+          <button
             onClick={() => handleOAuthLogin('google')}
             className="w-full bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded-lg transition"
           >

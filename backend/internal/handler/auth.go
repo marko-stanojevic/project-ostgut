@@ -128,6 +128,35 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "password updated"})
 }
 
+// OAuthLogin finds or creates a user for an OAuth provider sign-in.
+// Called by the Auth.js jwt callback after a successful OAuth flow.
+// POST /auth/oauth
+func (h *Handler) OAuthLogin(c *gin.Context) {
+	var req struct {
+		Provider   string `json:"provider" binding:"required"`
+		ProviderID string `json:"provider_id" binding:"required"`
+		Email      string `json:"email" binding:"required,email"`
+		Name       string `json:"name"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	u, err := h.store.UpsertOAuthUser(c.Request.Context(), req.Provider, req.ProviderID, req.Email, req.Name)
+	if err != nil {
+		h.log.Error("oauth login: upsert user", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":    u.ID,
+		"email": u.Email,
+		"name":  u.Name,
+	})
+}
+
 // AuthVerify is a lightweight token validation endpoint.
 // POST /auth/verify
 func AuthVerify(c *gin.Context) {
