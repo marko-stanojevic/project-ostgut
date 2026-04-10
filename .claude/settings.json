@@ -4,7 +4,11 @@
       "Bash(go vet:*)",
       "Bash(go test:*)",
       "Bash(npx tsc:*)",
-      "Bash(go mod:*)"
+      "Bash(go mod:*)",
+      "Bash(psql \"postgres://postgres:postgres@localhost:5432/ostgut?sslmode=disable\" -f /Users/mstanojevic/Projects/Git/project-ostgut/backend/migrations/002_oauth.sql)",
+      "Read(//Applications/Postgres.app/Contents/**)",
+      "Read(//usr/local/**)",
+      "Bash(docker exec:*)"
     ]
   }
 }

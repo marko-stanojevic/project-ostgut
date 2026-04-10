@@ -61,6 +61,7 @@ func main() {
 	})
 	router.POST("/auth/login", h.Login)
 	router.POST("/auth/register", h.Register)
+	router.POST("/auth/oauth", h.OAuthLogin)
 	router.POST("/auth/forgot-password", h.ForgotPassword)
 	router.POST("/auth/reset-password", h.ResetPassword)
 	router.POST("/auth/verify", handler.AuthVerify)

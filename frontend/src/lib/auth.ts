@@ -9,7 +9,7 @@ const getSecret = () => new TextEncoder().encode(process.env.AUTH_SECRET!)
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Google,
-    GitHub,
+    { ...GitHub({}), issuer: 'https://github.com/login/oauth' },
     Credentials({
       credentials: {
         email: { label: 'Email', type: 'email' },
@@ -32,8 +32,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
+    async jwt({ token, user, account }) {
+      if (account && account.provider !== 'credentials') {
+        // OAuth sign-in: upsert the user in the backend to get a stable UUID
+        const apiUrl = process.env.API_URL || 'http://localhost:8080'
+        const res = await fetch(`${apiUrl}/auth/oauth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: account.provider,
+            provider_id: account.providerAccountId,
+            email: token.email,
+            name: token.name ?? '',
+          }),
+        })
+        if (res.ok) {
+          const backendUser = await res.json()
+          token.id = backendUser.id
+          token.email = backendUser.email
+        }
+      } else if (user) {
         token.id = user.id
         token.email = user.email
       }

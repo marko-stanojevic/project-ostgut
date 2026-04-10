@@ -67,7 +67,7 @@ func (s *UserStore) Create(ctx context.Context, email, password string) (*User, 
 func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, password_hash, name FROM users WHERE email = $1`,
+		`SELECT id, email, COALESCE(password_hash, ''), name FROM users WHERE email = $1`,
 		email,
 	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -83,7 +83,7 @@ func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error)
 func (s *UserStore) GetByID(ctx context.Context, id string) (*User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, password_hash, name FROM users WHERE id = $1`,
+		`SELECT id, email, COALESCE(password_hash, ''), name FROM users WHERE id = $1`,
 		id,
 	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -91,6 +91,58 @@ func (s *UserStore) GetByID(ctx context.Context, id string) (*User, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get user by id: %w", err)
+	}
+	return &u, nil
+}
+
+// UpsertOAuthUser finds or creates a user for an OAuth sign-in.
+//
+// Lookup order:
+//  1. Existing row matching (oauth_provider, oauth_provider_id) — return it.
+//  2. Existing row matching email — link the OAuth identity and return it.
+//  3. No match — create a new password-less user.
+func (s *UserStore) UpsertOAuthUser(ctx context.Context, provider, providerID, email, name string) (*User, error) {
+	var u User
+
+	// 1. Already linked
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, email, COALESCE(password_hash, ''), name
+		 FROM users WHERE oauth_provider = $1 AND oauth_provider_id = $2`,
+		provider, providerID,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	if err == nil {
+		return &u, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("lookup oauth user: %w", err)
+	}
+
+	// 2. Link to existing email account
+	err = s.pool.QueryRow(ctx,
+		`UPDATE users SET oauth_provider = $1, oauth_provider_id = $2, updated_at = NOW()
+		 WHERE email = $3
+		 RETURNING id, email, COALESCE(password_hash, ''), name`,
+		provider, providerID, email,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	if err == nil {
+		return &u, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("link oauth user: %w", err)
+	}
+
+	// 3. Create new OAuth-only user
+	err = s.pool.QueryRow(ctx,
+		`INSERT INTO users (email, name, oauth_provider, oauth_provider_id)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, email, COALESCE(password_hash, ''), name`,
+		email, name, provider, providerID,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrEmailTaken
+		}
+		return nil, fmt.Errorf("create oauth user: %w", err)
 	}
 	return &u, nil
 }
