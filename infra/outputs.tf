@@ -22,3 +22,14 @@ output "backend_identity_client_id" {
   description = "Client ID of the user-assigned managed identity used by the backend."
   value       = azurerm_user_assigned_identity.backend.client_id
 }
+
+output "database_fqdn" {
+  description = "Fully-qualified domain name of the PostgreSQL Flexible Server."
+  value       = azurerm_postgresql_flexible_server.main.fqdn
+}
+
+output "database_url" {
+  description = "PostgreSQL connection string for the backend (sensitive)."
+  value       = local.database_url
+  sensitive   = true
+}

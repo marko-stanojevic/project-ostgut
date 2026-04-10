@@ -29,19 +29,88 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
-  # 1. Build & push the Docker image to ACR
+  # 1. Provision infrastructure
+  #    Runs tofu apply to ensure all Azure resources exist (VNet, DB, ACR, etc.).
+  #    Uses "latest" as a placeholder image tag — the container app may be in a
+  #    degraded state until job 3 updates it with the real tag, which is fine.
+  #    Outputs the ACR login server so job 2 can push images without needing
+  #    a separately configured GitHub variable.
+  # ──────────────────────────────────────────────────────────────────────────
+  provision:
+    name: Provision infrastructure (${{ github.event.inputs.environment || 'staging' }})
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    outputs:
+      acr_login_server: ${{ steps.tofu-output.outputs.acr_login_server }}
+
+    defaults:
+      run:
+        working-directory: infra
+
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.9.x"
+
+      - name: tofu init
+        run: |
+          tofu init \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${{ env.ENVIRONMENT }}.tfstate"
+
+      - name: tofu apply
+        run: |
+          tofu apply -auto-approve \
+            -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="db_admin_password=${{ secrets.DB_ADMIN_PASSWORD }}" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}"
+
+      - name: Read tofu outputs
+        id: tofu-output
+        run: |
+          echo "acr_login_server=$(tofu output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 2. Build & push Docker images to ACR
+  #    ACR login server comes from the provision job — no GitHub variable needed.
   # ──────────────────────────────────────────────────────────────────────────
   build-push:
-    name: Build & push image
+    name: Build & push images
     runs-on: ubuntu-latest
+    needs: provision
     environment: ${{ github.event.inputs.environment || 'staging' }}
 
     outputs:
       backend_image_tag: ${{ steps.meta-backend.outputs.version }}
       frontend_image_tag: ${{ steps.meta-frontend.outputs.version }}
-      registry: ${{ steps.login-acr.outputs.registry }}
 
     steps:
       - uses: actions/checkout@v4
@@ -59,9 +128,6 @@ jobs:
         with:
           useConfigFile: true
 
-      # ── OIDC login to Azure ──────────────────────────────────────────────
-      # No client secret is stored; GitHub exchanges the OIDC JWT for a
-      # short-lived Azure access token using Workload Identity Federation.
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -70,17 +136,15 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Log in to Azure Container Registry
-        id: login-acr
         run: |
-          REGISTRY="${{ vars.ACR_LOGIN_SERVER }}"
+          REGISTRY="${{ needs.provision.outputs.acr_login_server }}"
           az acr login --name "${REGISTRY%%.*}"
-          echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (backend)
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.login-acr.outputs.registry }}/backend
+          images: ${{ needs.provision.outputs.acr_login_server }}/backend
           tags: |
             type=raw,value=${{ steps.gitversion.outputs.semVer }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
@@ -89,7 +153,7 @@ jobs:
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.login-acr.outputs.registry }}/frontend
+          images: ${{ needs.provision.outputs.acr_login_server }}/frontend
           tags: |
             type=raw,value=${{ steps.gitversion.outputs.semVer }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
@@ -123,10 +187,11 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ──────────────────────────────────────────────────────────────────────────
-  # 2. OpenTofu plan → apply (idempotent infrastructure reconciliation)
+  # 3. Update container app with the real image tags
+  #    Second tofu apply is fast — only the container app image tag changes.
   # ──────────────────────────────────────────────────────────────────────────
-  tofu-apply:
-    name: OpenTofu apply (${{ github.event.inputs.environment || 'staging' }})
+  deploy:
+    name: Deploy (${{ github.event.inputs.environment || 'staging' }})
     runs-on: ubuntu-latest
     needs: build-push
     environment: ${{ github.event.inputs.environment || 'staging' }}
@@ -136,7 +201,6 @@ jobs:
         working-directory: infra
 
     env:
-      # Pass OIDC vars so the azurerm provider can request its own token.
       ARM_USE_OIDC: "true"
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -163,20 +227,17 @@ jobs:
             -backend-config="resource_group_name=${{ vars.TF_STATE_RESOURCE_GROUP }}" \
             -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}" \
             -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ github.event.inputs.environment || 'staging' }}.tfstate"
+            -backend-config="key=${{ env.ENVIRONMENT }}.tfstate"
 
-      - name: tofu plan
+      - name: tofu apply
         run: |
-          tofu plan -out=tfplan \
+          tofu apply -auto-approve \
             -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
             -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             -var="client_id=${{ secrets.AZURE_CLIENT_ID }}" \
-            -var="environment=${{ github.event.inputs.environment || 'staging' }}" \
-            -var="backend_image_tag=${{ needs.build-push.outputs.backend_image_tag }}" \
-            -var="frontend_image_tag=${{ needs.build-push.outputs.frontend_image_tag }}" \
-            -var="database_url=${{ secrets.DATABASE_URL }}" \
+            -var="environment=${{ env.ENVIRONMENT }}" \
+            -var="db_admin_password=${{ secrets.DB_ADMIN_PASSWORD }}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
-            -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}"
-
-      - name: tofu apply
-        run: tofu apply -auto-approve tfplan
+            -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}" \
+            -var="backend_image_tag=${{ needs.build-push.outputs.backend_image_tag }}" \
+            -var="frontend_image_tag=${{ needs.build-push.outputs.frontend_image_tag }}"
