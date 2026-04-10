@@ -5,11 +5,10 @@ WORKDIR /app
 
 RUN apk upgrade --no-cache
 
+# NEXT_PUBLIC_* vars must be available at build time (baked into the JS bundle).
+# AUTH_SECRET is NOT a build arg — it is injected at runtime via the container environment.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080
-ARG AUTH_SECRET
-
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV AUTH_SECRET=$AUTH_SECRET
 
 COPY package*.json ./
 RUN npm ci
@@ -23,7 +22,6 @@ FROM gcr.io/distroless/nodejs20-debian12:nonroot
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV NEXT_PUBLIC_API_URL=http://backend:8080
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

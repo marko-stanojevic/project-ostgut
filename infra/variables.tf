@@ -91,6 +91,11 @@ variable "api_url" {
   description = "Server-side URL the frontend uses to call the backend (Auth.js credentials provider)."
 }
 
+variable "auth_url" {
+  type        = string
+  description = "Public base URL of the frontend app, used by Auth.js for callback URLs (e.g. https://ca-ostgut-staging-frontend--xxx.azurecontainerapps.io)."
+}
+
 variable "auth_github_id" {
   type        = string
   description = "GitHub OAuth App client ID for Auth.js."

@@ -361,11 +361,17 @@ resource "azurerm_container_app" "frontend" {
         port      = 3000
       }
 
-      # NEXT_PUBLIC_API_URL and AUTH_SECRET are baked into the image at build time.
-      # These are the runtime-only vars that can't be baked in.
+      env {
+        name  = "AUTH_URL"
+        value = "https://${var.auth_url}"
+      }
       env {
         name  = "API_URL"
         value = var.api_url
+      }
+      env {
+        name        = "AUTH_SECRET"
+        secret_name = "auth-secret"
       }
       env {
         name        = "AUTH_GITHUB_ID"
@@ -378,6 +384,10 @@ resource "azurerm_container_app" "frontend" {
     }
   }
 
+  secret {
+    name  = "auth-secret"
+    value = var.jwt_secret
+  }
   secret {
     name  = "auth-github-id"
     value = var.auth_github_id

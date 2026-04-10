@@ -93,6 +93,7 @@ jobs:
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
             -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}" \
             -var="api_url=${{ vars.API_URL }}" \
+            -var="auth_url=${{ vars.FRONTEND_URL }}" \
             -var="auth_github_id=${{ secrets.AUTH_GITHUB_ID }}" \
             -var="auth_github_secret=${{ secrets.AUTH_GITHUB_SECRET }}" \
             -target=azurerm_resource_group.main \
@@ -200,7 +201,6 @@ jobs:
           labels: ${{ steps.meta-frontend.outputs.labels }}
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
-            AUTH_SECRET=${{ secrets.AUTH_SECRET }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -258,6 +258,7 @@ jobs:
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
             -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}" \
             -var="api_url=${{ vars.API_URL }}" \
+            -var="auth_url=${{ vars.FRONTEND_URL }}" \
             -var="auth_github_id=${{ secrets.AUTH_GITHUB_ID }}" \
             -var="auth_github_secret=${{ secrets.AUTH_GITHUB_SECRET }}" \
             -var="backend_image_tag=${{ needs.build-push.outputs.backend_image_tag }}" \
