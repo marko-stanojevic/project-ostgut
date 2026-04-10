@@ -94,8 +94,9 @@ resource "azurerm_postgresql_flexible_server" "main" {
   administrator_password = var.db_admin_password
 
   # Private access — no public endpoint, traffic stays inside the VNet.
-  delegated_subnet_id = azurerm_subnet.postgresql.id
-  private_dns_zone_id = azurerm_private_dns_zone.postgresql.id
+  public_network_access_enabled = false
+  delegated_subnet_id           = azurerm_subnet.postgresql.id
+  private_dns_zone_id           = azurerm_private_dns_zone.postgresql.id
 
   # B_Standard_B1ms: 1 vCore burstable, 2 GB RAM — cheapest tier, good for staging.
   sku_name   = "B_Standard_B1ms"

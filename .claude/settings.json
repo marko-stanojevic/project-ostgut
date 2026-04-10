@@ -9,7 +9,8 @@
       "Read(//Applications/Postgres.app/Contents/**)",
       "Read(//usr/local/**)",
       "Bash(docker exec:*)",
-      "Bash(chmod +x /Users/mstanojevic/Projects/Git/project-ostgut/scripts/bootstrap.sh)"
+      "Bash(chmod +x /Users/mstanojevic/Projects/Git/project-ostgut/scripts/bootstrap.sh)",
+      "Bash(gh run:*)"
     ]
   }
 }

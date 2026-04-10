@@ -31,4 +31,8 @@ provider "azurerm" {
   subscription_id = var.subscription_id
   tenant_id       = var.tenant_id
   client_id       = var.client_id
+
+  # Automatically register any Azure resource provider namespaces that
+  # OpenTofu needs but aren't yet enabled on the subscription.
+  resource_provider_registrations = "extended"
 }
