@@ -97,13 +97,9 @@ jobs:
             -var="auth_github_id=${{ secrets.AUTH_GITHUB_ID }}" \
             -var="auth_github_secret=${{ secrets.AUTH_GITHUB_SECRET }}" \
             -target=azurerm_resource_group.main \
-            -target=azurerm_virtual_network.main \
-            -target=azurerm_subnet.container_apps \
-            -target=azurerm_subnet.postgresql \
-            -target=azurerm_private_dns_zone.postgresql \
-            -target=azurerm_private_dns_zone_virtual_network_link.postgresql \
             -target=azurerm_postgresql_flexible_server.main \
             -target=azurerm_postgresql_flexible_server_database.main \
+            -target=azurerm_postgresql_flexible_server_firewall_rule.azure_services \
             -target=azurerm_container_registry.main \
             -target=azurerm_log_analytics_workspace.main \
             -target=azurerm_container_app_environment.main \
