@@ -30,6 +30,9 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# Claude Code local settings
+.claude/
+
 # OpenTofu / Terraform state and plan files (never commit these)
 *.tfstate
 *.tfstate.*
