@@ -102,7 +102,6 @@ jobs:
             -target=azurerm_postgresql_flexible_server_firewall_rule.azure_services \
             -target=azurerm_container_registry.main \
             -target=azurerm_log_analytics_workspace.main \
-            -target=azurerm_container_app_environment.main \
             -target=azurerm_user_assigned_identity.backend \
             -target=azurerm_role_assignment.acr_pull \
             -target=azurerm_user_assigned_identity.frontend \
