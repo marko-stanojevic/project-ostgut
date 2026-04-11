@@ -9,7 +9,7 @@ const getSecret = () => new TextEncoder().encode(process.env.AUTH_SECRET!)
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Google,
-    { ...GitHub({}), issuer: 'https://github.com/login/oauth' },
+    GitHub,
     Credentials({
       credentials: {
         email: { label: 'Email', type: 'email' },
