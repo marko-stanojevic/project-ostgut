@@ -1,0 +1,65 @@
+name: Cleanup old workflow runs
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC daily
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    name: Delete old runs
+    runs-on: ubuntu-latest
+
+    env:
+      KEEP: 5 # number of recent runs to keep per workflow
+
+    steps:
+      - name: Delete old runs
+        run: |
+          set -euo pipefail
+
+          REPO="${{ github.repository }}"
+          KEEP="${KEEP}"
+
+          echo "Repository: ${REPO}, keeping last ${KEEP} runs per workflow"
+
+          # Fetch all workflow IDs
+          WORKFLOW_IDS=$(gh api "repos/${REPO}/actions/workflows" \
+            --paginate --jq '.workflows[].id')
+
+          for WF_ID in $WORKFLOW_IDS; do
+            WF_NAME=$(gh api "repos/${REPO}/actions/workflows/${WF_ID}" --jq '.name')
+            echo ""
+            echo "--- Workflow: ${WF_NAME} (${WF_ID}) ---"
+
+            # Get all run IDs for this workflow, sorted newest-first
+            RUN_IDS=$(gh api "repos/${REPO}/actions/workflows/${WF_ID}/runs" \
+              --paginate --jq '.workflow_runs[].id')
+
+            TOTAL=$(echo "$RUN_IDS" | wc -w | tr -d ' ')
+            echo "Total runs: ${TOTAL}"
+
+            if [ "$TOTAL" -le "$KEEP" ]; then
+              echo "Nothing to delete."
+              continue
+            fi
+
+            # Skip the first $KEEP runs (most recent), delete the rest
+            TO_DELETE=$(echo "$RUN_IDS" | tr ' ' '\n' | tail -n "+$((KEEP + 1))")
+            COUNT=$(echo "$TO_DELETE" | wc -w | tr -d ' ')
+            echo "Deleting ${COUNT} old runs..."
+
+            for RUN_ID in $TO_DELETE; do
+              gh api -X DELETE "repos/${REPO}/actions/runs/${RUN_ID}" && \
+                echo "  Deleted run ${RUN_ID}" || \
+                echo "  Failed to delete run ${RUN_ID} (may already be gone)"
+            done
+          done
+
+          echo ""
+          echo "Cleanup complete."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
