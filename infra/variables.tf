@@ -93,7 +93,7 @@ variable "api_url" {
 
 variable "auth_url" {
   type        = string
-  description = "Public base URL of the frontend app, used by Auth.js for callback URLs (e.g. https://ca-ostgut-staging-frontend--xxx.azurecontainerapps.io)."
+  description = "Public base URL of the frontend app, used by Auth.js for callback URLs (e.g. https://console.staging.worksfine.app)."
 }
 
 variable "auth_github_id" {

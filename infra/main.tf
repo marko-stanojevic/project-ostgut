@@ -283,7 +283,7 @@ resource "azurerm_container_app" "frontend" {
 
       env {
         name  = "AUTH_URL"
-        value = "https://${var.auth_url}"
+        value = var.auth_url
       }
       env {
         name  = "AUTH_TRUST_HOST"
