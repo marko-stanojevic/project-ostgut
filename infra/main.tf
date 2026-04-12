@@ -336,65 +336,81 @@ resource "azurerm_container_app" "frontend" {
 
 # ──────────────────────────────────────────────
 # Custom Domains with Azure-managed TLS Certificates
-# Azure issues and auto-renews free certificates via CNAME validation.
-# DNS prerequisite: CNAME + TXT (asuid.*) records must exist before apply.
+# Azure requires the hostname to be registered in the CAE before a managed
+# cert can be issued, so a plain azapi_resource cannot express the dependency.
+# `az containerapp hostname bind` handles all three steps atomically:
+#   1. add hostname to container app (Disabled binding)
+#   2. issue a free managed certificate via CNAME validation
+#   3. bind the certificate (SniEnabled)
+# DNS prerequisite: CNAME + TXT (asuid.*) records must already exist.
 # ──────────────────────────────────────────────
 
-# Backend: api.staging.worksfine.app
-resource "azapi_resource" "backend_managed_cert" {
-  count     = var.backend_custom_domain != "" ? 1 : 0
-  type      = "Microsoft.App/managedEnvironments/managedCertificates@2024-03-01"
-  name      = "cert-${local.prefix}-backend"
-  parent_id = azurerm_container_app_environment.main.id
-  location  = azurerm_resource_group.main.location
+resource "null_resource" "backend_custom_domain" {
+  count = var.backend_custom_domain != "" ? 1 : 0
 
-  body = {
-    properties = {
-      domainControlValidation = "CNAME"
-      subjectName             = var.backend_custom_domain
-    }
+  triggers = {
+    domain   = var.backend_custom_domain
+    app_name = azurerm_container_app.backend.name
+    env_name = azurerm_container_app_environment.main.name
+    rg_name  = azurerm_resource_group.main.name
   }
 
-  # Certificate issuance typically takes 2-5 minutes.
-  timeouts {
-    create = "15m"
-    update = "15m"
+  provisioner "local-exec" {
+    command = <<-EOT
+      az containerapp hostname bind \
+        --hostname "${self.triggers.domain}" \
+        --name "${self.triggers.app_name}" \
+        --environment "${self.triggers.env_name}" \
+        --resource-group "${self.triggers.rg_name}" \
+        --validation-method CNAME
+    EOT
   }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      az containerapp hostname delete \
+        --hostname "${self.triggers.domain}" \
+        --name "${self.triggers.app_name}" \
+        --resource-group "${self.triggers.rg_name}" \
+        --yes || true
+    EOT
+  }
+
+  depends_on = [azurerm_container_app.backend]
 }
 
-resource "azurerm_container_app_custom_domain" "backend" {
-  count                                    = var.backend_custom_domain != "" ? 1 : 0
-  name                                     = var.backend_custom_domain
-  container_app_id                         = azurerm_container_app.backend.id
-  container_app_environment_certificate_id = azapi_resource.backend_managed_cert[0].id
-  certificate_binding_type                 = "SniEnabled"
-}
+resource "null_resource" "frontend_custom_domain" {
+  count = var.frontend_custom_domain != "" ? 1 : 0
 
-# Frontend: console.staging.worksfine.app
-resource "azapi_resource" "frontend_managed_cert" {
-  count     = var.frontend_custom_domain != "" ? 1 : 0
-  type      = "Microsoft.App/managedEnvironments/managedCertificates@2024-03-01"
-  name      = "cert-${local.prefix}-frontend"
-  parent_id = azurerm_container_app_environment.main.id
-  location  = azurerm_resource_group.main.location
-
-  body = {
-    properties = {
-      domainControlValidation = "CNAME"
-      subjectName             = var.frontend_custom_domain
-    }
+  triggers = {
+    domain   = var.frontend_custom_domain
+    app_name = azurerm_container_app.frontend.name
+    env_name = azurerm_container_app_environment.main.name
+    rg_name  = azurerm_resource_group.main.name
   }
 
-  timeouts {
-    create = "15m"
-    update = "15m"
+  provisioner "local-exec" {
+    command = <<-EOT
+      az containerapp hostname bind \
+        --hostname "${self.triggers.domain}" \
+        --name "${self.triggers.app_name}" \
+        --environment "${self.triggers.env_name}" \
+        --resource-group "${self.triggers.rg_name}" \
+        --validation-method CNAME
+    EOT
   }
-}
 
-resource "azurerm_container_app_custom_domain" "frontend" {
-  count                                    = var.frontend_custom_domain != "" ? 1 : 0
-  name                                     = var.frontend_custom_domain
-  container_app_id                         = azurerm_container_app.frontend.id
-  container_app_environment_certificate_id = azapi_resource.frontend_managed_cert[0].id
-  certificate_binding_type                 = "SniEnabled"
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      az containerapp hostname delete \
+        --hostname "${self.triggers.domain}" \
+        --name "${self.triggers.app_name}" \
+        --resource-group "${self.triggers.rg_name}" \
+        --yes || true
+    EOT
+  }
+
+  depends_on = [azurerm_container_app.frontend]
 }
