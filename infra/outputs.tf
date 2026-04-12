@@ -21,11 +21,13 @@ output "frontend_fqdn" {
 output "backend_domain_verification_id" {
   description = "TXT record value for asuid.api.staging.worksfine.app domain verification."
   value       = azurerm_container_app.backend.custom_domain_verification_id
+  sensitive   = true
 }
 
 output "frontend_domain_verification_id" {
   description = "TXT record value for asuid.console.staging.worksfine.app domain verification."
   value       = azurerm_container_app.frontend.custom_domain_verification_id
+  sensitive   = true
 }
 
 output "container_app_environment_id" {
