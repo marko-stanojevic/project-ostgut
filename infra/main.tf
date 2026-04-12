@@ -357,6 +357,10 @@ resource "null_resource" "backend_custom_domain" {
 
   provisioner "local-exec" {
     command = <<-EOT
+      az containerapp hostname add \
+        --hostname "${self.triggers.domain}" \
+        --name "${self.triggers.app_name}" \
+        --resource-group "${self.triggers.rg_name}" || true
       az containerapp hostname bind \
         --hostname "${self.triggers.domain}" \
         --name "${self.triggers.app_name}" \
@@ -392,6 +396,10 @@ resource "null_resource" "frontend_custom_domain" {
 
   provisioner "local-exec" {
     command = <<-EOT
+      az containerapp hostname add \
+        --hostname "${self.triggers.domain}" \
+        --name "${self.triggers.app_name}" \
+        --resource-group "${self.triggers.rg_name}" || true
       az containerapp hostname bind \
         --hostname "${self.triggers.domain}" \
         --name "${self.triggers.app_name}" \
