@@ -8,14 +8,24 @@ output "container_registry_login_server" {
   value       = azurerm_container_registry.main.login_server
 }
 
-output "container_app_fqdn" {
-  description = "Fully-qualified domain name of the Backend Container App."
-  value       = azurerm_container_app.backend.latest_revision_fqdn
+output "backend_fqdn" {
+  description = "Default FQDN of the Backend Container App (use as CNAME target)."
+  value       = azurerm_container_app.backend.ingress[0].fqdn
 }
 
 output "frontend_fqdn" {
-  description = "Fully-qualified domain name of the Frontend Container App."
-  value       = azurerm_container_app.frontend.latest_revision_fqdn
+  description = "Default FQDN of the Frontend Container App (use as CNAME target)."
+  value       = azurerm_container_app.frontend.ingress[0].fqdn
+}
+
+output "backend_domain_verification_id" {
+  description = "TXT record value for asuid.api.staging.worksfine.app domain verification."
+  value       = azurerm_container_app.backend.custom_domain_verification_id
+}
+
+output "frontend_domain_verification_id" {
+  description = "TXT record value for asuid.console.staging.worksfine.app domain verification."
+  value       = azurerm_container_app.frontend.custom_domain_verification_id
 }
 
 output "container_app_environment_id" {
