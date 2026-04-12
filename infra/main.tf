@@ -217,6 +217,7 @@ resource "azurerm_container_app" "backend" {
   depends_on = [azurerm_role_assignment.acr_pull]
 }
 
+
 # ──────────────────────────────────────────────
 # Frontend Container App
 # ──────────────────────────────────────────────
@@ -331,4 +332,69 @@ resource "azurerm_container_app" "frontend" {
   }
 
   depends_on = [azurerm_role_assignment.acr_pull_frontend]
+}
+
+# ──────────────────────────────────────────────
+# Custom Domains with Azure-managed TLS Certificates
+# Azure issues and auto-renews free certificates via CNAME validation.
+# DNS prerequisite: CNAME + TXT (asuid.*) records must exist before apply.
+# ──────────────────────────────────────────────
+
+# Backend: api.staging.worksfine.app
+resource "azapi_resource" "backend_managed_cert" {
+  count     = var.backend_custom_domain != "" ? 1 : 0
+  type      = "Microsoft.App/managedEnvironments/managedCertificates@2024-03-01"
+  name      = "cert-${local.prefix}-backend"
+  parent_id = azurerm_container_app_environment.main.id
+  location  = azurerm_resource_group.main.location
+
+  body = {
+    properties = {
+      domainControlValidation = "CNAME"
+      subjectName             = var.backend_custom_domain
+    }
+  }
+
+  # Certificate issuance typically takes 2-5 minutes.
+  timeouts {
+    create = "15m"
+    update = "15m"
+  }
+}
+
+resource "azurerm_container_app_custom_domain" "backend" {
+  count                                    = var.backend_custom_domain != "" ? 1 : 0
+  name                                     = var.backend_custom_domain
+  container_app_id                         = azurerm_container_app.backend.id
+  container_app_environment_certificate_id = azapi_resource.backend_managed_cert[0].id
+  certificate_binding_type                 = "SniEnabled"
+}
+
+# Frontend: console.staging.worksfine.app
+resource "azapi_resource" "frontend_managed_cert" {
+  count     = var.frontend_custom_domain != "" ? 1 : 0
+  type      = "Microsoft.App/managedEnvironments/managedCertificates@2024-03-01"
+  name      = "cert-${local.prefix}-frontend"
+  parent_id = azurerm_container_app_environment.main.id
+  location  = azurerm_resource_group.main.location
+
+  body = {
+    properties = {
+      domainControlValidation = "CNAME"
+      subjectName             = var.frontend_custom_domain
+    }
+  }
+
+  timeouts {
+    create = "15m"
+    update = "15m"
+  }
+}
+
+resource "azurerm_container_app_custom_domain" "frontend" {
+  count                                    = var.frontend_custom_domain != "" ? 1 : 0
+  name                                     = var.frontend_custom_domain
+  container_app_id                         = azurerm_container_app.frontend.id
+  container_app_environment_certificate_id = azapi_resource.frontend_managed_cert[0].id
+  certificate_binding_type                 = "SniEnabled"
 }

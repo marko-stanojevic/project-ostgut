@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
@@ -21,6 +25,13 @@ terraform {
   # a separate init script.  Values are supplied through -backend-config flags
   # or environment variables in CI so that no secrets appear in source code.
   backend "azurerm" {}
+}
+
+provider "azapi" {
+  use_oidc        = true
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id
+  client_id       = var.client_id
 }
 
 provider "azurerm" {

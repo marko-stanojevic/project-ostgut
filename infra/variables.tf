@@ -106,3 +106,18 @@ variable "auth_github_secret" {
   description = "GitHub OAuth App client secret for Auth.js."
   sensitive   = true
 }
+
+# ──────────────────────────────────────────────
+# Custom domains (optional)
+# ──────────────────────────────────────────────
+variable "backend_custom_domain" {
+  type        = string
+  description = "Custom domain for the backend API (e.g. api.staging.worksfine.app). Leave empty to skip."
+  default     = ""
+}
+
+variable "frontend_custom_domain" {
+  type        = string
+  description = "Custom domain for the frontend (e.g. console.staging.worksfine.app). Leave empty to skip."
+  default     = ""
+}
