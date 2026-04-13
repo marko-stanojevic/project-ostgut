@@ -2,6 +2,10 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -35,68 +39,53 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center px-4">
-        <div className="bg-slate-700 rounded-lg border border-slate-600 p-8 w-full max-w-md text-center">
-          <div className="text-4xl mb-4">✓</div>
-          <h1 className="text-3xl font-bold text-white mb-4">Check your email</h1>
-          <p className="text-slate-300 mb-6">
-            We&apos;ve sent a password reset link to {email}. Click the link in the email to reset your password.
-          </p>
-          <Link href="/auth/login" className="text-blue-400 hover:text-blue-300">
-            Back to login
-          </Link>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
+        <Card className="w-full max-w-sm text-center">
+          <CardContent className="pt-6 space-y-2">
+            <p className="text-3xl">✓</p>
+            <CardTitle>Check your email</CardTitle>
+            <CardDescription>
+              We&apos;ve sent a reset link to {email}.
+            </CardDescription>
+            <Link href="/auth/login" className="text-sm text-foreground font-medium hover:underline block pt-2">
+              Back to login
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center px-4">
-      <div className="bg-slate-700 rounded-lg border border-slate-600 p-8 w-full max-w-md">
-        <h1 className="text-3xl font-bold text-white mb-2 text-center">Reset Password</h1>
-        <p className="text-slate-300 text-center mb-6">
-          Enter your email and we&apos;ll send you a link to reset your password.
-        </p>
+    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Reset password</CardTitle>
+          <CardDescription>Enter your email and we&apos;ll send you a reset link</CardDescription>
+        </CardHeader>
 
-        {error && (
-          <div className="bg-red-500 bg-opacity-20 border border-red-500 text-red-200 px-4 py-3 rounded-lg mb-4">
-            {error}
-          </div>
-        )}
+        <CardContent className="space-y-4">
+          {error && (
+            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
+              {error}
+            </p>
+          )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-2">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="w-full px-4 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
-              placeholder="you@example.com"
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" placeholder="you@example.com" />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Sending…' : 'Send Reset Link'}
+            </Button>
+          </form>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-2 rounded-lg transition"
-          >
-            {loading ? 'Sending...' : 'Send Reset Link'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <Link href="/auth/login" className="text-blue-400 hover:text-blue-300">
-            Back to login
-          </Link>
-        </div>
-      </div>
+          <p className="text-center text-sm text-muted-foreground">
+            <Link href="/auth/login" className="text-foreground font-medium hover:underline">Back to login</Link>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   )
 }
