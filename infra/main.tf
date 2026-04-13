@@ -146,8 +146,7 @@ resource "azurerm_container_app" "backend" {
   }
 
   template {
-    # min_replicas = 0 → scales to zero when idle, eliminating compute cost.
-    min_replicas = 0
+    min_replicas = 1
     max_replicas = 10
 
     custom_scale_rule {
