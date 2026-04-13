@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 const navItems = [
   { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -42,8 +43,11 @@ function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b px-6 py-4">
-        <span className="text-lg font-semibold tracking-tight">Ostgut</span>
+      <SidebarHeader className="border-b px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-lg font-semibold tracking-tight">Ostgut</span>
+          <ThemeToggle />
+        </div>
       </SidebarHeader>
 
       <SidebarContent>

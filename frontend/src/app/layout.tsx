@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { SessionProvider } from 'next-auth/react'
 import { AuthProvider } from '@/context/AuthContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ThemeProvider } from 'next-themes'
 import './globals.css'
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -19,15 +20,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
       <body>
-        <SessionProvider>
-          <AuthProvider>
-            <TooltipProvider>
-              {children}
-            </TooltipProvider>
-          </AuthProvider>
-        </SessionProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <SessionProvider>
+            <AuthProvider>
+              <TooltipProvider>
+                {children}
+              </TooltipProvider>
+            </AuthProvider>
+          </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
