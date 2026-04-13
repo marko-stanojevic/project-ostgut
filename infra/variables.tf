@@ -108,6 +108,35 @@ variable "auth_github_secret" {
 }
 
 # ──────────────────────────────────────────────
+# Paddle billing (optional — leave empty to disable)
+# ──────────────────────────────────────────────
+variable "paddle_api_key" {
+  type        = string
+  description = "Paddle server-side API key."
+  sensitive   = true
+  default     = ""
+}
+
+variable "paddle_webhook_secret" {
+  type        = string
+  description = "Paddle webhook secret for signature verification."
+  sensitive   = true
+  default     = ""
+}
+
+variable "paddle_client_token" {
+  type        = string
+  description = "Paddle client-side token for Paddle.js overlay checkout."
+  default     = ""
+}
+
+variable "paddle_price_id" {
+  type        = string
+  description = "Paddle Price ID for the Pro subscription."
+  default     = ""
+}
+
+# ──────────────────────────────────────────────
 # Custom domains (optional)
 # ──────────────────────────────────────────────
 variable "backend_custom_domain" {

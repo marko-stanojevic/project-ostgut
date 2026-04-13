@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { SubscriptionCard } from '@/components/subscription-card'
 
 export default function AccountPage() {
   const { user, signOut } = useAuth()
@@ -54,6 +55,8 @@ export default function AccountPage() {
       </div>
 
       <div className="space-y-4 max-w-2xl">
+        <SubscriptionCard />
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Account Information</CardTitle>

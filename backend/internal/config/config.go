@@ -25,6 +25,12 @@ type Config struct {
 
 	// Env is the deployment environment (local | staging | production).
 	Env string
+
+	// Paddle billing configuration.
+	PaddleAPIKey        string
+	PaddleWebhookSecret string
+	PaddleClientToken   string
+	PaddlePriceID       string
 }
 
 // Load reads configuration from environment variables, returning an error when
@@ -48,11 +54,15 @@ func Load() (*Config, error) {
 	)
 
 	return &Config{
-		Port:           port,
-		DatabaseURL:    databaseURL,
-		JWTSecret:      jwtSecret,
-		AllowedOrigins: allowedOrigins,
-		Env:            getEnv("ENV", "local"),
+		Port:                port,
+		DatabaseURL:         databaseURL,
+		JWTSecret:           jwtSecret,
+		AllowedOrigins:      allowedOrigins,
+		Env:                 getEnv("ENV", "local"),
+		PaddleAPIKey:        os.Getenv("PADDLE_API_KEY"),
+		PaddleWebhookSecret: os.Getenv("PADDLE_WEBHOOK_SECRET"),
+		PaddleClientToken:   os.Getenv("PADDLE_CLIENT_TOKEN"),
+		PaddlePriceID:       os.Getenv("PADDLE_PRICE_ID"),
 	}, nil
 }
 

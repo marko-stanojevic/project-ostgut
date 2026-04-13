@@ -1,0 +1,135 @@
+'use client'
+
+import Link from 'next/link'
+import { useAuth } from '@/context/AuthContext'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+
+const features = {
+  free: [
+    'Up to 3 projects',
+    'Basic analytics',
+    'Community support',
+    '14-day free trial of Pro',
+  ],
+  pro: [
+    'Unlimited projects',
+    'Advanced analytics',
+    'Priority support',
+    'Early access to new features',
+    'Custom integrations',
+    'Team collaboration',
+  ],
+}
+
+export default function PricingPage() {
+  const { user } = useAuth()
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Navigation */}
+      <header className="border-b">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
+          <Link href="/" className="text-lg font-semibold tracking-tight">Ostgut</Link>
+          <nav className="flex items-center gap-3">
+            {user ? (
+              <>
+                <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
+                <Link href="/account" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Account</Link>
+              </>
+            ) : (
+              <>
+                <Link href="/auth/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Login</Link>
+                <Link href="/auth/signup" className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90 transition-opacity">Sign Up</Link>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      <main className="flex-1 py-20 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-14">
+            <h1 className="text-4xl font-bold tracking-tight">Simple, transparent pricing</h1>
+            <p className="text-muted-foreground mt-3 text-lg">Start free, upgrade when you need more.</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Free */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl">Free</CardTitle>
+                <div className="mt-2">
+                  <span className="text-4xl font-bold">$0</span>
+                  <span className="text-muted-foreground ml-1">/ month</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ul className="space-y-2">
+                  {features.free.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm">
+                      <span className="text-muted-foreground mt-0.5">✓</span>
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href="/auth/signup">
+                  <Button variant="outline" className="w-full mt-4">Get started free</Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Pro */}
+            <Card className="border-primary/60 shadow-md">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl">Pro</CardTitle>
+                  <span className="text-xs font-medium bg-primary text-primary-foreground px-2 py-0.5 rounded-full">Popular</span>
+                </div>
+                <div className="mt-2">
+                  <span className="text-4xl font-bold">$19</span>
+                  <span className="text-muted-foreground ml-1">/ month</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ul className="space-y-2">
+                  {features.pro.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm">
+                      <span className="text-primary mt-0.5">✓</span>
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href={user ? '/account' : '/auth/signup'}>
+                  <Button className="w-full mt-4">
+                    {user ? 'Upgrade to Pro' : 'Start 14-day free trial'}
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+
+          <p className="text-center text-sm text-muted-foreground mt-10">
+            All plans include a 14-day free trial. No credit card required to start.
+            Payments are processed securely by{' '}
+            <a href="https://paddle.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
+              Paddle
+            </a>
+            .
+          </p>
+        </div>
+      </main>
+
+      <footer className="border-t">
+        <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>&copy; {new Date().getFullYear()} Ostgut. All rights reserved.</span>
+          <nav className="flex gap-4">
+            <Link href="/refunds" className="hover:text-foreground transition-colors">Refunds</Link>
+            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
+          </nav>
+        </div>
+      </footer>
+    </div>
+  )
+}

@@ -51,8 +51,14 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t">
-        <div className="max-w-5xl mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Ostgut. All rights reserved.
+        <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>&copy; {new Date().getFullYear()} Ostgut. All rights reserved.</span>
+          <nav className="flex gap-4">
+            <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
+            <Link href="/refunds" className="hover:text-foreground transition-colors">Refunds</Link>
+            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
+          </nav>
         </div>
       </footer>
     </div>

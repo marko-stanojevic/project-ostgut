@@ -191,6 +191,22 @@ resource "azurerm_container_app" "backend" {
         name        = "JWT_SECRET"
         secret_name = "jwt-secret"
       }
+      env {
+        name        = "PADDLE_API_KEY"
+        secret_name = "paddle-api-key"
+      }
+      env {
+        name        = "PADDLE_WEBHOOK_SECRET"
+        secret_name = "paddle-webhook-secret"
+      }
+      env {
+        name  = "PADDLE_CLIENT_TOKEN"
+        value = var.paddle_client_token
+      }
+      env {
+        name  = "PADDLE_PRICE_ID"
+        value = var.paddle_price_id
+      }
     }
   }
 
@@ -201,6 +217,14 @@ resource "azurerm_container_app" "backend" {
   secret {
     name  = "jwt-secret"
     value = var.jwt_secret
+  }
+  secret {
+    name  = "paddle-api-key"
+    value = var.paddle_api_key != "" ? var.paddle_api_key : "placeholder"
+  }
+  secret {
+    name  = "paddle-webhook-secret"
+    value = var.paddle_webhook_secret != "" ? var.paddle_webhook_secret : "placeholder"
   }
 
   ingress {

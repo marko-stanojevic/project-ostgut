@@ -9,11 +9,22 @@ import (
 
 // Handler holds shared dependencies for HTTP handlers.
 type Handler struct {
-	store *store.UserStore
-	log   *slog.Logger
+	store               *store.UserStore
+	subStore            *store.SubscriptionStore
+	log                 *slog.Logger
+	paddleWebhookSecret string
+	paddleClientToken   string
+	paddlePriceID       string
 }
 
-// New creates a Handler with the given store and logger.
-func New(s *store.UserStore, log *slog.Logger) *Handler {
-	return &Handler{store: s, log: log}
+// New creates a Handler with the given stores and logger.
+func New(s *store.UserStore, sub *store.SubscriptionStore, log *slog.Logger, paddleWebhookSecret, paddleClientToken, paddlePriceID string) *Handler {
+	return &Handler{
+		store:               s,
+		subStore:            sub,
+		log:                 log,
+		paddleWebhookSecret: paddleWebhookSecret,
+		paddleClientToken:   paddleClientToken,
+		paddlePriceID:       paddlePriceID,
+	}
 }

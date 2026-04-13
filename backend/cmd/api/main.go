@@ -49,7 +49,8 @@ func main() {
 	}
 
 	userStore := store.NewUserStore(pool)
-	h := handler.New(userStore, logger)
+	subStore := store.NewSubscriptionStore(pool)
+	h := handler.New(userStore, subStore, logger, cfg.PaddleWebhookSecret, cfg.PaddleClientToken, cfg.PaddlePriceID)
 
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -76,12 +77,17 @@ func main() {
 	router.POST("/auth/reset-password", h.ResetPassword)
 	router.POST("/auth/verify", handler.AuthVerify)
 
+	// Paddle webhook (public — signature-verified internally)
+	router.POST("/billing/webhook", h.PaddleWebhook)
+
 	// Protected routes (JWT required)
 	protected := router.Group("/")
 	protected.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
 	{
 		protected.GET("/users/me", h.GetProfile)
 		protected.PUT("/users/me", h.UpdateProfile)
+		protected.GET("/billing/subscription", h.GetSubscription)
+		protected.GET("/billing/checkout-config", h.GetCheckoutConfig)
 	}
 
 	srv := &http.Server{
