@@ -34,16 +34,33 @@ env:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
+  # 0. Detect which parts of the repo changed.
+  #    On workflow_dispatch, all services are treated as changed.
+  # ──────────────────────────────────────────────────────────────────────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  # ──────────────────────────────────────────────────────────────────────────
   # 1. Provision infrastructure
-  #    Runs tofu apply to ensure all Azure resources exist (VNet, DB, ACR, etc.).
-  #    Uses "latest" as a placeholder image tag — the container app may be in a
-  #    degraded state until job 3 updates it with the real tag, which is fine.
-  #    Outputs the ACR login server so job 2 can push images without needing
-  #    a separately configured GitHub variable.
   # ──────────────────────────────────────────────────────────────────────────
   provision:
     name: Provision infrastructure (${{ github.event.inputs.environment || 'staging' }})
     runs-on: ubuntu-latest
+    needs: changes
     environment: ${{ github.event.inputs.environment || 'staging' }}
 
     outputs:
@@ -115,18 +132,20 @@ jobs:
           echo "acr_login_server=$(tofu output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
 
   # ──────────────────────────────────────────────────────────────────────────
-  # 2. Build & push Docker images to ACR
-  #    ACR login server comes from the provision job — no GitHub variable needed.
+  # 2. Build & push Docker images
+  #    Only builds images for services that changed.
+  #    For unchanged services, fetches the current running image tag from Azure
+  #    so the deploy step can pass it through without triggering a redeploy.
   # ──────────────────────────────────────────────────────────────────────────
   build-push:
     name: Build & push images
     runs-on: ubuntu-latest
-    needs: provision
+    needs: [changes, provision]
     environment: ${{ github.event.inputs.environment || 'staging' }}
 
     outputs:
-      backend_image_tag: ${{ steps.meta-backend.outputs.version }}
-      frontend_image_tag: ${{ steps.meta-frontend.outputs.version }}
+      backend_image_tag: ${{ steps.backend-tag.outputs.tag }}
+      frontend_image_tag: ${{ steps.frontend-tag.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v6
@@ -156,54 +175,75 @@ jobs:
           REGISTRY="${{ needs.provision.outputs.acr_login_server }}"
           az acr login --name "${REGISTRY%%.*}"
 
-      - name: Docker metadata (backend)
-        id: meta-backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ needs.provision.outputs.acr_login_server }}/backend
-          tags: |
-            type=raw,value=${{ steps.gitversion.outputs.semVer }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-
-      - name: Docker metadata (frontend)
-        id: meta-frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ needs.provision.outputs.acr_login_server }}/frontend
-          tags: |
-            type=raw,value=${{ steps.gitversion.outputs.semVer }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # ── Backend ──────────────────────────────────────────────────────────
+      - name: Determine backend image tag
+        id: backend-tag
+        run: |
+          FORCE="${{ github.event_name == 'workflow_dispatch' }}"
+          CHANGED="${{ needs.changes.outputs.backend }}"
+          if [[ "$FORCE" == "true" || "$CHANGED" == "true" ]]; then
+            echo "tag=${{ steps.gitversion.outputs.semVer }}" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            CURRENT=$(az containerapp show \
+              --name "ca-ostgut-${{ env.ENVIRONMENT }}-backend" \
+              --resource-group "rg-ostgut-${{ env.ENVIRONMENT }}" \
+              --query "properties.template.containers[0].image" -o tsv 2>/dev/null || echo ":latest")
+            echo "tag=${CURRENT##*:}" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build & push backend
+        if: steps.backend-tag.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: backend
           file: backend/Dockerfile
           push: true
-          tags: ${{ steps.meta-backend.outputs.tags }}
-          labels: ${{ steps.meta-backend.outputs.labels }}
+          tags: |
+            ${{ needs.provision.outputs.acr_login_server }}/backend:${{ steps.backend-tag.outputs.tag }}
+            ${{ needs.provision.outputs.acr_login_server }}/backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ── Frontend ─────────────────────────────────────────────────────────
+      - name: Determine frontend image tag
+        id: frontend-tag
+        run: |
+          FORCE="${{ github.event_name == 'workflow_dispatch' }}"
+          CHANGED="${{ needs.changes.outputs.frontend }}"
+          if [[ "$FORCE" == "true" || "$CHANGED" == "true" ]]; then
+            echo "tag=${{ steps.gitversion.outputs.semVer }}" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            CURRENT=$(az containerapp show \
+              --name "ca-ostgut-${{ env.ENVIRONMENT }}-frontend" \
+              --resource-group "rg-ostgut-${{ env.ENVIRONMENT }}" \
+              --query "properties.template.containers[0].image" -o tsv 2>/dev/null || echo ":latest")
+            echo "tag=${CURRENT##*:}" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build & push frontend
+        if: steps.frontend-tag.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: frontend
           file: frontend/Dockerfile
           push: true
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
+          tags: |
+            ${{ needs.provision.outputs.acr_login_server }}/frontend:${{ steps.frontend-tag.outputs.tag }}
+            ${{ needs.provision.outputs.acr_login_server }}/frontend:latest
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   # ──────────────────────────────────────────────────────────────────────────
-  # 3. Update container app with the real image tags
-  #    Second tofu apply is fast — only the container app image tag changes.
+  # 3. Update container apps with the resolved image tags
   # ──────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy (${{ github.event.inputs.environment || 'staging' }})
