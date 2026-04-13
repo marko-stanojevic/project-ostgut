@@ -9,7 +9,7 @@ locals {
   }
 
   # Constructed from the server FQDN so no secret is stored in variables.
-  database_url = "postgres://${var.db_admin_username}:${var.db_admin_password}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${var.project}?sslmode=require"
+  database_url = "postgres://${var.db_admin_username}:${urlencode(var.db_admin_password)}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${var.project}?sslmode=require"
 }
 
 # ──────────────────────────────────────────────
