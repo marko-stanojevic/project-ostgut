@@ -2,6 +2,10 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -14,55 +18,52 @@ export default function ProfilePage() {
   }
 
   return (
-    <div>
-      <h1 className="text-4xl font-bold text-white mb-8">Profile</h1>
-
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 max-w-2xl">
-        {saveSuccess && (
-          <div className="bg-green-500 bg-opacity-20 border border-green-500 text-green-200 px-4 py-3 rounded-lg mb-6">
-            Profile updated successfully!
-          </div>
-        )}
-
-        <div className="mb-6">
-          <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-2">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            value={user?.email || ''}
-            disabled
-            autoComplete="email"
-            className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-400 cursor-not-allowed"
-          />
-          <p className="text-xs text-slate-500 mt-1">Email cannot be changed here</p>
-        </div>
-
-        <div className="mb-6">
-          <label htmlFor="display-name" className="block text-sm font-medium text-slate-200 mb-2">
-            Display Name
-          </label>
-          <input
-            id="display-name"
-            name="display-name"
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            autoComplete="name"
-            className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
-            placeholder="Your name"
-          />
-        </div>
-
-        <button
-          onClick={handleSave}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition"
-        >
-          Save Changes
-        </button>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
+        <p className="text-muted-foreground text-sm mt-1">Manage your personal information</p>
       </div>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle className="text-base">Personal Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {saveSuccess && (
+            <p className="text-sm text-green-600 bg-green-50 border border-green-200 rounded-md px-3 py-2">
+              Profile updated successfully!
+            </p>
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              value={user?.email || ''}
+              disabled
+              autoComplete="email"
+            />
+            <p className="text-xs text-muted-foreground">Email cannot be changed here</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="display-name">Display Name</Label>
+            <Input
+              id="display-name"
+              name="display-name"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="name"
+              placeholder="Your name"
+            />
+          </div>
+
+          <Button onClick={handleSave}>Save Changes</Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -3,6 +3,11 @@
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 
 export default function AccountPage() {
   const { user, signOut } = useAuth()
@@ -22,18 +27,17 @@ export default function AccountPage() {
       setError('New passwords do not match')
       return
     }
-
     if (newPassword.length < 8) {
       setError('Password must be at least 8 characters')
       return
     }
 
-    // In real app, you would call API to change password
     setSuccess(true)
     setTimeout(() => {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
+      setSuccess(false)
     }, 1500)
   }
 
@@ -43,119 +47,94 @@ export default function AccountPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-4xl font-bold text-white mb-8">Account</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+        <p className="text-muted-foreground text-sm mt-1">Manage your account details and security</p>
+      </div>
 
-      <div className="space-y-6 max-w-2xl">
-        {/* Account Info */}
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Account Information</h2>
-
-          <div className="space-y-4">
+      <div className="space-y-4 max-w-2xl">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Account Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">
-                Email
-              </label>
-              <p className="text-white text-lg">{user?.email}</p>
+              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="text-sm font-medium mt-0.5">{user?.email}</p>
             </div>
-
+            <Separator />
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">
-                Account ID
-              </label>
-              <p className="text-white font-mono text-sm">{user?.id}</p>
+              <p className="text-xs text-muted-foreground">Account ID</p>
+              <p className="text-sm font-mono mt-0.5">{user?.id ?? '—'}</p>
             </div>
+          </CardContent>
+        </Card>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">
-                Created
-              </label>
-              <p className="text-white">
-                {'—'}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Change Password</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2 mb-4">
+                {error}
               </p>
-            </div>
-          </div>
-        </div>
+            )}
+            {success && (
+              <p className="text-sm text-green-600 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-4">
+                Password changed successfully!
+              </p>
+            )}
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="current-password">Current Password</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="new-password">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+                <p className="text-xs text-muted-foreground">At least 8 characters</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
+              <Button type="submit">Update Password</Button>
+            </form>
+          </CardContent>
+        </Card>
 
-        {/* Change Password */}
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Change Password</h2>
-
-          {error && (
-            <div className="bg-red-500 bg-opacity-20 border border-red-500 text-red-200 px-4 py-3 rounded-lg mb-4">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="bg-green-500 bg-opacity-20 border border-green-500 text-green-200 px-4 py-3 rounded-lg mb-4">
-              Password changed successfully!
-            </div>
-          )}
-
-          <form onSubmit={handlePasswordChange} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
-                Current Password
-              </label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
-                New Password
-              </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
-              />
-              <p className="text-xs text-slate-400 mt-1">At least 8 characters</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-200 mb-2">
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition"
-            >
-              Update Password
-            </button>
-          </form>
-        </div>
-
-        {/* Danger Zone */}
-        <div className="bg-red-900 bg-opacity-20 border border-red-700 rounded-lg p-6">
-          <h2 className="text-xl font-bold text-red-400 mb-4">Danger Zone</h2>
-          <p className="text-slate-300 mb-4">
-            Sign out from this device.
-          </p>
-          <button
-            onClick={handleSignOut}
-            className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-lg transition"
-          >
-            Sign Out
-          </button>
-        </div>
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">Sign out from this device.</p>
+            <Button variant="destructive" onClick={handleSignOut}>Sign Out</Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
