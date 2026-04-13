@@ -11,6 +11,7 @@ import (
 type Handler struct {
 	store               *store.UserStore
 	subStore            *store.SubscriptionStore
+	stationStore        *store.StationStore
 	log                 *slog.Logger
 	paddleWebhookSecret string
 	paddleClientToken   string
@@ -18,10 +19,17 @@ type Handler struct {
 }
 
 // New creates a Handler with the given stores and logger.
-func New(s *store.UserStore, sub *store.SubscriptionStore, log *slog.Logger, paddleWebhookSecret, paddleClientToken, paddlePriceID string) *Handler {
+func New(
+	s *store.UserStore,
+	sub *store.SubscriptionStore,
+	stations *store.StationStore,
+	log *slog.Logger,
+	paddleWebhookSecret, paddleClientToken, paddlePriceID string,
+) *Handler {
 	return &Handler{
 		store:               s,
 		subStore:            sub,
+		stationStore:        stations,
 		log:                 log,
 		paddleWebhookSecret: paddleWebhookSecret,
 		paddleClientToken:   paddleClientToken,

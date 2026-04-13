@@ -5,7 +5,7 @@ export default auth(function middleware(req) {
   const isAuthenticated = !!req.auth?.user?.email
   const { pathname } = req.nextUrl
 
-  const protectedRoutes = ['/dashboard', '/profile', '/settings', '/account']
+  const protectedRoutes = ['/settings']
   const authRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/reset-password']
 
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
@@ -16,7 +16,7 @@ export default auth(function middleware(req) {
   }
 
   if (isAuthRoute && isAuthenticated) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
+    return NextResponse.redirect(new URL('/', req.url))
   }
 })
 

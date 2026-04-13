@@ -5,17 +5,24 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
 // GetSubscription returns the current user's subscription details.
 func (h *Handler) GetSubscription(c *gin.Context) {
-	userID, _ := c.Get("userID")
-	sub, err := h.subStore.GetByUserID(c.Request.Context(), userID.(string))
+	sub, err := h.subStore.GetByUserID(c.Request.Context(), middleware.GetUserID(c))
+	if errors.Is(err, store.ErrNotFound) {
+		// User predates the subscriptions table — return a default free/trialing state.
+		c.JSON(http.StatusOK, gin.H{"plan": "free", "status": "trialing"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load subscription"})
 		return

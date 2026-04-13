@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -28,6 +29,7 @@ type User struct {
 	Email        string
 	PasswordHash string
 	Name         string
+	IsAdmin      bool
 }
 
 // UserStore executes queries against the users and password_reset_tokens tables.
@@ -42,6 +44,8 @@ func NewUserStore(pool *pgxpool.Pool) *UserStore {
 
 // Create inserts a new user with a bcrypt-hashed password.
 func (s *UserStore) Create(ctx context.Context, email, password string) (*User, error) {
+	email = normalizeEmail(email)
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
@@ -65,6 +69,8 @@ func (s *UserStore) Create(ctx context.Context, email, password string) (*User, 
 
 // GetByEmail fetches a user by email address.
 func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error) {
+	email = normalizeEmail(email)
+
 	var u User
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, email, COALESCE(password_hash, ''), name FROM users WHERE email = $1`,
@@ -83,9 +89,9 @@ func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error)
 func (s *UserStore) GetByID(ctx context.Context, id string) (*User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, COALESCE(password_hash, ''), name FROM users WHERE id = $1`,
+		`SELECT id, email, COALESCE(password_hash, ''), name, is_admin FROM users WHERE id = $1`,
 		id,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.IsAdmin)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -102,6 +108,8 @@ func (s *UserStore) GetByID(ctx context.Context, id string) (*User, error) {
 //  2. Existing row matching email — link the OAuth identity and return it.
 //  3. No match — create a new password-less user.
 func (s *UserStore) UpsertOAuthUser(ctx context.Context, provider, providerID, email, name string) (*User, error) {
+	email = normalizeEmail(email)
+
 	var u User
 
 	// 1. Already linked
@@ -147,6 +155,33 @@ func (s *UserStore) UpsertOAuthUser(ctx context.Context, provider, providerID, e
 	return &u, nil
 }
 
+// ListUsers returns a paginated list of users ordered by creation date.
+func (s *UserStore) ListUsers(ctx context.Context, limit, offset int) ([]*User, int, error) {
+	var total int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count users: %w", err)
+	}
+
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, email, COALESCE(name,''), is_admin FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.IsAdmin); err != nil {
+			return nil, 0, err
+		}
+		users = append(users, &u)
+	}
+	return users, total, rows.Err()
+}
+
 // UpdateName updates the display name of a user.
 func (s *UserStore) UpdateName(ctx context.Context, id, name string) error {
 	tag, err := s.pool.Exec(ctx,
@@ -155,6 +190,36 @@ func (s *UserStore) UpdateName(ctx context.Context, id, name string) error {
 	)
 	if err != nil {
 		return fmt.Errorf("update name: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// IsAdmin returns true if the user has the is_admin flag set.
+func (s *UserStore) IsAdmin(ctx context.Context, userID string) (bool, error) {
+	var isAdmin bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT is_admin FROM users WHERE id = $1`, userID,
+	).Scan(&isAdmin)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check admin: %w", err)
+	}
+	return isAdmin, nil
+}
+
+// SetAdmin sets or clears the is_admin flag for a user.
+func (s *UserStore) SetAdmin(ctx context.Context, userID string, isAdmin bool) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET is_admin = $1, updated_at = NOW() WHERE id = $2`,
+		isAdmin, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("set admin: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -235,4 +300,8 @@ func (s *UserStore) ResetPassword(ctx context.Context, token, newPassword string
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }

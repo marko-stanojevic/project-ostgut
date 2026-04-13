@@ -30,9 +30,10 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":    u.ID,
-		"email": u.Email,
-		"name":  u.Name,
+		"id":       u.ID,
+		"email":    u.Email,
+		"name":     u.Name,
+		"is_admin": u.IsAdmin,
 	})
 }
 

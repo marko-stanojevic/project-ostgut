@@ -1,7 +1,6 @@
-'use client'
-
 import Link from 'next/link'
-import { useAuth } from '@/context/AuthContext'
+import { auth } from '@/lib/auth'
+import { AccountMenu } from '@/components/account-menu'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -22,20 +21,23 @@ const features = {
   ],
 }
 
-export default function PricingPage() {
-  const { user } = useAuth()
+export default async function PricingPage() {
+  const session = await auth()
+  const isAuthenticated = !!session?.user
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Navigation */}
-      <header className="border-b">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-lg font-semibold tracking-tight">Ostgut</Link>
+      <header className="border-b border-border/30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-3 sm:px-6">
+          <Link href="/" className="text-base font-bold tracking-tight text-white sm:text-lg">bouji.fm</Link>
           <nav className="flex items-center gap-3">
-            {user ? (
+            {isAuthenticated ? (
               <>
-                <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
-                <Link href="/account" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Account</Link>
+                <Link href="/pricing" className="hidden rounded-full border border-border/50 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-muted/40 sm:block">
+                  Upgrade
+                </Link>
+                <AccountMenu />
               </>
             ) : (
               <>
@@ -100,9 +102,9 @@ export default function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href={user ? '/account' : '/auth/signup'}>
+                <Link href={isAuthenticated ? '/settings' : '/auth/signup'}>
                   <Button className="w-full mt-4">
-                    {user ? 'Upgrade to Pro' : 'Start 14-day free trial'}
+                    {isAuthenticated ? 'Upgrade to Pro' : 'Start 14-day free trial'}
                   </Button>
                 </Link>
               </CardContent>
@@ -120,9 +122,9 @@ export default function PricingPage() {
         </div>
       </main>
 
-      <footer className="border-t">
-        <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>&copy; {new Date().getFullYear()} Ostgut. All rights reserved.</span>
+      <footer className="border-t border-border/40">
+        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>&copy; {new Date().getFullYear()} bouji.fm. All rights reserved.</span>
           <nav className="flex gap-4">
             <Link href="/refunds" className="hover:text-foreground transition-colors">Refunds</Link>
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>

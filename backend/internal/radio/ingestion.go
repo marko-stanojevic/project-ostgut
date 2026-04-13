@@ -1,0 +1,295 @@
+// Package radio handles station ingestion from Radio Browser API and applies
+// the curation layer that makes bouji.fm feel premium.
+package radio
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
+)
+
+const (
+	// radioBrowserBase is the community-run open radio directory.
+	radioBrowserBase = "https://de1.api.radio-browser.info/json"
+
+	// minBitrate filters out low-quality streams.
+	minBitrate = 64
+
+	// minVotes is a proxy for reliability — stations with few votes are often dead.
+	minVotes = 5
+
+	// batchSize controls how many stations we fetch per request.
+	batchSize = 500
+
+	// syncInterval is how often the background goroutine re-syncs.
+	SyncInterval = 6 * time.Hour
+)
+
+// radioBrowserStation is the raw shape returned by Radio Browser API.
+type radioBrowserStation struct {
+	StationUUID  string `json:"stationuuid"`
+	Name         string `json:"name"`
+	URL          string `json:"url_resolved"`
+	Homepage     string `json:"homepage"`
+	Favicon      string `json:"favicon"`
+	Tags         string `json:"tags"`         // comma-separated
+	Country      string `json:"country"`
+	CountryCode  string `json:"countrycode"`
+	Language     string `json:"language"`
+	LanguageCodes string `json:"languagecodes"`
+	Codec        string `json:"codec"`
+	Bitrate      int    `json:"bitrate"`
+	Votes        int    `json:"votes"`
+	ClickCount   int    `json:"clickcount"`
+	LastCheckOK  int    `json:"lastcheckok"` // 1 = OK, 0 = down
+}
+
+// Syncer fetches stations from Radio Browser and writes them to the store.
+type Syncer struct {
+	store  *store.StationStore
+	log    *slog.Logger
+	client *http.Client
+}
+
+// NewSyncer creates a Syncer.
+func NewSyncer(s *store.StationStore, log *slog.Logger) *Syncer {
+	return &Syncer{
+		store:  s,
+		log:    log,
+		client: &http.Client{Timeout: 30 * time.Second},
+	}
+}
+
+// Run blocks, syncing immediately then on SyncInterval.
+func (s *Syncer) Run(ctx context.Context) {
+	s.sync(ctx)
+	ticker := time.NewTicker(SyncInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.sync(ctx)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Syncer) sync(ctx context.Context) {
+	s.log.Info("radio: starting station sync")
+	start := time.Now()
+
+	stations, err := s.fetch(ctx)
+	if err != nil {
+		s.log.Error("radio: fetch failed", "error", err)
+		return
+	}
+
+	curated := curate(stations)
+	s.log.Info("radio: curation complete", "fetched", len(stations), "curated", len(curated))
+
+	var saved int
+	for _, st := range curated {
+		if err := s.store.Upsert(ctx, st); err != nil {
+			s.log.Warn("radio: upsert failed", "station", st.Name, "error", err)
+			continue
+		}
+		saved++
+	}
+
+	s.log.Info("radio: sync done", "saved", saved, "duration", time.Since(start).Round(time.Second))
+}
+
+// fetch retrieves stations from Radio Browser, paginating until exhausted.
+func (s *Syncer) fetch(ctx context.Context) ([]radioBrowserStation, error) {
+	var all []radioBrowserStation
+	offset := 0
+
+	for {
+		url := fmt.Sprintf(
+			"%s/stations/search?limit=%d&offset=%d&order=votes&reverse=true&hidebroken=true",
+			radioBrowserBase, batchSize, offset,
+		)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "bouji.fm/1.0 (radio@worksfine.app)")
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("radio browser request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("radio browser returned %d", resp.StatusCode)
+		}
+
+		var batch []radioBrowserStation
+		if err := json.NewDecoder(resp.Body).Decode(&batch); err != nil {
+			return nil, fmt.Errorf("decode: %w", err)
+		}
+
+		all = append(all, batch...)
+
+		// Stop when we get a partial page (last page) or have enough.
+		if len(batch) < batchSize || len(all) >= 10_000 {
+			break
+		}
+		offset += batchSize
+	}
+
+	return all, nil
+}
+
+// curate applies curation rules and converts to store.Station.
+// Rules (in order):
+//  1. Stream URL must be non-empty
+//  2. Last check must be OK
+//  3. Bitrate >= minBitrate
+//  4. Votes >= minVotes
+//  5. Reliability score computed from votes + clicks
+func curate(raw []radioBrowserStation) []*store.Station {
+	var out []*store.Station
+
+	for _, r := range raw {
+		// Hard filters
+		if r.URL == "" {
+			continue
+		}
+		if r.LastCheckOK != 1 {
+			continue
+		}
+		if r.Bitrate < minBitrate {
+			continue
+		}
+		if r.Votes < minVotes {
+			continue
+		}
+
+		name := strings.TrimSpace(r.Name)
+		if name == "" {
+			continue
+		}
+
+		// Parse tags
+		tags := parseTags(r.Tags)
+
+		// Derive primary genre from tags or language
+		genre := primaryGenre(tags, r.Language)
+
+		// Reliability score: normalised votes weighted 70%, clicks 30%
+		// Both capped at 10 000 to avoid outlier domination.
+		votesNorm := clamp(float64(r.Votes)/10_000, 0, 1)
+		clicksNorm := clamp(float64(r.ClickCount)/10_000, 0, 1)
+		reliability := votesNorm*0.7 + clicksNorm*0.3
+
+		out = append(out, &store.Station{
+			ExternalID:       r.StationUUID,
+			Name:             name,
+			StreamURL:        r.URL,
+			Homepage:         r.Homepage,
+			Favicon:          r.Favicon,
+			Genre:            genre,
+			Language:         primaryLanguage(r.Language, r.LanguageCodes),
+			Country:          r.Country,
+			CountryCode:      strings.ToUpper(r.CountryCode),
+			Tags:             tags,
+			Bitrate:          r.Bitrate,
+			Codec:            strings.ToUpper(r.Codec),
+			Votes:            r.Votes,
+			ClickCount:       r.ClickCount,
+			ReliabilityScore: reliability,
+			IsActive:         true,
+		})
+	}
+
+	return out
+}
+
+func parseTags(raw string) []string {
+	var tags []string
+	for _, t := range strings.Split(raw, ",") {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return tags
+}
+
+// genreKeywords maps common radio tags to a canonical genre name.
+var genreKeywords = []struct {
+	keyword string
+	genre   string
+}{
+	{"jazz", "Jazz"},
+	{"classical", "Classical"},
+	{"classic rock", "Classic Rock"},
+	{"rock", "Rock"},
+	{"pop", "Pop"},
+	{"electronic", "Electronic"},
+	{"dance", "Dance"},
+	{"house", "House"},
+	{"techno", "Techno"},
+	{"ambient", "Ambient"},
+	{"lofi", "Lo-Fi"},
+	{"lo-fi", "Lo-Fi"},
+	{"hip hop", "Hip-Hop"},
+	{"hiphop", "Hip-Hop"},
+	{"r&b", "R&B"},
+	{"soul", "Soul"},
+	{"blues", "Blues"},
+	{"country", "Country"},
+	{"folk", "Folk"},
+	{"reggae", "Reggae"},
+	{"latin", "Latin"},
+	{"news", "News"},
+	{"talk", "Talk"},
+	{"sports", "Sports"},
+	{"world", "World"},
+	{"metal", "Metal"},
+	{"punk", "Punk"},
+	{"alternative", "Alternative"},
+	{"indie", "Indie"},
+}
+
+func primaryGenre(tags []string, language string) string {
+	combined := strings.ToLower(strings.Join(tags, " "))
+	for _, g := range genreKeywords {
+		if strings.Contains(combined, g.keyword) {
+			return g.genre
+		}
+	}
+	return "World"
+}
+
+func primaryLanguage(language, codes string) string {
+	if language != "" {
+		parts := strings.Split(language, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if codes != "" {
+		parts := strings.Split(codes, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	return ""
+}
+
+func clamp(v, min, max float64) float64 {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
+}

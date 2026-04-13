@@ -1,21 +1,36 @@
 import Link from 'next/link'
+import { auth } from '@/lib/auth'
+import { AccountMenu } from '@/components/account-menu'
 
 export const metadata = {
-  title: 'Privacy Policy — Ostgut',
+  title: 'Privacy Policy — bouji.fm',
 }
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const session = await auth()
+  const isAuthenticated = !!session?.user
   const updated = 'April 13, 2025'
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Navigation */}
-      <header className="border-b">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-lg font-semibold tracking-tight">Ostgut</Link>
+      <header className="border-b border-border/30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-3 sm:px-6">
+          <Link href="/" className="text-base font-bold tracking-tight text-white sm:text-lg">bouji.fm</Link>
           <nav className="flex items-center gap-3">
-            <Link href="/auth/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Login</Link>
-            <Link href="/auth/signup" className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90 transition-opacity">Sign Up</Link>
+            {isAuthenticated ? (
+              <>
+                <Link href="/pricing" className="hidden rounded-full border border-border/50 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-muted/40 sm:block">
+                  Upgrade
+                </Link>
+                <AccountMenu />
+              </>
+            ) : (
+              <>
+                <Link href="/auth/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Login</Link>
+                <Link href="/auth/signup" className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90 transition-opacity">Sign Up</Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -29,7 +44,7 @@ export default function PrivacyPage() {
             <section>
               <h2 className="text-lg font-semibold mb-2">1. Who We Are</h2>
               <p>
-                Ostgut (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates the Ostgut platform. This Privacy Policy explains how we collect, use, and protect your personal data when you use our Service.
+                bouji.fm (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates the bouji.fm platform. This Privacy Policy explains how we collect, use, and protect your personal data when you use our Service.
               </p>
             </section>
 
@@ -126,9 +141,9 @@ export default function PrivacyPage() {
         </div>
       </main>
 
-      <footer className="border-t">
-        <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>&copy; {new Date().getFullYear()} Ostgut. All rights reserved.</span>
+      <footer className="border-t border-border/40">
+        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>&copy; {new Date().getFullYear()} bouji.fm. All rights reserved.</span>
           <nav className="flex gap-4">
             <Link href="/refunds" className="hover:text-foreground transition-colors">Refunds</Link>
             <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>

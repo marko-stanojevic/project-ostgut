@@ -21,6 +21,7 @@ import (
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/db"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/handler"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 	"github.com/marko-stanojevic/project-ostgut/backend/migrations"
 )
@@ -51,7 +52,14 @@ func main() {
 
 	userStore := store.NewUserStore(pool)
 	subStore := store.NewSubscriptionStore(pool)
-	h := handler.New(userStore, subStore, logger, cfg.PaddleWebhookSecret, cfg.PaddleClientToken, cfg.PaddlePriceID)
+	stationStore := store.NewStationStore(pool)
+	h := handler.New(userStore, subStore, stationStore, logger, cfg.PaddleWebhookSecret, cfg.PaddleClientToken, cfg.PaddlePriceID)
+
+	// Start background station sync (Radio Browser ingestion).
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	defer syncCancel()
+	syncer := radio.NewSyncer(stationStore, logger)
+	go syncer.Run(syncCtx)
 
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -78,6 +86,12 @@ func main() {
 	router.POST("/auth/reset-password", h.ResetPassword)
 	router.POST("/auth/verify", handler.AuthVerify)
 
+	// Station routes (public — no auth required)
+	router.GET("/stations", h.ListStations)
+	router.GET("/stations/filters", h.GetFilters)
+	router.GET("/stations/:id", h.GetStation)
+	router.GET("/search", h.SearchStations)
+
 	// Paddle webhook (public — signature-verified internally)
 	router.POST("/billing/webhook", h.PaddleWebhook)
 
@@ -89,6 +103,20 @@ func main() {
 		protected.PUT("/users/me", h.UpdateProfile)
 		protected.GET("/billing/subscription", h.GetSubscription)
 		protected.GET("/billing/checkout-config", h.GetCheckoutConfig)
+	}
+
+	// Admin routes (JWT + is_admin required)
+	admin := router.Group("/admin")
+	admin.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
+	admin.Use(middleware.AdminMiddleware(userStore))
+	{
+		admin.GET("/stats", h.AdminStats)
+		admin.GET("/stations", h.AdminListStations)
+		admin.POST("/stations/bulk", h.AdminBulkAction)
+		admin.GET("/stations/:id", h.AdminGetStation)
+		admin.PUT("/stations/:id", h.AdminUpdateStation)
+		admin.GET("/users", h.AdminListUsers)
+		admin.PUT("/users/:id/admin", h.AdminSetUserAdmin)
 	}
 
 	srv := &http.Server{
