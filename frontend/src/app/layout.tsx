@@ -1,7 +1,12 @@
 import type { Metadata } from 'next'
 import { SessionProvider } from 'next-auth/react'
 import { AuthProvider } from '@/context/AuthContext'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import './globals.css'
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: 'Project Ostgut',
@@ -14,11 +19,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={cn("font-sans", geist.variable)}>
       <body>
         <SessionProvider>
           <AuthProvider>
-            {children}
+            <TooltipProvider>
+              {children}
+            </TooltipProvider>
           </AuthProvider>
         </SessionProvider>
       </body>

@@ -1,40 +1,46 @@
 'use client'
 
 import { useAuth } from '@/context/AuthContext'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 
 export default function DashboardPage() {
   const { user } = useAuth()
 
   return (
-    <div>
-      <h1 className="text-4xl font-bold text-white mb-8">Welcome back</h1>
-
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-          <p className="text-slate-400 text-sm mb-2">Account Status</p>
-          <p className="text-2xl font-bold text-white">Active</p>
-        </div>
-
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-          <p className="text-slate-400 text-sm mb-2">Email</p>
-          <p className="text-lg font-semibold text-white truncate">{user?.email}</p>
-        </div>
-
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-          <p className="text-slate-400 text-sm mb-2">Member Since</p>
-          <p className="text-lg font-semibold text-white">
-            {'—'}
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+        <p className="text-muted-foreground text-sm mt-1">{user?.email}</p>
       </div>
 
-      <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-        <h2 className="text-xl font-bold text-white mb-4">Quick Links</h2>
-        <ul className="space-y-2 text-slate-300">
-          <li>• <a href="/profile" className="text-blue-400 hover:text-blue-300">Edit your profile</a></li>
-          <li>• <a href="/settings" className="text-blue-400 hover:text-blue-300">Manage settings</a></li>
-          <li>• <a href="/account" className="text-blue-400 hover:text-blue-300">Account settings</a></li>
-        </ul>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Account Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Badge variant="secondary">Active</Badge>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Email</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="font-medium truncate">{user?.email}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Member Since</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="font-medium">—</p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

@@ -1,70 +1,116 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { LayoutDashboard, User, Settings, CreditCard, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+
+const navItems = [
+  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { title: 'Profile',   href: '/profile',   icon: User },
+  { title: 'Settings',  href: '/settings',  icon: Settings },
+  { title: 'Account',   href: '/account',   icon: CreditCard },
+]
+
+function AppSidebar() {
+  const pathname = usePathname()
+  const { user, signOut } = useAuth()
+
+  const initials = user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : '??'
+
+  return (
+    <Sidebar>
+      <SidebarHeader className="border-b px-6 py-4">
+        <span className="text-lg font-semibold tracking-tight">Ostgut</span>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    render={<Link href={item.href} />}
+                    isActive={pathname === item.href}
+                    tooltip={item.title}
+                  >
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t p-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
+            }
+          >
+            <Avatar className="h-7 w-7">
+              <AvatarImage src={user?.image ?? undefined} />
+              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 text-left leading-tight">
+              <p className="font-medium truncate">{user?.name ?? 'Account'}</p>
+              <p className="text-muted-foreground text-xs truncate">{user?.email}</p>
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-52">
+            <DropdownMenuItem onClick={() => signOut()} className="text-destructive focus:text-destructive">
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarFooter>
+    </Sidebar>
+  )
+}
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { user, signOut } = useAuth()
-
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Sidebar Navigation */}
-      <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-white">Project Ostgut</h2>
-        </div>
-
-        <nav className="mt-8 space-y-2 px-4">
-          <Link
-            href="/dashboard"
-            className="block px-4 py-2 text-slate-200 hover:bg-slate-700 rounded-lg transition"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/profile"
-            className="block px-4 py-2 text-slate-200 hover:bg-slate-700 rounded-lg transition"
-          >
-            Profile
-          </Link>
-          <Link
-            href="/settings"
-            className="block px-4 py-2 text-slate-200 hover:bg-slate-700 rounded-lg transition"
-          >
-            Settings
-          </Link>
-          <Link
-            href="/account"
-            className="block px-4 py-2 text-slate-200 hover:bg-slate-700 rounded-lg transition"
-          >
-            Account
-          </Link>
-        </nav>
-
-        <div className="absolute bottom-0 left-0 right-0 border-t border-slate-700 p-4">
-          <div className="mb-4">
-            <p className="text-slate-400 text-sm">Signed in as</p>
-            <p className="text-white font-semibold truncate">{user?.email}</p>
-          </div>
-          <button
-            onClick={() => signOut()}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition"
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="ml-64">
-        <div className="px-8 py-6">
+    <SidebarProvider>
+      <AppSidebar />
+      <main className="flex flex-1 flex-col">
+        <header className="flex h-12 items-center gap-2 border-b px-4">
+          <SidebarTrigger />
+        </header>
+        <div className="flex-1 p-6">
           {children}
         </div>
-      </div>
-    </div>
+      </main>
+    </SidebarProvider>
   )
 }
