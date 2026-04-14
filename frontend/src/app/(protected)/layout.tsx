@@ -115,7 +115,7 @@ export default function DashboardLayout({
         <main className="relative flex-1 overflow-y-auto">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_16%,transparent)_0%,transparent_68%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_8%,transparent)_0%,transparent_72%)] dark:bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_20%,transparent)_0%,transparent_70%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_14%,transparent)_0%,transparent_76%)]"
+            className="pointer-events-none absolute inset-0 opacity-90 bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_16%,transparent)_0%,transparent_68%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_8%,transparent)_0%,transparent_72%)] bg-[length:118%_118%,112%_112%] motion-safe:animate-[bg-fade-drift_24s_ease-in-out_infinite_alternate] motion-reduce:animate-none dark:bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_20%,transparent)_0%,transparent_70%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_14%,transparent)_0%,transparent_76%)]"
           />
           <div className="relative p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
             {children}

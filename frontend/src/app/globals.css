@@ -191,8 +191,29 @@
 }
 
 @keyframes wave-bar {
-  0%, 100% { transform: scaleY(0.35); }
-  50% { transform: scaleY(1); }
+
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes bg-fade-drift {
+  0% {
+    background-position: 0% 0%, 100% 0%;
+  }
+
+  50% {
+    background-position: 6% 3%, 96% 4%;
+  }
+
+  100% {
+    background-position: 2% 6%, 92% 2%;
+  }
 }
 
 @layer components {
