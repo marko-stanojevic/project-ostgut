@@ -16,6 +16,7 @@ type Station struct {
 	ID                string
 	ExternalID        string
 	Name              string
+	CustomName        *string
 	StreamURL         string
 	Homepage          string
 	Favicon           string
@@ -55,8 +56,8 @@ type StationFilter struct {
 
 // EnrichmentUpdate carries the editable editorial fields for a station.
 type EnrichmentUpdate struct {
-	Name              string
 	Status            string
+	CustomName        *string
 	CustomLogo        *string
 	CustomWebsite     *string
 	CustomDescription *string
@@ -75,7 +76,7 @@ func NewStationStore(pool *pgxpool.Pool) *StationStore {
 }
 
 const stationColumns = `
-	id, external_id, name, stream_url, homepage, favicon,
+	id, external_id, name, custom_name, stream_url, homepage, favicon,
 	genre, language, country, country_code, tags,
 	bitrate, codec, votes, click_count, reliability_score,
 	is_active, featured, status,
@@ -85,7 +86,7 @@ const stationColumns = `
 func scanStation(row pgx.Row) (*Station, error) {
 	var s Station
 	err := row.Scan(
-		&s.ID, &s.ExternalID, &s.Name, &s.StreamURL, &s.Homepage, &s.Favicon,
+		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Favicon,
 		&s.Genre, &s.Language, &s.Country, &s.CountryCode, &s.Tags,
 		&s.Bitrate, &s.Codec, &s.Votes, &s.ClickCount, &s.ReliabilityScore,
 		&s.IsActive, &s.Featured, &s.Status,
@@ -275,7 +276,7 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 			is_active         = EXCLUDED.is_active,
 			last_synced_at    = NOW(),
 			updated_at        = NOW()
-			-- NOTE: status, custom_*, editor_notes, featured are intentionally NOT updated`,
+			-- NOTE: status, custom_name, custom_*, editor_notes, featured are intentionally NOT updated`,
 		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Favicon,
 		st.Genre, st.Language, st.Country, st.CountryCode, st.Tags,
 		st.Bitrate, st.Codec, st.Votes, st.ClickCount, st.ReliabilityScore,
@@ -288,8 +289,8 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u EnrichmentUpdate) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE stations SET
-			name               = $1,
-			status             = $2,
+			status             = $1,
+			custom_name        = $2,
 			custom_logo        = $3,
 			custom_website     = $4,
 			custom_description = $5,
@@ -297,7 +298,7 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			featured           = $7,
 			updated_at         = NOW()
 		WHERE id = $8`,
-		u.Name, u.Status, u.CustomLogo, u.CustomWebsite, u.CustomDescription, u.EditorNotes, u.Featured, id,
+		u.Status, u.CustomName, u.CustomLogo, u.CustomWebsite, u.CustomDescription, u.EditorNotes, u.Featured, id,
 	)
 	return err
 }

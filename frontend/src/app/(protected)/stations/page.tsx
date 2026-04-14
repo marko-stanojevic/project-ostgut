@@ -51,11 +51,13 @@ function StationCard({
   s,
   isActive,
   isPlaying,
+  imagePriority,
   onOpen,
 }: {
   s: ApiStation
   isActive: boolean
   isPlaying: boolean
+  imagePriority?: boolean
   onOpen: () => void
 }) {
   const { play, pause } = usePlayer()
@@ -67,37 +69,45 @@ function StationCard({
   }
 
   return (
-    <article className="group relative rounded-xl p-1 text-left transition-all hover:bg-muted/40">
+    <article className="group relative rounded-xl p-2 text-left transition-all hover:bg-muted/40">
       <div
         onClick={onOpen}
-        className="relative block aspect-square w-full overflow-hidden rounded-md bg-muted cursor-pointer"
+        className="relative block aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-pointer"
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpen() }}
         aria-label={`Open ${s.name} details`}
       >
         {s.logo ? (
-          <Image src={s.logo} alt="" fill className="object-cover transition-transform duration-300 group-hover:scale-[1.02]" unoptimized />
+          <Image
+            src={s.logo}
+            alt={s.name}
+            fill
+            priority={imagePriority}
+            sizes="(max-width: 640px) 25vw, (max-width: 1024px) 16vw, 14vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            unoptimized
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Radio className="h-5 w-5 text-muted-foreground" />
+            <Radio className="h-6 w-6 text-muted-foreground" />
           </div>
         )}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/20">
           <button
             onClick={(e) => { e.stopPropagation(); handleTogglePlay() }}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-white/90 opacity-0 transition-opacity duration-200 hover:scale-110 hover:bg-white group-hover:opacity-100"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 opacity-0 transition-opacity duration-200 hover:scale-110 hover:bg-white group-hover:opacity-100"
             aria-label={isActive && isPlaying ? `Pause ${s.name}` : `Play ${s.name}`}
           >
-            {isActive && isPlaying ? <Pause className="h-3 w-3 text-black" /> : <Play className="ml-0.5 h-3 w-3 text-black" />}
+            {isActive && isPlaying ? <Pause className="h-4 w-4 text-black" /> : <Play className="ml-0.5 h-4 w-4 text-black" />}
           </button>
         </div>
       </div>
-      <div className="mt-1">
+      <div className="mt-1.5">
         <button onClick={onOpen} className="w-full cursor-pointer text-left" aria-label={`Open ${s.name} details`}>
-          <p className="truncate text-[13px] font-medium leading-tight tracking-tight">{s.name}</p>
-          <p className="mt-0.5 truncate text-[9px] font-light text-muted-foreground">
-            {[s.genre, s.country].filter(Boolean).join(' · ')}
+          <p className="ui-card-title">{s.name}</p>
+          <p className="ui-card-meta">
+            {s.genre || 'Unknown genre'}
           </p>
         </button>
       </div>
@@ -254,7 +264,7 @@ function StationsContent() {
               </button>
             </div>
             {loadingSearch ? (
-              <div className="grid grid-cols-5 gap-2 sm:grid-cols-8 lg:grid-cols-9">
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-7">
                 {Array.from({ length: 12 }).map((_, i) => <StationCardSkeleton key={i} />)}
               </div>
             ) : searchResults.length === 0 ? (
@@ -263,9 +273,9 @@ function StationsContent() {
                 <p className="text-sm">No stations found. Try a different search.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-5 gap-2 sm:grid-cols-8 lg:grid-cols-9">
-                {searchResults.map((s) => (
-                  <StationCard key={s.id} s={s} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-7">
+                {searchResults.map((s, index) => (
+                  <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                 ))}
               </div>
             )}
@@ -276,20 +286,20 @@ function StationsContent() {
               <div className="mb-10">
                 <div className="mb-4 flex items-center gap-2">
                   <Sparkle className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-medium uppercase tracking-[0.18em]">
+                  <h2 className="ui-section-title">
                     {feedView === 'staff-picks' ? 'Staff Picks' : 'Featured'}
                   </h2>
                 </div>
                 {loadingRecommended ? (
-                  <div className="grid grid-cols-5 gap-2 sm:grid-cols-12">
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-9">
                     {Array.from({ length: 8 }).map((_, i) => <StationCardSkeleton key={i} />)}
                   </div>
                 ) : recommended.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No featured stations yet.</p>
                 ) : (
-                  <div className="grid grid-cols-5 gap-2 sm:grid-cols-12">
-                    {recommended.map((s) => (
-                      <StationCard key={s.id} s={s} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-9">
+                    {recommended.map((s, index) => (
+                      <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                     ))}
                   </div>
                 )}
@@ -299,20 +309,20 @@ function StationsContent() {
               <div>
                 <div className="mb-4 flex items-center gap-2">
                   <TrendUp className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-medium uppercase tracking-[0.18em]">
+                  <h2 className="ui-section-title">
                     {feedView === 'trending' ? 'Trending' : 'Most Played'}
                   </h2>
                 </div>
                 {loadingMostPlayed ? (
-                  <div className="grid grid-cols-5 gap-2 sm:grid-cols-12">
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-9">
                     {Array.from({ length: 5 }).map((_, i) => <StationCardSkeleton key={i} />)}
                   </div>
                 ) : mostPlayed.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No stations yet.</p>
                 ) : (
-                  <div className="grid grid-cols-5 gap-2 sm:grid-cols-12">
-                    {mostPlayed.map((s) => (
-                      <StationCard key={s.id} s={s} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-9">
+                    {mostPlayed.map((s, index) => (
+                      <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                     ))}
                   </div>
                 )}

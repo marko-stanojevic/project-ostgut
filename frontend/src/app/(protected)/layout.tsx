@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { AccountMenu } from '@/components/account-menu'
-import { AppSidebar } from '@/components/app-sidebar'
+import { AppSidebar, AppSidebarMobile } from '@/components/app-sidebar'
 import { MagnifyingGlass, X } from '@phosphor-icons/react'
 
 function StationSearchInner() {
@@ -90,24 +90,30 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
-        {/* Logo occupies exactly the sidebar width so search aligns with content */}
-        <div className="flex w-[222px] shrink-0 items-center pl-3 py-3">
-          <Link href="/stations" className="text-2xl font-medium tracking-[-0.05em] text-foreground sm:text-3xl">
-            bougie.fm
-          </Link>
-        </div>
-        <div className="flex flex-1 items-center gap-4 py-3 pr-6">
-          {showStationSearch ? <StationSearch /> : <div className="w-full max-w-lg" aria-hidden="true" />}
-          <div className="ml-auto flex items-center gap-3">
-            <AccountMenu />
+      <header className="shrink-0 bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/75 sm:px-0">
+        <div className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:gap-0 sm:py-0">
+          {/* Logo occupies exactly the desktop sidebar width so search aligns with content */}
+          <div className="flex items-center justify-between sm:w-[222px] sm:shrink-0 sm:pl-3 sm:py-3">
+            <Link href="/stations" className="text-2xl font-medium tracking-[-0.05em] text-foreground sm:text-3xl">
+              bougie.fm
+            </Link>
+            <div className="sm:hidden">
+              <AccountMenu />
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-1 items-center gap-3 pb-1 sm:gap-4 sm:py-3 sm:pr-6">
+            {showStationSearch ? <StationSearch /> : <div className="hidden w-full max-w-lg sm:block" aria-hidden="true" />}
+            <div className="ml-auto hidden items-center gap-3 sm:flex">
+              <AccountMenu />
+            </div>
           </div>
         </div>
       </header>
+      <AppSidebarMobile />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar />
         <main className="flex-1 overflow-y-auto">
-          <div className="p-6 pb-24">
+          <div className="p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
             {children}
           </div>
         </main>

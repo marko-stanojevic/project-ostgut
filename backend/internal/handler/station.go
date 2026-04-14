@@ -49,9 +49,14 @@ func toStationResponse(s *store.Station) stationResponse {
 		website = *s.CustomWebsite
 	}
 
+	name := s.Name
+	if s.CustomName != nil && *s.CustomName != "" {
+		name = *s.CustomName
+	}
+
 	return stationResponse{
 		ID:               s.ID,
-		Name:             s.Name,
+		Name:             name,
 		StreamURL:        s.StreamURL,
 		Logo:             logo,
 		Website:          website,

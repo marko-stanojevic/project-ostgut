@@ -108,18 +108,18 @@ export default function StationDetailsPage() {
     }, [station])
 
     return (
-        <div className="w-full">
+        <div className="mx-auto w-full max-w-7xl">
             <button
                 type="button"
                 onClick={handleBack}
-                className="mb-5 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:mb-5"
             >
                 <ArrowLeft className="h-4 w-4" />
                 Back to stations
             </button>
 
             {loading ? (
-                <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+                <div className="grid gap-4 md:gap-6 lg:grid-cols-[minmax(240px,320px)_1fr]">
                     <Skeleton className="aspect-square w-full rounded-xl" />
                     <div className="space-y-3">
                         <Skeleton className="h-9 w-3/5" />
@@ -133,10 +133,18 @@ export default function StationDetailsPage() {
                     <p className="text-sm text-destructive">{error}</p>
                 </div>
             ) : station ? (
-                <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+                <div className="grid gap-4 md:gap-6 lg:grid-cols-[minmax(240px,320px)_1fr]">
                     <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted">
                         {station.logo ? (
-                            <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
+                            <Image
+                                src={station.logo}
+                                alt={station.name}
+                                fill
+                                priority
+                                sizes="(max-width: 1024px) 100vw, 320px"
+                                className="object-cover"
+                                unoptimized
+                            />
                         ) : (
                             <div className="flex h-full w-full items-center justify-center">
                                 <Radio className="h-12 w-12 text-muted-foreground" />
@@ -151,12 +159,12 @@ export default function StationDetailsPage() {
                     </div>
 
                     <div>
-                        <h1 className="text-3xl font-semibold tracking-tight">{station.name}</h1>
-                        <p className="mt-2 text-sm text-muted-foreground">
+                        <h1 className="ui-page-title">{station.name}</h1>
+                        <p className="ui-page-subtitle">
                             {[station.genre, station.country].filter(Boolean).join(' · ') || 'Unknown station'}
                         </p>
 
-                        <div className="mt-5 flex flex-wrap items-center gap-3">
+                        <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
                             <button
                                 type="button"
                                 onClick={() => {
@@ -166,7 +174,7 @@ export default function StationDetailsPage() {
                                     }
                                     play(toStation(station))
                                 }}
-                                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                                className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 sm:px-5"
                             >
                                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                                 {isPlaying ? 'Pause' : 'Play'}
@@ -177,7 +185,7 @@ export default function StationDetailsPage() {
                                     href={station.website}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex items-center gap-2 rounded-full border border-border/70 px-4 py-2 text-sm transition-colors hover:bg-muted"
+                                    className="inline-flex items-center gap-2 rounded-full border border-border/70 px-3.5 py-2 text-sm transition-colors hover:bg-muted sm:px-4"
                                 >
                                     <Globe className="h-4 w-4" />
                                     Website
@@ -185,7 +193,7 @@ export default function StationDetailsPage() {
                             ) : null}
                         </div>
 
-                        <div className="mt-6 grid max-w-3xl gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                        <div className="mt-5 grid max-w-3xl gap-2 sm:mt-6 sm:grid-cols-2 xl:grid-cols-3">
                             {stats.map((item) => (
                                 <div key={item.label} className="rounded-md border border-border/60 bg-card/40 px-3 py-2 text-sm">
                                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{item.label}</p>
