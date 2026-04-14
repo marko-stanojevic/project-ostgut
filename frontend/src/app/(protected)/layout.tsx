@@ -49,7 +49,7 @@ function StationSearchInner() {
   }
 
   return (
-    <div className="relative w-full max-w-lg">
+    <div className="relative w-full max-w-lg sm:max-w-2xl">
       <MagnifyingGlassIcon className="absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-muted-foreground" />
       <input
         type="search"
@@ -102,7 +102,7 @@ export default function DashboardLayout({
             </div>
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-4 pb-1 sm:gap-5 sm:py-3.5 sm:pr-5">
-            {showStationSearch ? <StationSearch /> : <div className="hidden w-full max-w-lg sm:block" aria-hidden="true" />}
+            {showStationSearch ? <StationSearch /> : <div className="hidden w-full max-w-lg sm:block sm:max-w-2xl" aria-hidden="true" />}
             <div className="ml-auto hidden items-center gap-3 sm:flex">
               <AccountMenu avatarSize={42} />
             </div>
