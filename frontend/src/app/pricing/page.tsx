@@ -1,23 +1,25 @@
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
-import { AccountMenu } from '@/components/account-menu'
+import { SiteHeader } from '@/components/site-header'
+import { AuthenticatedHeaderActions, GuestHeaderActions } from '@/components/site-header-actions'
+import { SiteFooter } from '@/components/site-footer'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 const features = {
   free: [
-    'Up to 3 projects',
-    'Basic analytics',
-    'Community support',
+    'Access to curated free stations',
+    'Standard stream quality',
+    'Search by genre, country, and language',
     '14-day free trial of Pro',
   ],
   pro: [
-    'Unlimited projects',
-    'Advanced analytics',
-    'Priority support',
-    'Early access to new features',
-    'Custom integrations',
-    'Team collaboration',
+    'Full premium station catalog',
+    'Staff Picks and editorial highlights',
+    'Higher quality and more reliable streams',
+    'Priority curation updates',
+    'Early access to new listening features',
+    'Faster support response',
   ],
 }
 
@@ -27,33 +29,15 @@ export default async function PricingPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Navigation */}
-      <header className="border-b border-border/30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
-        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-3 sm:px-6">
-          <Link href="/" className="text-base font-bold tracking-tight text-white sm:text-lg">bouji.fm</Link>
-          <nav className="flex items-center gap-3">
-            {isAuthenticated ? (
-              <>
-                <Link href="/pricing" className="hidden rounded-full border border-border/50 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-muted/40 sm:block">
-                  Upgrade
-                </Link>
-                <AccountMenu />
-              </>
-            ) : (
-              <>
-                <Link href="/auth/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Login</Link>
-                <Link href="/auth/signup" className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90 transition-opacity">Sign Up</Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      <SiteHeader
+        rightSlot={isAuthenticated ? <AuthenticatedHeaderActions /> : <GuestHeaderActions />}
+      />
 
       <main className="flex-1 py-20 px-4">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
             <h1 className="text-4xl font-bold tracking-tight">Simple, transparent pricing</h1>
-            <p className="text-muted-foreground mt-3 text-lg">Start free, upgrade when you need more.</p>
+            <p className="text-muted-foreground mt-3 text-lg">Start free, upgrade for the full Listening Room experience.</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -89,7 +73,7 @@ export default async function PricingPage() {
                   <span className="text-xs font-medium bg-primary text-primary-foreground px-2 py-0.5 rounded-full">Popular</span>
                 </div>
                 <div className="mt-2">
-                  <span className="text-4xl font-bold">$19</span>
+                  <span className="text-4xl font-bold">$3.99</span>
                   <span className="text-muted-foreground ml-1">/ month</span>
                 </div>
               </CardHeader>
@@ -122,16 +106,13 @@ export default async function PricingPage() {
         </div>
       </main>
 
-      <footer className="border-t border-border/40">
-        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>&copy; {new Date().getFullYear()} bouji.fm. All rights reserved.</span>
-          <nav className="flex gap-4">
-            <Link href="/refunds" className="hover:text-foreground transition-colors">Refunds</Link>
-            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter
+        links={[
+          { href: '/refunds', label: 'Refunds' },
+          { href: '/privacy', label: 'Privacy Policy' },
+          { href: '/terms', label: 'Terms of Service' },
+        ]}
+      />
     </div>
   )
 }

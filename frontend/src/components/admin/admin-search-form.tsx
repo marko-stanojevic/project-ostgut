@@ -1,6 +1,6 @@
 'use client'
 
-import { Search } from 'lucide-react'
+import { MagnifyingGlass } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -22,7 +22,7 @@ export function AdminSearchForm({
     return (
         <form onSubmit={onSubmit} className={className || 'flex gap-2 max-w-sm'}>
             <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                     placeholder={placeholder}
                     value={value}

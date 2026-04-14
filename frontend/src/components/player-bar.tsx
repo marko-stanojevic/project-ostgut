@@ -8,11 +8,11 @@ import {
   Play,
   Pause,
   Square,
-  Volume2,
-  VolumeX,
+  SpeakerHigh,
+  SpeakerX,
   Radio,
-  Loader2,
-} from 'lucide-react'
+  CircleNotch,
+} from '@phosphor-icons/react'
 
 export function PlayerBar() {
   const { station, state, volume, pause, resume, stop, setVolume } = usePlayer()
@@ -24,7 +24,7 @@ export function PlayerBar() {
   const isError = state === 'error'
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 text-zinc-50 backdrop-blur-md supports-[backdrop-filter]:bg-zinc-950/90">
       <div className="flex items-center gap-4 px-4 py-3 max-w-screen-2xl mx-auto">
 
         {/* Station identity */}
@@ -55,8 +55,8 @@ export function PlayerBar() {
               {isError
                 ? 'Stream unavailable'
                 : isLoading
-                ? 'Connecting…'
-                : [station?.genre, station?.country].filter(Boolean).join(' · ')}
+                  ? 'Connecting…'
+                  : [station?.genre, station?.country].filter(Boolean).join(' · ')}
             </p>
           </div>
         </div>
@@ -64,7 +64,7 @@ export function PlayerBar() {
         {/* Playback controls */}
         <div className="flex items-center gap-1 shrink-0">
           {isLoading ? (
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <CircleNotch className="h-5 w-5 animate-spin text-muted-foreground" />
           ) : isPlaying ? (
             <Button variant="ghost" size="icon" onClick={pause} title="Pause">
               <Pause className="h-5 w-5" />
@@ -96,9 +96,9 @@ export function PlayerBar() {
             title={volume === 0 ? 'Unmute' : 'Mute'}
           >
             {volume === 0 ? (
-              <VolumeX className="h-4 w-4" />
+              <SpeakerX className="h-4 w-4" />
             ) : (
-              <Volume2 className="h-4 w-4" />
+              <SpeakerHigh className="h-4 w-4" />
             )}
           </Button>
           <Slider

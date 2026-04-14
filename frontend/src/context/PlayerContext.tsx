@@ -98,6 +98,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setVolume = (v: number) => {
+    if (!Number.isFinite(v)) return
     const clamped = Math.max(0, Math.min(1, v))
     setVolumeState(clamped)
     if (audioRef.current) audioRef.current.volume = clamped
