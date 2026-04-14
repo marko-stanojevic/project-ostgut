@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { LayoutDashboard, Radio, Users, ArrowLeft } from 'lucide-react'
+import { SquaresFour, Radio, Users, ArrowLeft } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { AccountMenu } from '@/components/account-menu'
@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { title: 'Overview', href: '/admin', icon: LayoutDashboard },
+  { title: 'Overview', href: '/admin', icon: SquaresFour },
   { title: 'Stations', href: '/admin/stations', icon: Radio },
   { title: 'Users', href: '/admin/users', icon: Users },
 ]

@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { usePlayer, type Station } from '@/context/PlayerContext'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Radio, Play, Pause, X, Sparkles, TrendingUp } from 'lucide-react'
+import { Radio, Play, Pause, X, Sparkle, TrendUp } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -234,7 +234,7 @@ function StationsContent() {
             {(feedView === 'for-you' || feedView === 'staff-picks') && (
               <div className="mb-10">
                 <div className="mb-4 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
+                  <Sparkle className="h-4 w-4 text-primary" />
                   <h2 className="text-sm font-medium uppercase tracking-[0.18em]">
                     {feedView === 'staff-picks' ? 'Staff Picks' : 'Featured'}
                   </h2>
@@ -257,7 +257,7 @@ function StationsContent() {
             {(feedView === 'for-you' || feedView === 'trending') && (
               <div>
                 <div className="mb-4 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
+                  <TrendUp className="h-4 w-4 text-primary" />
                   <h2 className="text-sm font-medium uppercase tracking-[0.18em]">
                     {feedView === 'trending' ? 'Trending' : 'Most Played'}
                   </h2>

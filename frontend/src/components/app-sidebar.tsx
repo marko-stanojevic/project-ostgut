@@ -3,14 +3,14 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { Radio, Mic2, MessageSquare, Settings, User, CreditCard, Shield, Bell, Palette } from 'lucide-react'
+import { Radio, Microphone, Chat, GearSix, User, CreditCard, Shield, Bell, Palette } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 const mainNavItems = [
   { href: '/stations', icon: Radio, label: 'Stations' },
-  { href: '/shows', icon: Mic2, label: 'Shows' },
-  { href: '/talks', icon: MessageSquare, label: 'Talks' },
-  { href: '/settings', icon: Settings, label: 'Settings' },
+  { href: '/shows', icon: Microphone, label: 'Shows' },
+  { href: '/talks', icon: Chat, label: 'Talks' },
+  { href: '/settings', icon: GearSix, label: 'GearSix' },
 ]
 
 const settingsSections = [
@@ -22,14 +22,14 @@ const settingsSections = [
   { section: 'preferences', label: 'Preferences', icon: Palette },
 ]
 
-function SettingsSubNav() {
+function GearSixSubNav() {
   const searchParams = useSearchParams()
   const activeSection = searchParams.get('section') ?? 'overview'
 
   return (
     <div className="mt-1 px-2">
       <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
-        Settings
+        GearSix
       </p>
       {settingsSections.map(({ section, label, icon: Icon }) => {
         const active = activeSection === section
@@ -55,13 +55,13 @@ function SettingsSubNav() {
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const isSettings = pathname.startsWith('/settings')
+  const isGearSix = pathname.startsWith('/settings')
 
   return (
     <aside className="flex w-[222px] shrink-0 flex-col bg-background">
-      {isSettings ? (
+      {isGearSix ? (
         <Suspense>
-          <SettingsSubNav />
+          <GearSixSubNav />
         </Suspense>
       ) : (
         <nav className="p-2 pt-6">

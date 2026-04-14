@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import { SiteHeader } from '@/components/site-header'
 import { GuestHeaderActions } from '@/components/site-header-actions'
 import { SiteFooter } from '@/components/site-footer'
-import { Radio } from 'lucide-react'
+import { Radio } from '@phosphor-icons/react'
 
 export default function HomePage() {
   const { user, loading } = useAuth()

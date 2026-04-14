@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { ChevronDown, LogOut, Moon, ShieldCheck, Sun } from 'lucide-react'
+import { CaretDown, SignOut, Moon, ShieldCheck, Sun } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { cn } from '@/lib/utils'
@@ -37,7 +37,7 @@ export function AccountMenu({ className }: AccountMenuProps) {
                 }
             >
                 Account
-                <ChevronDown className="h-3.5 w-3.5" />
+                <CaretDown className="h-3.5 w-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onClick={() => router.push('/settings')}>Settings</DropdownMenuItem>
@@ -56,7 +56,7 @@ export function AccountMenu({ className }: AccountMenuProps) {
                     onClick={() => signOut().then(() => router.push('/'))}
                     className="text-destructive focus:text-destructive"
                 >
-                    <LogOut className="mr-2 h-4 w-4" />
+                    <SignOut className="mr-2 h-4 w-4" />
                     Sign out
                 </DropdownMenuItem>
             </DropdownMenuContent>

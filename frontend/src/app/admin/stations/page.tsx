@@ -17,8 +17,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  ExternalLink,
-} from 'lucide-react'
+  ArrowSquareOut,
+} from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const PAGE_SIZE = 50
@@ -346,7 +346,7 @@ export default function AdminStationsPage() {
                       <Link href={`/admin/stations/${s.id}`}>
                         <Button variant="ghost" size="sm" className="h-7 gap-1.5">
                           Edit
-                          <ExternalLink className="h-3 w-3" />
+                          <ArrowSquareOut className="h-3 w-3" />
                         </Button>
                       </Link>
                     </td>

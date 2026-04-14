@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 
 interface AdminPaginationProps {
@@ -27,10 +27,10 @@ export function AdminPagination({
             <span>{total.toLocaleString()} {itemLabel} · page {page + 1} of {totalPages}</span>
             <div className="flex gap-1">
                 <Button variant="outline" size="sm" disabled={page === 0} onClick={onPrev}>
-                    <ChevronLeft className="h-4 w-4" />
+                    <CaretLeft className="h-4 w-4" />
                 </Button>
                 <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={onNext}>
-                    <ChevronRight className="h-4 w-4" />
+                    <CaretRight className="h-4 w-4" />
                 </Button>
             </div>
         </div>

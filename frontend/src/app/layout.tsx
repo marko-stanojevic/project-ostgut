@@ -1,26 +1,25 @@
 import type { Metadata } from 'next'
-import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google'
+import { Geist, Geist_Mono } from 'next/font/google'
 import { SessionProvider } from 'next-auth/react'
 import { AuthProvider } from '@/context/AuthContext'
 import { PlayerProvider } from '@/context/PlayerContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeProvider } from 'next-themes'
 import { PlayerBar } from '@/components/player-bar'
+import { PhosphorProvider } from '@/components/phosphor-provider'
 import './globals.css'
 import { cn } from "@/lib/utils";
 
-const ibmPlexSans = IBM_Plex_Sans({
+const geistSans = Geist({
   subsets: ['latin'],
-  weight: ['300', '500'],
   display: 'swap',
-  variable: '--font-ibm-plex-sans',
+  variable: '--font-geist-sans',
 })
 
-const ibmPlexMono = IBM_Plex_Mono({
+const geistMono = Geist_Mono({
   subsets: ['latin'],
-  weight: ['300'],
   display: 'swap',
-  variable: '--font-ibm-plex-mono',
+  variable: '--font-geist-mono',
 })
 
 export const metadata: Metadata = {
@@ -34,15 +33,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={cn("font-sans", ibmPlexSans.variable, ibmPlexMono.variable)} suppressHydrationWarning>
+    <html lang="en" className={cn("font-sans", geistSans.variable, geistMono.variable)} suppressHydrationWarning>
       <body className="bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <SessionProvider>
             <AuthProvider>
               <PlayerProvider>
                 <TooltipProvider>
-                  {children}
-                  <PlayerBar />
+                  <PhosphorProvider>
+                    {children}
+                    <PlayerBar />
+                  </PhosphorProvider>
                 </TooltipProvider>
               </PlayerProvider>
             </AuthProvider>

@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Radio, ExternalLink, CheckCircle, XCircle, Clock, ArrowLeft, Save } from 'lucide-react'
+import { Radio, ArrowSquareOut, CheckCircle, XCircle, Clock, ArrowLeft, Save } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -303,7 +303,7 @@ export default function StationEditorPage() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                <ExternalLink className="h-3.5 w-3.5" />
+                <ArrowSquareOut className="h-3.5 w-3.5" />
                 Open stream
               </a>
             )}

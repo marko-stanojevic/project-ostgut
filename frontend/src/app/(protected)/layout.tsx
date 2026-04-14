@@ -6,7 +6,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { AccountMenu } from '@/components/account-menu'
 import { AppSidebar } from '@/components/app-sidebar'
-import { Search, X } from 'lucide-react'
+import { MagnifyingGlass, X } from '@phosphor-icons/react'
 
 function StationSearchInner() {
   const router = useRouter()
@@ -44,7 +44,7 @@ function StationSearchInner() {
 
   return (
     <div className="relative w-full max-w-lg">
-      <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <MagnifyingGlass className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <input
         type="search"
         value={value}
