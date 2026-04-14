@@ -3,14 +3,13 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { Radio, Microphone, Chat, GearSix, User, CreditCard, Shield, Bell, Palette } from '@phosphor-icons/react'
+import { Radio, Microphone, Chat, User, CreditCard, Shield, Bell, Palette } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 const mainNavItems = [
   { href: '/stations', icon: Radio, label: 'Stations' },
   { href: '/shows', icon: Microphone, label: 'Shows' },
   { href: '/talks', icon: Chat, label: 'Talks' },
-  { href: '/settings', icon: GearSix, label: 'GearSix' },
 ]
 
 const settingsSections = [
@@ -22,15 +21,12 @@ const settingsSections = [
   { section: 'preferences', label: 'Preferences', icon: Palette },
 ]
 
-function GearSixSubNav() {
+function SettingsSubNav() {
   const searchParams = useSearchParams()
   const activeSection = searchParams.get('section') ?? 'overview'
 
   return (
-    <div className="mt-1 px-2">
-      <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
-        GearSix
-      </p>
+    <div className="mt-6 px-2">
       {settingsSections.map(({ section, label, icon: Icon }) => {
         const active = activeSection === section
         return (
@@ -53,15 +49,46 @@ function GearSixSubNav() {
   )
 }
 
-export function AppSidebar() {
+export function AppSidebarMobile() {
   const pathname = usePathname()
-  const isGearSix = pathname.startsWith('/settings')
 
   return (
-    <aside className="flex w-[222px] shrink-0 flex-col bg-background">
-      {isGearSix ? (
+    <nav className="border-b border-border/60 bg-background md:hidden">
+      <div className="flex items-center gap-1 overflow-x-auto px-3 py-2">
+        {mainNavItems.map(({ href, icon: Icon, label }) => {
+          const active = pathname === href || pathname.startsWith(href + '/')
+
+          return (
+            <Link
+              key={href}
+              href={href}
+              prefetch
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                active
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              {label}
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
+
+export function AppSidebar() {
+  const pathname = usePathname()
+  const isSettings = pathname.startsWith('/settings')
+
+  return (
+    <aside className="hidden w-[222px] shrink-0 flex-col bg-background md:flex">
+      {isSettings ? (
         <Suspense>
-          <GearSixSubNav />
+          <SettingsSubNav />
         </Suspense>
       ) : (
         <nav className="p-2 pt-6">
@@ -71,6 +98,7 @@ export function AppSidebar() {
               <Link
                 key={href}
                 href={href}
+                prefetch
                 className={cn(
                   'mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   active

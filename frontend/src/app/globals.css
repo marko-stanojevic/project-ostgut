@@ -183,3 +183,25 @@
     font-weight: 300;
   }
 }
+
+@layer components {
+  .ui-page-title {
+    @apply text-2xl font-medium tracking-tight sm:text-3xl;
+  }
+
+  .ui-page-subtitle {
+    @apply mt-2 text-sm text-muted-foreground sm:text-base;
+  }
+
+  .ui-section-title {
+    @apply text-sm font-medium uppercase tracking-[0.18em] sm:text-base;
+  }
+
+  .ui-card-title {
+    @apply line-clamp-2 break-words text-[15px] font-medium leading-tight tracking-tight sm:text-base;
+  }
+
+  .ui-card-meta {
+    @apply mt-0.5 truncate text-xs font-light text-muted-foreground sm:text-[13px];
+  }
+}

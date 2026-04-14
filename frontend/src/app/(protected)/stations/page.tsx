@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { usePlayer, type Station } from '@/context/PlayerContext'
@@ -25,6 +25,14 @@ interface ApiStation {
 
 type FeedView = 'for-you' | 'staff-picks' | 'trending'
 
+const LIST_RETURN_KEY = 'stations:list:return'
+const LIST_SCROLL_KEY = 'stations:list:scrollY'
+
+function parseFeedView(value: string | null): FeedView {
+  if (value === 'staff-picks' || value === 'trending' || value === 'for-you') return value
+  return 'for-you'
+}
+
 function toStation(s: ApiStation): Station {
   return {
     id: s.id,
@@ -43,34 +51,43 @@ function StationCard({
   s,
   isActive,
   isPlaying,
-  isSelected,
-  onSelect,
+  imagePriority,
+  onOpen,
 }: {
   s: ApiStation
   isActive: boolean
   isPlaying: boolean
-  isSelected: boolean
-  onSelect: () => void
+  imagePriority?: boolean
+  onOpen: () => void
 }) {
   const { play, pause } = usePlayer()
 
   const handleTogglePlay = () => {
     if (isActive && isPlaying) { pause(); return }
     play(toStation(s))
+    onOpen()
   }
 
   return (
-    <article className={`group relative rounded-xl p-1.5 text-left transition-all ${isSelected ? 'bg-muted/70' : 'hover:bg-muted/40'}`}>
+    <article className="group relative rounded-xl p-2 text-left transition-all hover:bg-muted/40">
       <div
-        onClick={onSelect}
+        onClick={onOpen}
         className="relative block aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-pointer"
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect() }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpen() }}
         aria-label={`Open ${s.name} details`}
       >
         {s.logo ? (
-          <Image src={s.logo} alt="" fill className="object-cover transition-transform duration-300 group-hover:scale-[1.02]" unoptimized />
+          <Image
+            src={s.logo}
+            alt={s.name}
+            fill
+            priority={imagePriority}
+            sizes="(max-width: 640px) 25vw, (max-width: 1024px) 16vw, 14vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            unoptimized
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <Radio className="h-6 w-6 text-muted-foreground" />
@@ -79,18 +96,18 @@ function StationCard({
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/20">
           <button
             onClick={(e) => { e.stopPropagation(); handleTogglePlay() }}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 opacity-0 transition-opacity duration-200 hover:scale-110 hover:bg-white group-hover:opacity-100"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 opacity-0 transition-opacity duration-200 hover:scale-110 hover:bg-white group-hover:opacity-100"
             aria-label={isActive && isPlaying ? `Pause ${s.name}` : `Play ${s.name}`}
           >
-            {isActive && isPlaying ? <Pause className="h-3.5 w-3.5 text-black" /> : <Play className="h-3.5 w-3.5 ml-0.5 text-black" />}
+            {isActive && isPlaying ? <Pause className="h-4 w-4 text-black" /> : <Play className="ml-0.5 h-4 w-4 text-black" />}
           </button>
         </div>
       </div>
       <div className="mt-1.5">
-        <button onClick={onSelect} className="w-full cursor-pointer text-left" aria-label={`Open ${s.name} details`}>
-          <p className="truncate text-[15px] font-medium leading-tight tracking-tight">{s.name}</p>
-          <p className="mt-0.5 truncate text-[10px] font-light text-muted-foreground">
-            {[s.genre, s.country].filter(Boolean).join(' · ')}
+        <button onClick={onOpen} className="w-full cursor-pointer text-left" aria-label={`Open ${s.name} details`}>
+          <p className="ui-card-title">{s.name}</p>
+          <p className="ui-card-meta">
+            {s.genre || 'Unknown genre'}
           </p>
         </button>
       </div>
@@ -125,8 +142,7 @@ function StationsContent() {
   const [loadingMostPlayed, setLoadingMostPlayed] = useState(true)
   const [loadingSearch, setLoadingSearch] = useState(false)
 
-  const [feedView, setFeedView] = useState<FeedView>('for-you')
-  const [selectedStationID, setSelectedStationID] = useState<string | null>(null)
+  const feedView = parseFeedView(searchParams.get('view'))
 
   const search = searchParams.get('q')?.trim() ?? ''
 
@@ -160,20 +176,55 @@ function StationsContent() {
 
   useEffect(() => { fetchSearch() }, [fetchSearch])
 
-  const allStations = useMemo(
-    () => (search ? searchResults : [...recommended, ...mostPlayed]),
-    [search, searchResults, recommended, mostPlayed]
-  )
-
   useEffect(() => {
-    if (allStations.length === 0) { setSelectedStationID(null); return }
-    if (activeStation?.id && allStations.some((s) => s.id === activeStation.id)) {
-      setSelectedStationID(activeStation.id); return
+    if (typeof window === 'undefined') return
+
+    const savedReturn = sessionStorage.getItem(LIST_RETURN_KEY)
+    const savedScrollY = sessionStorage.getItem(LIST_SCROLL_KEY)
+    const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+
+    if (!savedReturn || !savedScrollY || savedReturn !== current) return
+
+    const y = Number(savedScrollY)
+    if (!Number.isFinite(y)) return
+
+    const rafID = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: y, behavior: 'auto' })
+      sessionStorage.removeItem(LIST_RETURN_KEY)
+      sessionStorage.removeItem(LIST_SCROLL_KEY)
+    })
+
+    return () => window.cancelAnimationFrame(rafID)
+  }, [pathname, searchParams, loadingRecommended, loadingMostPlayed, loadingSearch])
+
+  const setFeedView = (next: FeedView) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (next === 'for-you') {
+      params.delete('view')
+    } else {
+      params.set('view', next)
     }
-    if (!selectedStationID || !allStations.some((s) => s.id === selectedStationID)) {
-      setSelectedStationID(allStations[0].id)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
+
+  const openStation = (stationID: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (feedView === 'for-you') {
+      params.delete('view')
+    } else {
+      params.set('view', feedView)
     }
-  }, [allStations, activeStation?.id, selectedStationID])
+
+    const from = params.toString() ? `${pathname}?${params.toString()}` : pathname
+
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(LIST_RETURN_KEY, from)
+      sessionStorage.setItem(LIST_SCROLL_KEY, String(window.scrollY))
+    }
+
+    router.push(`/stations/${stationID}?from=${encodeURIComponent(from)}`)
+  }
 
   const clearSearch = () => {
     const params = new URLSearchParams(searchParams.toString())
@@ -203,7 +254,7 @@ function StationsContent() {
         </div>
       )}
 
-      <section>
+      <section className="min-w-0">
         {search ? (
           <>
             <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -223,8 +274,8 @@ function StationsContent() {
               </div>
             ) : (
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-7">
-                {searchResults.map((s) => (
-                  <StationCard key={s.id} s={s} isSelected={selectedStationID === s.id} onSelect={() => setSelectedStationID(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                {searchResults.map((s, index) => (
+                  <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                 ))}
               </div>
             )}
@@ -235,7 +286,7 @@ function StationsContent() {
               <div className="mb-10">
                 <div className="mb-4 flex items-center gap-2">
                   <Sparkle className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-medium uppercase tracking-[0.18em]">
+                  <h2 className="ui-section-title">
                     {feedView === 'staff-picks' ? 'Staff Picks' : 'Featured'}
                   </h2>
                 </div>
@@ -247,8 +298,8 @@ function StationsContent() {
                   <p className="text-sm text-muted-foreground">No featured stations yet.</p>
                 ) : (
                   <div className="grid grid-cols-4 gap-2 sm:grid-cols-9">
-                    {recommended.map((s) => (
-                      <StationCard key={s.id} s={s} isSelected={selectedStationID === s.id} onSelect={() => setSelectedStationID(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                    {recommended.map((s, index) => (
+                      <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                     ))}
                   </div>
                 )}
@@ -258,7 +309,7 @@ function StationsContent() {
               <div>
                 <div className="mb-4 flex items-center gap-2">
                   <TrendUp className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-medium uppercase tracking-[0.18em]">
+                  <h2 className="ui-section-title">
                     {feedView === 'trending' ? 'Trending' : 'Most Played'}
                   </h2>
                 </div>
@@ -270,8 +321,8 @@ function StationsContent() {
                   <p className="text-sm text-muted-foreground">No stations yet.</p>
                 ) : (
                   <div className="grid grid-cols-4 gap-2 sm:grid-cols-9">
-                    {mostPlayed.map((s) => (
-                      <StationCard key={s.id} s={s} isSelected={selectedStationID === s.id} onSelect={() => setSelectedStationID(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                    {mostPlayed.map((s, index) => (
+                      <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                     ))}
                   </div>
                 )}

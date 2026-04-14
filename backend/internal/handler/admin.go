@@ -91,6 +91,7 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 type adminStationResponse struct {
 	stationResponse
 	Status            string  `json:"status"`
+	CustomName        *string `json:"custom_name"`
 	CustomLogo        *string `json:"custom_logo"`
 	CustomWebsite     *string `json:"custom_website"`
 	CustomDescription *string `json:"custom_description"`
@@ -101,6 +102,7 @@ func toAdminStationResponse(s *store.Station) adminStationResponse {
 	return adminStationResponse{
 		stationResponse:   toStationResponse(s),
 		Status:            s.Status,
+		CustomName:        s.CustomName,
 		CustomLogo:        s.CustomLogo,
 		CustomWebsite:     s.CustomWebsite,
 		CustomDescription: s.CustomDescription,
@@ -180,8 +182,8 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 
 	// Merge: use incoming value if provided, else keep current.
 	u := store.EnrichmentUpdate{
-		Name:              current.Name,
 		Status:            current.Status,
+		CustomName:        current.CustomName,
 		CustomLogo:        current.CustomLogo,
 		CustomWebsite:     current.CustomWebsite,
 		CustomDescription: current.CustomDescription,
@@ -194,7 +196,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "name cannot be empty"})
 			return
 		}
-		u.Name = trimmed
+		u.CustomName = &trimmed
 	}
 	if req.Status != nil {
 		switch *req.Status {

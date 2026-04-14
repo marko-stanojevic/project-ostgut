@@ -68,6 +68,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     // Same station — just resume if paused.
     if (station?.id === s.id && state === 'paused') {
+      if (!audio.src) {
+        audio.src = s.streamUrl
+        audio.load()
+      }
       audio.play().catch(() => setState('error'))
       return
     }
@@ -85,15 +89,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }
 
   const resume = () => {
-    audioRef.current?.play().catch(() => setState('error'))
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (!audio.src && station) {
+      audio.src = station.streamUrl
+      audio.load()
+    }
+
+    audio.play().catch(() => setState('error'))
   }
 
   const stop = () => {
     const audio = audioRef.current
     if (!audio) return
     audio.pause()
-    audio.src = ''
-    setStation(null)
+    audio.removeAttribute('src')
+    audio.load()
     setState('idle')
   }
 

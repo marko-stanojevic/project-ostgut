@@ -2,12 +2,10 @@
 
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
-import { Button } from '@/components/ui/button'
-import { Slider } from '@/components/ui/slider'
 import {
   Play,
   Pause,
-  Square,
+  Stop,
   SpeakerHigh,
   SpeakerX,
   Radio,
@@ -24,92 +22,94 @@ export function PlayerBar() {
   const isError = state === 'error'
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 text-zinc-50 backdrop-blur-md supports-[backdrop-filter]:bg-zinc-950/90">
-      <div className="flex items-center gap-4 px-4 py-3 max-w-screen-2xl mx-auto">
+    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-400/25 bg-zinc-900/75 text-zinc-100 backdrop-blur-md supports-[backdrop-filter]:bg-zinc-900/60">
+      <div className="mx-auto flex max-w-screen-2xl items-center gap-4 px-4 py-4">
 
         {/* Station identity */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="relative h-9 w-9 shrink-0 rounded-md overflow-hidden bg-muted flex items-center justify-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-zinc-700/80 flex items-center justify-center ring-1 ring-zinc-300/20">
             {station?.favicon ? (
-              <Image
-                src={station.favicon}
-                alt=""
-                fill
-                className="object-cover"
-                unoptimized
-              />
+              <Image src={station.favicon} alt="" fill className="object-cover" unoptimized />
             ) : (
-              <Radio className="h-4 w-4 text-muted-foreground" />
+              <Radio className="h-6 w-6 text-zinc-300" />
             )}
-            {/* Live pulse indicator */}
             {isPlaying && (
-              <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
             )}
           </div>
-
           <div className="min-w-0">
-            <p className="text-sm font-medium truncate leading-tight">
-              {station?.name ?? '—'}
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {isError
-                ? 'Stream unavailable'
-                : isLoading
-                  ? 'Connecting…'
-                  : [station?.genre, station?.country].filter(Boolean).join(' · ')}
+            <p className="truncate text-sm font-medium leading-tight">{station?.name ?? '—'}</p>
+            <p className="truncate text-xs text-zinc-400">
+              {isError ? 'Stream unavailable' : isLoading ? 'Connecting…' : [station?.genre, station?.country].filter(Boolean).join(' · ')}
             </p>
           </div>
         </div>
 
         {/* Playback controls */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5">
           {isLoading ? (
-            <CircleNotch className="h-5 w-5 animate-spin text-muted-foreground" />
+            <CircleNotch className="h-7 w-7 animate-spin text-zinc-300" />
           ) : isPlaying ? (
-            <Button variant="ghost" size="icon" onClick={pause} title="Pause">
-              <Pause className="h-5 w-5" />
-            </Button>
+            <button onClick={pause} title="Pause" className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-100 transition-colors hover:bg-zinc-700/70">
+              <Pause className="h-6 w-6" />
+            </button>
           ) : (
-            <Button variant="ghost" size="icon" onClick={resume} disabled={isError} title="Play">
-              <Play className="h-5 w-5" />
-            </Button>
+            <button onClick={resume} disabled={isError} title="Play" className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-100 transition-colors hover:bg-zinc-700/70 disabled:opacity-40">
+              <Play className="h-6 w-6" />
+            </button>
           )}
-          <Button variant="ghost" size="icon" onClick={stop} title="Stop">
-            <Square className="h-4 w-4" />
-          </Button>
+          <button onClick={stop} title="Stop" className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-100 transition-colors hover:bg-zinc-700/70">
+            <Stop className="h-6 w-6" />
+          </button>
         </div>
 
-        {/* Bitrate badge */}
+        {/* Bitrate */}
         {station?.bitrate ? (
-          <span className="hidden sm:inline-flex text-xs text-muted-foreground tabular-nums shrink-0">
+          <span className="hidden shrink-0 text-xs tabular-nums text-zinc-500 sm:inline-flex">
             {station.bitrate} kbps
           </span>
         ) : null}
 
         {/* Volume */}
-        <div className="hidden md:flex items-center gap-2 w-32 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0"
+        <div className="hidden md:flex items-center gap-2 w-36 shrink-0">
+          <button
             onClick={() => setVolume(volume === 0 ? 0.8 : 0)}
             title={volume === 0 ? 'Unmute' : 'Mute'}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-200 transition-colors hover:bg-zinc-700/70"
           >
-            {volume === 0 ? (
-              <SpeakerX className="h-4 w-4" />
-            ) : (
-              <SpeakerHigh className="h-4 w-4" />
-            )}
-          </Button>
-          <Slider
-            value={[volume * 100]}
-            min={0}
-            max={100}
-            step={1}
-            onValueChange={(vals) => setVolume((vals as number[])[0] / 100)}
-            className="flex-1"
-          />
+            {volume === 0 ? <SpeakerX className="h-6 w-6" /> : <SpeakerHigh className="h-6 w-6" />}
+          </button>
+
+          {/* Custom slider — avoids theme color issues */}
+          <div className="relative flex flex-1 items-center h-5 cursor-pointer group"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect()
+              const x = e.clientX - rect.left
+              setVolume(Math.min(1, Math.max(0, x / rect.width)))
+            }}
+            onMouseMove={(e) => {
+              if (e.buttons !== 1) return
+              const rect = e.currentTarget.getBoundingClientRect()
+              const x = e.clientX - rect.left
+              setVolume(Math.min(1, Math.max(0, x / rect.width)))
+            }}
+          >
+            {/* Track */}
+            <div className="h-[3px] w-full rounded-full bg-zinc-700">
+              {/* Fill */}
+              <div
+                className="h-full rounded-full bg-zinc-100 transition-none"
+                style={{ width: `${volume * 100}%` }}
+              />
+            </div>
+            {/* Thumb */}
+            <div
+              className="absolute h-3 w-3 rounded-full bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ left: `calc(${volume * 100}% - 6px)` }}
+            />
+          </div>
         </div>
+
       </div>
     </div>
   )

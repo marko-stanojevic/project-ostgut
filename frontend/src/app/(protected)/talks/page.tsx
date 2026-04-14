@@ -1,0 +1,13 @@
+import { Chat } from '@phosphor-icons/react/dist/ssr'
+
+export default function TalksPage() {
+  return (
+    <div className="mx-auto flex w-full max-w-4xl flex-col">
+      <div className="rounded-xl border border-border/60 bg-card/50 px-6 py-16 text-center sm:px-10 sm:py-24">
+        <Chat className="mx-auto mb-4 h-10 w-10 text-muted-foreground/40 sm:h-12 sm:w-12" />
+        <h1 className="ui-page-title">Talks</h1>
+        <p className="ui-page-subtitle">Coming soon.</p>
+      </div>
+    </div>
+  )
+}
