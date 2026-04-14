@@ -6,18 +6,18 @@ import { Button } from '@/components/ui/button'
 
 const features = {
   free: [
-    'Up to 3 projects',
-    'Basic analytics',
-    'Community support',
+    'Access to curated free stations',
+    'Standard stream quality',
+    'Search by genre, country, and language',
     '14-day free trial of Pro',
   ],
   pro: [
-    'Unlimited projects',
-    'Advanced analytics',
-    'Priority support',
-    'Early access to new features',
-    'Custom integrations',
-    'Team collaboration',
+    'Full premium station catalog',
+    'Staff Picks and editorial highlights',
+    'Higher quality and more reliable streams',
+    'Priority curation updates',
+    'Early access to new listening features',
+    'Faster support response',
   ],
 }
 
@@ -53,7 +53,7 @@ export default async function PricingPage() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
             <h1 className="text-4xl font-bold tracking-tight">Simple, transparent pricing</h1>
-            <p className="text-muted-foreground mt-3 text-lg">Start free, upgrade when you need more.</p>
+            <p className="text-muted-foreground mt-3 text-lg">Start free, upgrade for the full Listening Room experience.</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -89,7 +89,7 @@ export default async function PricingPage() {
                   <span className="text-xs font-medium bg-primary text-primary-foreground px-2 py-0.5 rounded-full">Popular</span>
                 </div>
                 <div className="mt-2">
-                  <span className="text-4xl font-bold">$19</span>
+                  <span className="text-4xl font-bold">$3.99</span>
                   <span className="text-muted-foreground ml-1">/ month</span>
                 </div>
               </CardHeader>
