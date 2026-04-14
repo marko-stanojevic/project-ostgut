@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { RadioIcon, CheckCircleIcon, ClockIcon, XCircleIcon, ArrowRightIcon } from '@phosphor-icons/react'
+import { RadioIcon, CheckCircleIcon, ClockIcon, XCircleIcon } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -126,77 +125,46 @@ export default function AdminOverviewPage() {
         <StatCard title="Rejected"        value={stats?.rejected ?? null}  icon={XCircleIcon}      variant="destructive" href="/admin/stations?status=rejected" />
       </div>
 
-      {/* Quick actions */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quick Approve</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Approve all pending stations above a reliability score threshold.
-              Higher thresholds are safer; lower thresholds capture more stations.
+      {/* Quick Approve */}
+      <Card className="max-w-xl">
+        <CardHeader>
+          <CardTitle className="text-base">Quick Approve</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Approve all pending stations above a reliability threshold. Higher is safer.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {bulkResult && (
+            <p className="text-sm font-medium text-green-600 dark:text-green-400">
+              {bulkResult.updated > 0
+                ? `Approved ${bulkResult.updated} station${bulkResult.updated !== 1 ? 's' : ''}`
+                : 'No stations matched the threshold'}
             </p>
+          )}
 
-            {bulkResult && (
-              <div className="text-sm font-medium text-green-600 dark:text-green-400">
-                {bulkResult.updated > 0
-                  ? `Approved ${bulkResult.updated} station${bulkResult.updated !== 1 ? 's' : ''}`
-                  : 'No stations matched the threshold'}
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              {[
-                { label: 'Conservative (≥ 0.8)', threshold: 0.8 },
-                { label: 'Balanced (≥ 0.6)',     threshold: 0.6 },
-                { label: 'Inclusive (≥ 0.4)',    threshold: 0.4 },
-              ].map(({ label, threshold }) => (
-                <Button
-                  key={threshold}
-                  variant="outline"
-                  size="sm"
-                  disabled={bulkLoading || !stats?.pending}
-                  onClick={() => handleQuickApprove(threshold)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-
-            {stats?.pending === 0 && (
-              <p className="text-xs text-muted-foreground">No pending stations to review</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quick Links</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
+          <div className="flex flex-wrap gap-2">
             {[
-              { label: 'Review pending stations', href: '/admin/stations?status=pending', badge: stats?.pending },
-              { label: 'Browse approved catalog',  href: '/admin/stations?status=approved', badge: stats?.approved },
-              { label: 'Manage users',             href: '/admin/users', badge: null },
-            ].map(({ label, href, badge }) => (
-              <Link
-                key={href}
-                href={href}
-                className="flex items-center justify-between rounded-md px-3 py-2.5 text-sm hover:bg-muted transition-colors"
+              { label: 'Conservative (≥ 0.8)', threshold: 0.8 },
+              { label: 'Balanced (≥ 0.6)',     threshold: 0.6 },
+              { label: 'Inclusive (≥ 0.4)',    threshold: 0.4 },
+            ].map(({ label, threshold }) => (
+              <Button
+                key={threshold}
+                variant="outline"
+                size="sm"
+                disabled={bulkLoading || !stats?.pending}
+                onClick={() => handleQuickApprove(threshold)}
               >
-                <span>{label}</span>
-                <span className="flex items-center gap-2">
-                  {badge != null && (
-                    <Badge variant="secondary" className="tabular-nums">{badge}</Badge>
-                  )}
-                  <ArrowRightIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                </span>
-              </Link>
+                {label}
+              </Button>
             ))}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+
+          {stats?.pending === 0 && (
+            <p className="text-xs text-muted-foreground">No pending stations to review.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

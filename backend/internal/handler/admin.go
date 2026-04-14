@@ -120,6 +120,13 @@ func (h *Handler) AdminListStations(c *gin.Context) {
 		Offset: queryInt(c, "offset", 0),
 	}
 
+	total, err := h.stationStore.Count(c.Request.Context(), f)
+	if err != nil {
+		h.log.Error("admin count stations", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
 	stations, err := h.stationStore.List(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("admin list stations", "error", err)
@@ -131,7 +138,7 @@ func (h *Handler) AdminListStations(c *gin.Context) {
 	for i, s := range stations {
 		resp[i] = toAdminStationResponse(s)
 	}
-	c.JSON(http.StatusOK, gin.H{"stations": resp, "count": len(resp)})
+	c.JSON(http.StatusOK, gin.H{"stations": resp, "count": total})
 }
 
 // AdminGetStation handles GET /admin/stations/:id

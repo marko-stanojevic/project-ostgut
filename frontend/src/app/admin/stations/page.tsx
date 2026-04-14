@@ -274,7 +274,6 @@ export default function AdminStationsPage() {
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">Quality</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden xl:table-cell">Reliability</th>
               <th className="px-4 py-3 text-center font-medium text-muted-foreground hidden xl:table-cell">Staff Pick</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
             </tr>
           </thead>
@@ -283,13 +282,12 @@ export default function AdminStationsPage() {
               <AdminTableSkeletonRows cells={stationSkeletonCells} />
             ) : stations.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-16 text-center text-muted-foreground text-sm">
+                <td colSpan={8} className="px-4 py-16 text-center text-muted-foreground text-sm">
                   No stations found
                 </td>
               </tr>
             ) : (
               stations.map((s) => {
-                const cfg = statusConfig[s.status as keyof typeof statusConfig]
                 return (
                   <tr
                     key={s.id}
@@ -307,9 +305,6 @@ export default function AdminStationsPage() {
                         <span className="font-medium leading-tight">{s.name}</span>
                         {s.custom_description && (
                           <span className="text-xs text-muted-foreground line-clamp-1">{s.custom_description}</span>
-                        )}
-                        {s.featured && (
-                          <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0 mt-0.5">Staff Pick</Badge>
                         )}
                       </div>
                     </td>
@@ -333,14 +328,6 @@ export default function AdminStationsPage() {
                           aria-label={`Toggle staff pick for ${s.name}`}
                         />
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {cfg && (
-                        <Badge variant={cfg.variant} className="gap-1">
-                          <cfg.icon className="h-3 w-3" />
-                          {cfg.label}
-                        </Badge>
-                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Link href={`/admin/stations/${s.id}`}>
