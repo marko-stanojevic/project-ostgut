@@ -287,7 +287,7 @@ function StationsContent() {
   return (
     <div>
       {!search && (
-        <div className="mb-7 flex items-center gap-1 border-b border-border/50 pb-0">
+        <div className="mb-7 flex items-center gap-3 border-b border-border/50 pb-0">
           {([
             { id: 'for-you', label: 'For You' },
             { id: 'staff-picks', label: 'Staff Picks' },
@@ -297,7 +297,7 @@ function StationsContent() {
               key={id}
               type="button"
               onClick={() => setFeedView(id)}
-              className={`relative px-3 py-2 text-sm font-medium transition-colors ${feedView === id
+              className={`relative px-3 py-2 text-[18px] font-medium transition-colors ${feedView === id
                 ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:bg-brand'
                 : 'text-muted-foreground hover:text-foreground'
                 }`}

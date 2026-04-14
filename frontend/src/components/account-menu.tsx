@@ -28,6 +28,7 @@ import {
 
 interface AccountMenuProps {
     className?: string
+    avatarSize?: number
 }
 
 function Avatar({ name, image, size = 32 }: { name?: string | null; image?: string | null; size?: number }) {
@@ -59,7 +60,7 @@ function Avatar({ name, image, size = 32 }: { name?: string | null; image?: stri
     )
 }
 
-export function AccountMenu({ className }: AccountMenuProps) {
+export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
     const router = useRouter()
     const { resolvedTheme, setTheme } = useTheme()
     const { user, signOut } = useAuth()
@@ -80,7 +81,7 @@ export function AccountMenu({ className }: AccountMenuProps) {
                     />
                 }
             >
-                <Avatar name={user?.name} image={user?.image} />
+                <Avatar name={user?.name} image={user?.image} size={avatarSize} />
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-56 p-0 overflow-hidden">

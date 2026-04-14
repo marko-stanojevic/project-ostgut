@@ -216,6 +216,20 @@
   }
 }
 
+@keyframes bg-fade-drift-alt {
+  0% {
+    background-position: 100% 100%, 0% 100%;
+  }
+
+  50% {
+    background-position: 95% 96%, 4% 97%;
+  }
+
+  100% {
+    background-position: 92% 98%, 8% 94%;
+  }
+}
+
 @layer components {
   .ui-page-title {
     @apply text-2xl font-medium tracking-tight sm:text-3xl;
