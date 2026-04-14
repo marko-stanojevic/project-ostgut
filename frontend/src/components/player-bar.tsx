@@ -24,7 +24,7 @@ export function PlayerBar() {
   const isError = state === 'error'
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-700/60 bg-zinc-900/75 backdrop-blur-md supports-[backdrop-filter]:bg-zinc-900/60">
       <div className="flex items-center gap-4 px-4 py-3 max-w-screen-2xl mx-auto">
 
         {/* Station identity */}
@@ -55,8 +55,8 @@ export function PlayerBar() {
               {isError
                 ? 'Stream unavailable'
                 : isLoading
-                ? 'Connecting…'
-                : [station?.genre, station?.country].filter(Boolean).join(' · ')}
+                  ? 'Connecting…'
+                  : [station?.genre, station?.country].filter(Boolean).join(' · ')}
             </p>
           </div>
         </div>
