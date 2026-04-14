@@ -286,6 +286,15 @@ function StationsContent() {
 
   return (
     <div>
+      <div className="mb-8 max-w-3xl">
+        <p className="ui-section-title">Curated</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          Start with what deserves your attention.
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+          A more editorial way to listen: featured selections, staff picks, and the stations people keep returning to.
+        </p>
+      </div>
       {!search && (
         <div className="mb-7 flex items-center gap-3 border-b border-border/50 pb-0">
           {([

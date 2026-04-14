@@ -8,14 +8,14 @@ import { AccountMenu } from '@/components/account-menu'
 import { AppSidebar, AppSidebarMobile } from '@/components/app-sidebar'
 import { MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react'
 
-function StationSearchInner() {
+function ExploreSearchInner() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [value, setValue] = useState(searchParams.get('q') ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Sync input when navigating back to /stations with an existing query
+  // Sync input when navigating back to /explore with an existing query
   useEffect(() => {
     setValue(searchParams.get('q') ?? '')
   }, [searchParams])
@@ -27,8 +27,7 @@ function StationSearchInner() {
       const params = new URLSearchParams()
       if (q.trim()) params.set('q', q.trim())
       const qs = params.toString()
-      // Always navigate to /stations so search results are shown there
-      const target = pathname === '/stations' ? pathname : '/stations'
+      const target = pathname === '/explore' ? pathname : '/explore'
       router.push(qs ? `${target}?${qs}` : target, { scroll: false })
     }, 200)
   }
@@ -45,7 +44,7 @@ function StationSearchInner() {
     const params = new URLSearchParams(searchParams.toString())
     params.delete('q')
     const qs = params.toString()
-    router.replace(qs ? `/stations?${qs}` : '/stations', { scroll: false })
+    router.replace(qs ? `/explore?${qs}` : '/explore', { scroll: false })
   }
 
   return (
@@ -55,7 +54,7 @@ function StationSearchInner() {
         type="search"
         value={value}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder="Find your frequency…"
+        placeholder="Search stations, genres, countries…"
         className="h-12 w-full rounded-full border border-border bg-secondary/60 pl-12 pr-10 text-[18px] text-foreground outline-none transition-all placeholder:text-muted-foreground/70 focus:border-border focus:bg-background focus:shadow-sm focus:ring-2 focus:ring-ring/20"
       />
       {value && (
@@ -72,10 +71,10 @@ function StationSearchInner() {
   )
 }
 
-function StationSearch() {
+function ExploreSearch() {
   return (
     <Suspense>
-      <StationSearchInner />
+      <ExploreSearchInner />
     </Suspense>
   )
 }
@@ -86,14 +85,14 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const showStationSearch = pathname === '/stations' || pathname.startsWith('/stations/')
+  const showExploreSearch = pathname === '/explore' || pathname.startsWith('/explore/')
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <header className="shrink-0 border-b border-border/50 bg-background/95 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 sm:px-0">
         <div className="flex flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:gap-0 sm:py-0">
           {/* Logo occupies exactly the desktop sidebar width so search aligns with content */}
-          <div className="flex items-center justify-between sm:w-[222px] sm:shrink-0 sm:border-r sm:border-border/40 sm:pl-4 sm:py-4">
+          <div className="flex items-center justify-between sm:w-[246px] sm:shrink-0 sm:border-r sm:border-border/40 sm:pl-4 sm:py-4">
             <Link href="/stations" className="text-[1.6rem] font-semibold tracking-[-0.04em] text-foreground sm:text-[2rem]">
               bougie.fm
             </Link>
@@ -102,7 +101,7 @@ export default function DashboardLayout({
             </div>
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-4 pb-1 sm:gap-5 sm:py-3.5 sm:pr-5">
-            {showStationSearch ? <StationSearch /> : <div className="hidden w-full max-w-lg sm:block sm:max-w-2xl" aria-hidden="true" />}
+            {showExploreSearch ? <ExploreSearch /> : <div className="hidden w-full max-w-lg sm:block sm:max-w-2xl" aria-hidden="true" />}
             <div className="ml-auto hidden items-center gap-3 sm:flex">
               <AccountMenu avatarSize={42} />
             </div>

@@ -75,9 +75,10 @@ func toStationResponse(s *store.Station) stationResponse {
 }
 
 // ListStations handles GET /stations
-// Query params: genre, country, language, featured, limit, offset
+// Query params: q, genre, country, language, featured, sort, limit, offset
 func (h *Handler) ListStations(c *gin.Context) {
 	f := store.StationFilter{
+		Search:       strings.TrimSpace(c.Query("q")),
 		Genre:        strings.ToLower(c.Query("genre")),
 		CountryCode:  strings.ToUpper(c.Query("country")),
 		Language:     strings.ToLower(c.Query("language")),
@@ -189,9 +190,6 @@ func (h *Handler) GetFilters(c *gin.Context) {
 
 	if genres == nil {
 		genres = []string{}
-	}
-	if countryResp == nil {
-		countryResp = []countryItem{}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"genres":    genres,
