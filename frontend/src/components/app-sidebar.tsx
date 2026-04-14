@@ -3,14 +3,13 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
-import { Radio, Microphone, Chat, GearSix, User, CreditCard, Shield, Bell, Palette } from '@phosphor-icons/react'
+import { Radio, Microphone, Chat, User, CreditCard, Shield, Bell, Palette } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 const mainNavItems = [
   { href: '/stations', icon: Radio, label: 'Stations' },
   { href: '/shows', icon: Microphone, label: 'Shows' },
   { href: '/talks', icon: Chat, label: 'Talks' },
-  { href: '/settings', icon: GearSix, label: 'GearSix' },
 ]
 
 const settingsSections = [
@@ -22,15 +21,12 @@ const settingsSections = [
   { section: 'preferences', label: 'Preferences', icon: Palette },
 ]
 
-function GearSixSubNav() {
+function SettingsSubNav() {
   const searchParams = useSearchParams()
   const activeSection = searchParams.get('section') ?? 'overview'
 
   return (
-    <div className="mt-1 px-2">
-      <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
-        GearSix
-      </p>
+    <div className="mt-6 px-2">
       {settingsSections.map(({ section, label, icon: Icon }) => {
         const active = activeSection === section
         return (
@@ -55,13 +51,13 @@ function GearSixSubNav() {
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const isGearSix = pathname.startsWith('/settings')
+  const isSettings = pathname.startsWith('/settings')
 
   return (
     <aside className="flex w-[222px] shrink-0 flex-col bg-background">
-      {isGearSix ? (
+      {isSettings ? (
         <Suspense>
-          <GearSixSubNav />
+          <SettingsSubNav />
         </Suspense>
       ) : (
         <nav className="p-2 pt-6">
@@ -71,6 +67,7 @@ export function AppSidebar() {
               <Link
                 key={href}
                 href={href}
+                prefetch
                 className={cn(
                   'mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   active

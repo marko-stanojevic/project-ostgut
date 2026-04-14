@@ -33,6 +33,12 @@ function StationSearchInner() {
     }, 200)
   }
 
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
+
   const clear = () => {
     setValue('')
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -44,19 +50,19 @@ function StationSearchInner() {
 
   return (
     <div className="relative w-full max-w-lg">
-      <MagnifyingGlass className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <MagnifyingGlass className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
       <input
         type="search"
         value={value}
         onChange={(e) => handleChange(e.target.value)}
         placeholder="Find your frequency..."
-        className="h-10 w-full rounded-full border border-border/60 bg-secondary/40 pl-10 pr-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-border focus:bg-background"
+        className="h-10 w-full rounded-full border border-zinc-300/70 bg-zinc-100/62 pl-10 pr-8 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-400 focus:bg-zinc-100/84"
       />
       {value && (
         <button
           type="button"
           onClick={clear}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-800"
           aria-label="Clear search"
         >
           <X className="h-3.5 w-3.5" />
@@ -79,6 +85,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
+  const showStationSearch = pathname === '/stations' || pathname.startsWith('/stations/')
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <header className="flex shrink-0 items-center bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
@@ -89,7 +98,7 @@ export default function DashboardLayout({
           </Link>
         </div>
         <div className="flex flex-1 items-center gap-4 py-3 pr-6">
-          <StationSearch />
+          {showStationSearch ? <StationSearch /> : <div className="w-full max-w-lg" aria-hidden="true" />}
           <div className="ml-auto flex items-center gap-3">
             <AccountMenu />
           </div>
