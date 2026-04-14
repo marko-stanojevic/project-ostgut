@@ -4,16 +4,16 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import {
-    SignOut,
-    Moon,
-    Sun,
-    ShieldCheck,
-    Gear,
-    ArrowsLeftRight,
-    User,
-    Lock,
-    Bell,
-    Palette,
+    SignOutIcon,
+    MoonIcon,
+    SunIcon,
+    ShieldCheckIcon,
+    GearIcon,
+    ArrowsLeftRightIcon,
+    UserIcon,
+    LockIcon,
+    BellIcon,
+    PaletteIcon,
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
@@ -92,18 +92,18 @@ export function AccountMenu({ className }: AccountMenuProps) {
                         {user?.name && <p className="text-sm font-medium truncate">{user.name}</p>}
                         {user?.email && <p className="text-xs text-muted-foreground truncate">{user.email}</p>}
                     </div>
-                    <ArrowsLeftRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <ArrowsLeftRightIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 </div>
 
                 {/* Main actions */}
                 <div className="py-1">
                     <DropdownMenuItem onClick={() => router.push('/settings?section=profile')} className="gap-2.5 px-3 py-2 text-sm">
-                        <User className="h-4 w-4 text-muted-foreground" />
+                        <UserIcon className="h-4 w-4 text-muted-foreground" />
                         Profile
                     </DropdownMenuItem>
                     {isAdmin && (
                         <DropdownMenuItem onClick={() => router.push('/admin')} className="gap-2.5 px-3 py-2 text-sm">
-                            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                            <ShieldCheckIcon className="h-4 w-4 text-muted-foreground" />
                             Admin
                         </DropdownMenuItem>
                     )}
@@ -114,19 +114,19 @@ export function AccountMenu({ className }: AccountMenuProps) {
                 {/* Settings group */}
                 <div className="py-1">
                     <DropdownMenuItem onClick={() => router.push('/settings')} className="gap-2.5 px-3 py-2 text-sm">
-                        <Gear className="h-4 w-4 text-muted-foreground" />
+                        <GearIcon className="h-4 w-4 text-muted-foreground" />
                         Settings
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/settings?section=security')} className="gap-2.5 px-3 py-2 text-sm">
-                        <Lock className="h-4 w-4 text-muted-foreground" />
+                        <LockIcon className="h-4 w-4 text-muted-foreground" />
                         Security
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/settings?section=notifications')} className="gap-2.5 px-3 py-2 text-sm">
-                        <Bell className="h-4 w-4 text-muted-foreground" />
+                        <BellIcon className="h-4 w-4 text-muted-foreground" />
                         Notifications
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/settings?section=preferences')} className="gap-2.5 px-3 py-2 text-sm">
-                        <Palette className="h-4 w-4 text-muted-foreground" />
+                        <PaletteIcon className="h-4 w-4 text-muted-foreground" />
                         Preferences
                     </DropdownMenuItem>
                     <DropdownMenuItem
@@ -134,8 +134,8 @@ export function AccountMenu({ className }: AccountMenuProps) {
                         className="gap-2.5 px-3 py-2 text-sm"
                     >
                         {isDark
-                            ? <Sun className="h-4 w-4 text-muted-foreground" />
-                            : <Moon className="h-4 w-4 text-muted-foreground" />
+                            ? <SunIcon className="h-4 w-4 text-muted-foreground" />
+                            : <MoonIcon className="h-4 w-4 text-muted-foreground" />
                         }
                         Appearance
                     </DropdownMenuItem>
@@ -149,7 +149,7 @@ export function AccountMenu({ className }: AccountMenuProps) {
                         onClick={() => signOut().then(() => router.push('/'))}
                         className="gap-2.5 px-3 py-2 text-sm text-muted-foreground"
                     >
-                        <SignOut className="h-4 w-4" />
+                        <SignOutIcon className="h-4 w-4" />
                         Sign out
                     </DropdownMenuItem>
                 </div>

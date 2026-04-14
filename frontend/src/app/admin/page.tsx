@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Radio, CheckCircle, Clock, XCircle, ArrowRight } from '@phosphor-icons/react'
+import { RadioIcon, CheckCircleIcon, ClockIcon, XCircleIcon, ArrowRightIcon } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -120,10 +120,10 @@ export default function AdminOverviewPage() {
 
       {/* Stat cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Stations"  value={stats?.total ?? null}    icon={Radio}        variant="default"     href="/admin/stations" />
-        <StatCard title="Pending Review"  value={stats?.pending ?? null}   icon={Clock}        variant="pending"     href="/admin/stations?status=pending" />
-        <StatCard title="Approved"        value={stats?.approved ?? null}  icon={CheckCircle}  variant="success"     href="/admin/stations?status=approved" />
-        <StatCard title="Rejected"        value={stats?.rejected ?? null}  icon={XCircle}      variant="destructive" href="/admin/stations?status=rejected" />
+        <StatCard title="Total Stations"  value={stats?.total ?? null}    icon={RadioIcon}        variant="default"     href="/admin/stations" />
+        <StatCard title="Pending Review"  value={stats?.pending ?? null}   icon={ClockIcon}        variant="pending"     href="/admin/stations?status=pending" />
+        <StatCard title="Approved"        value={stats?.approved ?? null}  icon={CheckCircleIcon}  variant="success"     href="/admin/stations?status=approved" />
+        <StatCard title="Rejected"        value={stats?.rejected ?? null}  icon={XCircleIcon}      variant="destructive" href="/admin/stations?status=rejected" />
       </div>
 
       {/* Quick actions */}
@@ -190,7 +190,7 @@ export default function AdminOverviewPage() {
                   {badge != null && (
                     <Badge variant="secondary" className="tabular-nums">{badge}</Badge>
                   )}
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ArrowRightIcon className="h-3.5 w-3.5 text-muted-foreground" />
                 </span>
               </Link>
             ))}

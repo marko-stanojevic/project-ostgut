@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Radio } from '@phosphor-icons/react'
+import { RadioIcon } from '@phosphor-icons/react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -52,7 +52,7 @@ export default function LoginPage() {
         <div className="w-full space-y-7">
           <div className="flex justify-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full border border-foreground/15 bg-foreground/5 shadow-[0_4px_20px_rgba(0,0,0,0.12)]">
-              <Radio className="h-6 w-6 text-white" />
+              <RadioIcon className="h-6 w-6 text-white" />
             </div>
           </div>
 

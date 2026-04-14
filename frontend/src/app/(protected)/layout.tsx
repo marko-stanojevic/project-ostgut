@@ -6,7 +6,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { AccountMenu } from '@/components/account-menu'
 import { AppSidebar, AppSidebarMobile } from '@/components/app-sidebar'
-import { MagnifyingGlass, X } from '@phosphor-icons/react'
+import { MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react'
 
 function StationSearchInner() {
   const router = useRouter()
@@ -50,22 +50,22 @@ function StationSearchInner() {
 
   return (
     <div className="relative w-full max-w-lg">
-      <MagnifyingGlass className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+      <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
       <input
         type="search"
         value={value}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder="Find your frequency..."
-        className="h-10 w-full rounded-full border border-zinc-300/70 bg-zinc-100/62 pl-10 pr-8 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-400 focus:bg-zinc-100/84"
+        placeholder="Find your frequency…"
+        className="h-9 w-full rounded-full border border-border bg-secondary/60 pl-9 pr-8 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/70 focus:border-border focus:bg-background focus:shadow-sm focus:ring-2 focus:ring-ring/20"
       />
       {value && (
         <button
           type="button"
           onClick={clear}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-800"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded text-muted-foreground hover:text-foreground"
           aria-label="Clear search"
         >
-          <X className="h-3.5 w-3.5" />
+          <XIcon className="h-3.5 w-3.5" />
         </button>
       )}
     </div>
@@ -90,18 +90,18 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <header className="shrink-0 bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/75 sm:px-0">
-        <div className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:gap-0 sm:py-0">
+      <header className="shrink-0 border-b border-border/50 bg-background/95 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 sm:px-0">
+        <div className="flex flex-col gap-2.5 py-2.5 sm:flex-row sm:items-center sm:gap-0 sm:py-0">
           {/* Logo occupies exactly the desktop sidebar width so search aligns with content */}
-          <div className="flex items-center justify-between sm:w-[222px] sm:shrink-0 sm:pl-3 sm:py-3">
-            <Link href="/stations" className="text-2xl font-medium tracking-[-0.05em] text-foreground sm:text-3xl">
+          <div className="flex items-center justify-between sm:w-[222px] sm:shrink-0 sm:border-r sm:border-border/40 sm:pl-4 sm:py-3">
+            <Link href="/stations" className="text-xl font-semibold tracking-[-0.04em] text-foreground sm:text-2xl">
               bougie.fm
             </Link>
             <div className="sm:hidden">
               <AccountMenu />
             </div>
           </div>
-          <div className="flex min-w-0 flex-1 items-center gap-3 pb-1 sm:gap-4 sm:py-3 sm:pr-6">
+          <div className="flex min-w-0 flex-1 items-center gap-3 pb-0.5 sm:gap-4 sm:py-2.5 sm:pr-5">
             {showStationSearch ? <StationSearch /> : <div className="hidden w-full max-w-lg sm:block" aria-hidden="true" />}
             <div className="ml-auto hidden items-center gap-3 sm:flex">
               <AccountMenu />
