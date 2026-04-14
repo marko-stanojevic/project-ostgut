@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { SquaresFour, Radio, Users, ArrowLeft } from '@phosphor-icons/react'
+import { SquaresFourIcon, RadioIcon, UsersIcon, ArrowLeftIcon } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { AccountMenu } from '@/components/account-menu'
@@ -12,9 +12,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { title: 'Overview', href: '/admin', icon: SquaresFour },
-  { title: 'Stations', href: '/admin/stations', icon: Radio },
-  { title: 'Users', href: '/admin/users', icon: Users },
+  { title: 'Overview', href: '/admin', icon: SquaresFourIcon },
+  { title: 'Stations', href: '/admin/stations', icon: RadioIcon },
+  { title: 'Users', href: '/admin/users', icon: UsersIcon },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -79,7 +79,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               href="/"
               className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
             >
-              <ArrowLeft className="h-3.5 w-3.5" />
+              <ArrowLeftIcon className="h-3.5 w-3.5" />
               Back to app
             </Link>
           </div>

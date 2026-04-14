@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Radio, ArrowSquareOut, CheckCircle, XCircle, Clock, ArrowLeft, FloppyDisk } from '@phosphor-icons/react'
+import { RadioIcon, ArrowSquareOutIcon, CheckCircleIcon, XCircleIcon, ClockIcon, ArrowLeftIcon, FloppyDiskIcon } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -48,9 +48,9 @@ interface AdminStation {
 }
 
 const statusConfig = {
-  pending: { label: 'Pending', icon: Clock, className: 'text-yellow-600 dark:text-yellow-400' },
-  approved: { label: 'Approved', icon: CheckCircle, className: 'text-green-600 dark:text-green-400' },
-  rejected: { label: 'Rejected', icon: XCircle, className: 'text-destructive' },
+  pending: { label: 'Pending', icon: ClockIcon, className: 'text-yellow-600 dark:text-yellow-400' },
+  approved: { label: 'Approved', icon: CheckCircleIcon, className: 'text-green-600 dark:text-green-400' },
+  rejected: { label: 'Rejected', icon: XCircleIcon, className: 'text-destructive' },
 }
 
 function SourceField({ label, value }: { label: string; value?: string }) {
@@ -203,7 +203,7 @@ export default function StationEditorPage() {
             onClick={() => router.back()}
             className="mt-1 text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeftIcon className="h-4 w-4" />
           </button>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">{trimmedDisplayName || station.name}</h1>
@@ -223,7 +223,7 @@ export default function StationEditorPage() {
           {error && <p className="text-sm text-destructive">{error}</p>}
           {saved && <p className="text-sm text-green-600 dark:text-green-400">Saved</p>}
           <Button onClick={handleSave} disabled={saving || !hasValidDisplayName} className="gap-2">
-            <FloppyDisk className="h-4 w-4" />
+            <FloppyDiskIcon className="h-4 w-4" />
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>
@@ -244,7 +244,7 @@ export default function StationEditorPage() {
                 {station.logo ? (
                   <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
                 ) : (
-                  <Radio className="h-5 w-5 text-muted-foreground" />
+                  <RadioIcon className="h-5 w-5 text-muted-foreground" />
                 )}
               </div>
               <div>
@@ -303,7 +303,7 @@ export default function StationEditorPage() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                <ArrowSquareOut className="h-3.5 w-3.5" />
+                <ArrowSquareOutIcon className="h-3.5 w-3.5" />
                 Open stream
               </a>
             )}

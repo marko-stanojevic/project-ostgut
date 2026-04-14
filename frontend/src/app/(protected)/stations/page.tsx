@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { usePlayer, type Station } from '@/context/PlayerContext'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Radio, Play, Pause, X, Sparkle, TrendUp } from '@phosphor-icons/react'
+import { RadioIcon, PlayIcon, PauseIcon, XIcon, SparkleIcon, TrendUpIcon } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -69,7 +69,7 @@ function StationCard({
   }
 
   return (
-    <article className="group relative rounded-xl p-2 text-left transition-all hover:bg-muted/40">
+    <article className="group relative rounded-xl p-1.5 text-left transition-all duration-200 hover:bg-muted/50">
       <div
         onClick={onOpen}
         className="relative block aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-pointer"
@@ -85,33 +85,39 @@ function StationCard({
             fill
             priority={imagePriority}
             sizes="(max-width: 640px) 25vw, (max-width: 1024px) 16vw, 14vw"
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
             unoptimized
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Radio className="h-6 w-6 text-muted-foreground" />
+            <RadioIcon className="h-6 w-6 text-muted-foreground/50" />
           </div>
         )}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/20">
+        {/* Bottom gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        {/* Play button */}
+        <div className="absolute inset-0 flex items-center justify-center">
           <button
             onClick={(e) => { e.stopPropagation(); handleTogglePlay() }}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 opacity-0 transition-opacity duration-200 hover:scale-110 hover:bg-white group-hover:opacity-100"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 hover:scale-110 hover:bg-white group-hover:opacity-100"
             aria-label={isActive && isPlaying ? `Pause ${s.name}` : `Play ${s.name}`}
           >
-            {isActive && isPlaying ? <Pause className="h-4 w-4 text-black" /> : <Play className="ml-0.5 h-4 w-4 text-black" />}
+            {isActive && isPlaying
+              ? <PauseIcon weight="fill" className="h-4 w-4 text-black" />
+              : <PlayIcon weight="fill" className="ml-0.5 h-4 w-4 text-black" />
+            }
           </button>
         </div>
       </div>
-      <div className="mt-1.5">
+      <div className="mt-1.5 px-0.5">
         <button onClick={onOpen} className="w-full cursor-pointer text-left" aria-label={`Open ${s.name} details`}>
           <p className="ui-card-title">{s.name}</p>
-          <p className="ui-card-meta">
-            {s.genre || 'Unknown genre'}
-          </p>
+          <p className="ui-card-meta">{s.genre || 'Unknown genre'}</p>
         </button>
       </div>
-      {isActive && isPlaying && <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />}
+      {isActive && isPlaying && (
+        <span className="absolute right-2.5 top-2.5 h-2 w-2 animate-pulse rounded-full bg-brand shadow-[0_0_6px_rgba(200,116,58,0.6)]" />
+      )}
     </article>
   )
 }
@@ -236,7 +242,7 @@ function StationsContent() {
   return (
     <div>
       {!search && (
-        <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="mb-7 flex items-center gap-1 border-b border-border/50 pb-0">
           {([
             { id: 'for-you', label: 'For You' },
             { id: 'staff-picks', label: 'Staff Picks' },
@@ -246,7 +252,11 @@ function StationsContent() {
               key={id}
               type="button"
               onClick={() => setFeedView(id)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${feedView === id ? 'bg-primary text-primary-foreground' : 'bg-secondary/70 text-foreground hover:bg-secondary'}`}
+              className={`relative px-3 py-2 text-sm font-medium transition-colors ${
+                feedView === id
+                  ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:bg-brand'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
               {label}
             </button>
@@ -257,10 +267,10 @@ function StationsContent() {
       <section className="min-w-0">
         {search ? (
           <>
-            <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Results for &ldquo;{search}&rdquo;</span>
-              <button onClick={clearSearch} className="flex items-center gap-1 text-xs transition-colors hover:text-foreground">
-                <X className="h-3 w-3" /> Clear
+            <div className="mb-5 flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Results for <span className="font-medium text-foreground">&ldquo;{search}&rdquo;</span></span>
+              <button onClick={clearSearch} className="ml-1 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                <XIcon className="h-3 w-3" /> Clear
               </button>
             </div>
             {loadingSearch ? (
@@ -268,9 +278,10 @@ function StationsContent() {
                 {Array.from({ length: 12 }).map((_, i) => <StationCardSkeleton key={i} />)}
               </div>
             ) : searchResults.length === 0 ? (
-              <div className="py-20 text-center text-muted-foreground">
-                <Radio className="mx-auto mb-3 h-10 w-10 opacity-30" />
-                <p className="text-sm">No stations found. Try a different search.</p>
+              <div className="py-24 text-center">
+                <RadioIcon className="mx-auto mb-4 h-10 w-10 text-muted-foreground/25" />
+                <p className="text-sm font-medium text-foreground">No stations found</p>
+                <p className="mt-1 text-xs text-muted-foreground">Try a different search term</p>
               </div>
             ) : (
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-7">
@@ -285,7 +296,7 @@ function StationsContent() {
             {(feedView === 'for-you' || feedView === 'staff-picks') && (
               <div className="mb-10">
                 <div className="mb-4 flex items-center gap-2">
-                  <Sparkle className="h-4 w-4 text-primary" />
+                  <SparkleIcon className="h-3.5 w-3.5 text-brand" />
                   <h2 className="ui-section-title">
                     {feedView === 'staff-picks' ? 'Staff Picks' : 'Featured'}
                   </h2>
@@ -308,7 +319,7 @@ function StationsContent() {
             {(feedView === 'for-you' || feedView === 'trending') && (
               <div>
                 <div className="mb-4 flex items-center gap-2">
-                  <TrendUp className="h-4 w-4 text-primary" />
+                  <TrendUpIcon className="h-3.5 w-3.5 text-brand" />
                   <h2 className="ui-section-title">
                     {feedView === 'trending' ? 'Trending' : 'Most Played'}
                   </h2>

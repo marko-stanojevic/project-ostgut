@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ShieldCheck } from '@phosphor-icons/react'
+import { ShieldCheckIcon } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const PAGE_SIZE = 50
@@ -181,7 +181,7 @@ export default function AdminUsersPage() {
                     <td className="px-4 py-3">
                       {u.is_admin ? (
                         <Badge variant="default" className="gap-1">
-                          <ShieldCheck className="h-3 w-3" />
+                          <ShieldCheckIcon className="h-3 w-3" />
                           Admin
                         </Badge>
                       ) : (

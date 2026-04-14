@@ -14,10 +14,10 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import {
-  CheckCircle,
-  XCircle,
-  Clock,
-  ArrowSquareOut,
+  CheckCircleIcon,
+  XCircleIcon,
+  ClockIcon,
+  ArrowSquareOutIcon,
 } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
@@ -51,9 +51,9 @@ interface AdminStation {
 }
 
 const statusConfig = {
-  pending: { label: 'Pending', variant: 'secondary' as const, icon: Clock },
-  approved: { label: 'Approved', variant: 'default' as const, icon: CheckCircle },
-  rejected: { label: 'Rejected', variant: 'destructive' as const, icon: XCircle },
+  pending: { label: 'Pending', variant: 'secondary' as const, icon: ClockIcon },
+  approved: { label: 'Approved', variant: 'default' as const, icon: CheckCircleIcon },
+  rejected: { label: 'Rejected', variant: 'destructive' as const, icon: XCircleIcon },
 }
 
 function ReliabilityBar({ score }: { score: number }) {
@@ -237,7 +237,7 @@ export default function AdminStationsPage() {
               onClick={() => bulkAction('approved')}
               className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
             >
-              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+              <CheckCircleIcon className="h-3.5 w-3.5 mr-1.5" />
               Approve
             </Button>
             <Button
@@ -247,7 +247,7 @@ export default function AdminStationsPage() {
               onClick={() => bulkAction('rejected')}
               className="text-destructive border-destructive/30 hover:bg-destructive/5"
             >
-              <XCircle className="h-3.5 w-3.5 mr-1.5" />
+              <XCircleIcon className="h-3.5 w-3.5 mr-1.5" />
               Reject
             </Button>
           </div>
@@ -346,7 +346,7 @@ export default function AdminStationsPage() {
                       <Link href={`/admin/stations/${s.id}`}>
                         <Button variant="ghost" size="sm" className="h-7 gap-1.5">
                           Edit
-                          <ArrowSquareOut className="h-3 w-3" />
+                          <ArrowSquareOutIcon className="h-3 w-3" />
                         </Button>
                       </Link>
                     </td>
