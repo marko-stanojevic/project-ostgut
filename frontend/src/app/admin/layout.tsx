@@ -41,14 +41,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <SiteHeader rightSlot={<AccountMenu />} />
+      <SiteHeader className="border-b border-border/50" rightSlot={<AccountMenu />} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Admin sidebar */}
-        <aside className="flex w-[222px] shrink-0 flex-col bg-background">
-          <div className="px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Admin</p>
-            <p className="mt-0.5 truncate text-xs text-foreground/70">{user?.email}</p>
+        <aside className="hidden w-[222px] shrink-0 flex-col border-r border-border/40 bg-background md:flex">
+          <div className="px-4 py-3.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Admin panel</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{user?.email}</p>
           </div>
 
           <nav className="flex-1 px-2">
@@ -61,10 +61,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                    'mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
                     active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+                      ? 'bg-secondary font-medium text-foreground'
+                      : 'font-light text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
@@ -76,8 +76,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <div className="p-3">
             <Link
-              href="/"
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+              href="/stations"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-light text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
             >
               <ArrowLeftIcon className="h-3.5 w-3.5" />
               Back to app

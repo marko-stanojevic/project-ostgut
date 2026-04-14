@@ -6,7 +6,6 @@ import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { AdminSearchForm } from '@/components/admin/admin-search-form'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -17,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ShieldCheckIcon } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const PAGE_SIZE = 50
@@ -144,8 +142,7 @@ export default function AdminUsersPage() {
             <tr className="border-b bg-muted/40">
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">User</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Name</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Admin access</th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Admin</th>
             </tr>
           </thead>
           <tbody>
@@ -153,7 +150,7 @@ export default function AdminUsersPage() {
               <AdminTableSkeletonRows cells={userSkeletonCells} />
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-16 text-center text-muted-foreground text-sm">
+                <td colSpan={3} className="px-4 py-16 text-center text-muted-foreground text-sm">
                   No users found
                 </td>
               </tr>
@@ -177,16 +174,6 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
                       {u.name || '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {u.is_admin ? (
-                        <Badge variant="default" className="gap-1">
-                          <ShieldCheckIcon className="h-3 w-3" />
-                          Admin
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">User</Badge>
-                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Switch

@@ -90,6 +90,13 @@ func (h *Handler) ListStations(c *gin.Context) {
 		f.Limit = 100
 	}
 
+	total, err := h.stationStore.Count(c.Request.Context(), f)
+	if err != nil {
+		h.log.Error("count stations", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
 	stations, err := h.stationStore.List(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("list stations", "error", err)
@@ -101,7 +108,7 @@ func (h *Handler) ListStations(c *gin.Context) {
 	for i, s := range stations {
 		resp[i] = toStationResponse(s)
 	}
-	c.JSON(http.StatusOK, gin.H{"stations": resp, "count": len(resp)})
+	c.JSON(http.StatusOK, gin.H{"stations": resp, "total": total})
 }
 
 // GetStation handles GET /stations/:id
@@ -134,6 +141,13 @@ func (h *Handler) SearchStations(c *gin.Context) {
 		Offset: queryInt(c, "offset", 0),
 	}
 
+	total, err := h.stationStore.Count(c.Request.Context(), f)
+	if err != nil {
+		h.log.Error("count search stations", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
 	stations, err := h.stationStore.List(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("search stations", "error", err)
@@ -145,7 +159,7 @@ func (h *Handler) SearchStations(c *gin.Context) {
 	for i, s := range stations {
 		resp[i] = toStationResponse(s)
 	}
-	c.JSON(http.StatusOK, gin.H{"stations": resp, "count": len(resp)})
+	c.JSON(http.StatusOK, gin.H{"stations": resp, "total": total})
 }
 
 // GetFilters handles GET /stations/filters — returns available genres + countries.

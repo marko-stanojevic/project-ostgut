@@ -303,6 +303,75 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 	return err
 }
 
+// Count returns the total number of stations matching a filter (ignoring Limit/Offset).
+func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) {
+	statusFilter := f.Status
+	if statusFilter == "" {
+		statusFilter = "approved"
+	}
+
+	args := []any{}
+	i := 1
+
+	where := fmt.Sprintf("is_active = true AND status = $%d", i)
+	args = append(args, statusFilter)
+	i++
+
+	if f.Genre != "" {
+		where += fmt.Sprintf(" AND lower(genre) = $%d", i)
+		args = append(args, f.Genre)
+		i++
+	}
+	if f.CountryCode != "" {
+		where += fmt.Sprintf(" AND upper(country_code) = $%d", i)
+		args = append(args, f.CountryCode)
+		i++
+	}
+	if f.Language != "" {
+		where += fmt.Sprintf(" AND lower(language) = $%d", i)
+		args = append(args, f.Language)
+		i++
+	}
+	if f.FeaturedOnly {
+		where += " AND featured = true"
+	}
+
+	trimmedSearch := strings.TrimSpace(f.Search)
+	var searchClauses []string
+	if trimmedSearch != "" {
+		for _, term := range strings.Fields(trimmedSearch) {
+			pattern := "%" + term + "%"
+			searchClauses = append(searchClauses, fmt.Sprintf(`
+				(
+					name ILIKE $%[1]d OR
+					genre ILIKE $%[2]d OR
+					language ILIKE $%[3]d OR
+					country ILIKE $%[4]d OR
+					country_code ILIKE $%[5]d OR
+					EXISTS (
+						SELECT 1
+						FROM unnest(tags) AS tag
+						WHERE tag ILIKE $%[6]d
+					)
+				)`, i, i+1, i+2, i+3, i+4, i+5))
+			args = append(args, pattern, pattern, pattern, pattern, pattern, pattern)
+			i += 6
+		}
+	}
+
+	searchClause := ""
+	if len(searchClauses) > 0 {
+		searchClause = " AND " + strings.Join(searchClauses, " AND ")
+	}
+
+	var n int
+	err := s.pool.QueryRow(ctx,
+		fmt.Sprintf(`SELECT COUNT(*) FROM stations WHERE %s%s`, where, searchClause),
+		args...,
+	).Scan(&n)
+	return n, err
+}
+
 // CountByStatus returns the number of active stations with the given status.
 func (s *StationStore) CountByStatus(ctx context.Context, status string) (int, error) {
 	var n int
