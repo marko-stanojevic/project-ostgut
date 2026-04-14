@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
-import { AccountMenu } from '@/components/account-menu'
+import { SiteHeader } from '@/components/site-header'
+import { AuthenticatedHeaderActions, GuestHeaderActions } from '@/components/site-header-actions'
+import { SiteFooter } from '@/components/site-footer'
 
 export const metadata = {
   title: 'Terms of Service — bouji.fm',
@@ -13,27 +15,9 @@ export default async function TermsPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Navigation */}
-      <header className="border-b border-border/30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
-        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-3 sm:px-6">
-          <Link href="/" className="text-base font-bold tracking-tight text-white sm:text-lg">bouji.fm</Link>
-          <nav className="flex items-center gap-3">
-            {isAuthenticated ? (
-              <>
-                <Link href="/pricing" className="hidden rounded-full border border-border/50 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-muted/40 sm:block">
-                  Upgrade
-                </Link>
-                <AccountMenu />
-              </>
-            ) : (
-              <>
-                <Link href="/auth/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Login</Link>
-                <Link href="/auth/signup" className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90 transition-opacity">Sign Up</Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      <SiteHeader
+        rightSlot={isAuthenticated ? <AuthenticatedHeaderActions /> : <GuestHeaderActions />}
+      />
 
       <main className="flex-1 py-16 px-4">
         <div className="max-w-3xl mx-auto prose prose-neutral dark:prose-invert prose-sm sm:prose-base">
@@ -133,16 +117,13 @@ export default async function TermsPage() {
         </div>
       </main>
 
-      <footer className="border-t border-border/40">
-        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>&copy; {new Date().getFullYear()} bouji.fm. All rights reserved.</span>
-          <nav className="flex gap-4">
-            <Link href="/refunds" className="hover:text-foreground transition-colors">Refunds</Link>
-            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
-            <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter
+        links={[
+          { href: '/refunds', label: 'Refunds' },
+          { href: '/privacy', label: 'Privacy Policy' },
+          { href: '/pricing', label: 'Pricing' },
+        ]}
+      />
     </div>
   )
 }

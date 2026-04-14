@@ -43,21 +43,21 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background px-4 py-10">
-      <div className="absolute inset-0 -z-10 opacity-30">
-        <div className="absolute left-[-10%] top-[12%] h-64 w-64 rounded-full bg-primary/30 blur-3xl" />
-        <div className="absolute bottom-[8%] right-[-8%] h-72 w-72 rounded-full bg-white/8 blur-3xl" />
+      <div className="absolute inset-0 -z-10 opacity-40">
+        <div className="absolute left-[-10%] top-[12%] h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
+        <div className="absolute bottom-[8%] right-[-8%] h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       </div>
 
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center justify-center">
         <div className="w-full space-y-7">
           <div className="flex justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/5 shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-foreground/15 bg-foreground/5 shadow-[0_4px_20px_rgba(0,0,0,0.12)]">
               <Radio className="h-6 w-6 text-white" />
             </div>
           </div>
 
           <div className="space-y-2 text-center">
-            <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl">Welcome back</h1>
+            <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">Welcome back</h1>
             <p className="text-sm text-muted-foreground sm:text-base">Sign in to continue to bouji.fm</p>
           </div>
 
@@ -70,7 +70,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm text-white">Email</Label>
+                <Label htmlFor="email" className="text-sm text-foreground">Email</Label>
                 <Input
                   id="email"
                   name="email"
@@ -80,12 +80,12 @@ export default function LoginPage() {
                   required
                   autoComplete="email"
                   placeholder="you@example.com"
-                  className="h-13 rounded-2xl border-white/20 bg-transparent px-4 text-base text-white placeholder:text-muted-foreground/80"
+                  className="h-13 rounded-2xl border-foreground/20 bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground/80"
                 />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-sm text-white">Password</Label>
+                  <Label htmlFor="password" className="text-sm text-foreground">Password</Label>
                   <Link
                     href="/auth/forgot-password"
                     className="text-xs text-muted-foreground transition-colors hover:text-white"
@@ -102,7 +102,7 @@ export default function LoginPage() {
                   required
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className="h-13 rounded-2xl border-white/20 bg-transparent px-4 text-base text-white placeholder:text-muted-foreground/80"
+                  className="h-13 rounded-2xl border-foreground/20 bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground/80"
                 />
               </div>
               <Button type="submit" className="h-14 w-full rounded-full text-base font-semibold" disabled={loading}>
@@ -111,15 +111,15 @@ export default function LoginPage() {
             </form>
 
             <div className="flex items-center gap-4">
-              <Separator className="flex-1 bg-white/12" />
-              <span className="text-sm font-medium text-white/80">or</span>
-              <Separator className="flex-1 bg-white/12" />
+              <Separator className="flex-1 bg-foreground/15" />
+              <span className="text-sm font-medium text-foreground/70">or</span>
+              <Separator className="flex-1 bg-foreground/15" />
             </div>
 
             <div className="space-y-3">
               <Button
                 variant="outline"
-                className="relative h-14 w-full rounded-full border-white/20 bg-transparent px-6 text-base text-white hover:bg-white/6"
+                className="relative h-14 w-full rounded-full border-foreground/20 bg-transparent px-6 text-base text-foreground hover:bg-foreground/6"
                 onClick={() => handleOAuthLogin('github')}
               >
                 <svg className="absolute left-5 top-1/2 h-[2.1rem] w-[2.1rem] -translate-y-1/2 shrink-0" viewBox="0 0 24 24" fill="currentColor">
@@ -129,7 +129,7 @@ export default function LoginPage() {
               </Button>
               <Button
                 variant="outline"
-                className="relative h-14 w-full rounded-full border-white/20 bg-transparent px-6 text-base text-white hover:bg-white/6"
+                className="relative h-14 w-full rounded-full border-foreground/20 bg-transparent px-6 text-base text-foreground hover:bg-foreground/6"
                 onClick={() => handleOAuthLogin('google')}
               >
                 <svg className="absolute left-5 top-1/2 h-[2.1rem] w-[2.1rem] -translate-y-1/2 shrink-0" viewBox="0 0 24 24">
@@ -143,7 +143,7 @@ export default function LoginPage() {
             </div>
             <p className="pt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
-              <Link href="/auth/signup" className="font-semibold text-white hover:underline">
+              <Link href="/auth/signup" className="font-semibold text-foreground hover:underline">
                 Sign up
               </Link>
             </p>
