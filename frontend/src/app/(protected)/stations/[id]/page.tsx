@@ -108,7 +108,7 @@ export default function StationDetailsPage() {
     }, [station])
 
     return (
-        <div className="mx-auto w-full max-w-7xl">
+        <div className="w-full max-w-7xl">
             <button
                 type="button"
                 onClick={handleBack}
