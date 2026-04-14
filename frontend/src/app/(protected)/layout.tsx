@@ -112,8 +112,12 @@ export default function DashboardLayout({
       <AppSidebarMobile />
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar />
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
+        <main className="relative flex-1 overflow-y-auto">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_16%,transparent)_0%,transparent_68%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_8%,transparent)_0%,transparent_72%)] dark:bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_20%,transparent)_0%,transparent_70%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_14%,transparent)_0%,transparent_76%)]"
+          />
+          <div className="relative p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
             {children}
           </div>
         </main>
