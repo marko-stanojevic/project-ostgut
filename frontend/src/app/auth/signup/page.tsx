@@ -92,7 +92,7 @@ export default function SignupPage() {
           </div>
 
           <div className="space-y-2 text-center">
-            <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">Join bouji.fm</h1>
+            <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">Join bougie.fm</h1>
             <p className="text-sm text-muted-foreground sm:text-base">Create your account and step into the Listening Room.</p>
           </div>
 

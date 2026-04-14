@@ -58,7 +58,7 @@ export default function LoginPage() {
 
           <div className="space-y-2 text-center">
             <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">Welcome back</h1>
-            <p className="text-sm text-muted-foreground sm:text-base">Sign in to continue to bouji.fm</p>
+            <p className="text-sm text-muted-foreground sm:text-base">Sign in to continue to bougie.fm</p>
           </div>
 
           <div className="mx-auto w-full max-w-[20rem] space-y-5">

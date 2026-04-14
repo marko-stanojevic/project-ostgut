@@ -4,7 +4,7 @@ import { AuthenticatedHeaderActions, GuestHeaderActions } from '@/components/sit
 import { SiteFooter } from '@/components/site-footer'
 
 export const metadata = {
-  title: 'Privacy Policy — bouji.fm',
+  title: 'Privacy Policy — bougie.fm',
 }
 
 export default async function PrivacyPage() {
@@ -27,7 +27,7 @@ export default async function PrivacyPage() {
             <section>
               <h2 className="text-lg font-semibold mb-2">1. Who We Are</h2>
               <p>
-                bouji.fm (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates the bouji.fm platform. This Privacy Policy explains how we collect, use, and protect your personal data when you use our Service.
+                bougie.fm (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates the bougie.fm platform. This Privacy Policy explains how we collect, use, and protect your personal data when you use our Service.
               </p>
             </section>
 

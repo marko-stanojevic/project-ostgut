@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'bouji.fm — The Listening Room',
+  title: 'bougie.fm — The Listening Room',
   description: 'Curated internet radio. Premium live stations. No ads.',
 }
 

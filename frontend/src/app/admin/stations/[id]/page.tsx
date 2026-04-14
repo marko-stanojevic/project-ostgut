@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Radio, ArrowSquareOut, CheckCircle, XCircle, Clock, ArrowLeft, Save } from '@phosphor-icons/react'
+import { Radio, ArrowSquareOut, CheckCircle, XCircle, Clock, ArrowLeft, FloppyDisk } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -223,7 +223,7 @@ export default function StationEditorPage() {
           {error && <p className="text-sm text-destructive">{error}</p>}
           {saved && <p className="text-sm text-green-600 dark:text-green-400">Saved</p>}
           <Button onClick={handleSave} disabled={saving || !hasValidDisplayName} className="gap-2">
-            <Save className="h-4 w-4" />
+            <FloppyDisk className="h-4 w-4" />
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>

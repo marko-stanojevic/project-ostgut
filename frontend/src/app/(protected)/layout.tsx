@@ -85,7 +85,7 @@ export default function DashboardLayout({
         {/* Logo occupies exactly the sidebar width so search aligns with content */}
         <div className="flex w-[222px] shrink-0 items-center pl-3 py-3">
           <Link href="/stations" className="text-2xl font-medium tracking-[-0.05em] text-foreground sm:text-3xl">
-            bouji.fm
+            bougie.fm
           </Link>
         </div>
         <div className="flex flex-1 items-center gap-4 py-3 pr-6">
