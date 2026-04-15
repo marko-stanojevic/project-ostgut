@@ -154,6 +154,13 @@ resource "azurerm_role_assignment" "acr_pull" {
   principal_id         = azurerm_user_assigned_identity.backend.principal_id
 }
 
+# Grant backend identity access to read/write media blobs via Azure AD.
+resource "azurerm_role_assignment" "backend_storage_blob_contributor" {
+  scope                = azurerm_storage_account.media.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.backend.principal_id
+}
+
 # ──────────────────────────────────────────────
 # Backend Container App
 # ──────────────────────────────────────────────
@@ -241,6 +248,14 @@ resource "azurerm_container_app" "backend" {
         name  = "MEDIA_UPLOAD_BASE_URL"
         value = "${azurerm_storage_account.media.primary_blob_endpoint}${azurerm_storage_container.media.name}"
       }
+      env {
+        name  = "MEDIA_STORAGE_ACCOUNT_NAME"
+        value = azurerm_storage_account.media.name
+      }
+      env {
+        name  = "MEDIA_STORAGE_CONTAINER_NAME"
+        value = azurerm_storage_container.media.name
+      }
     }
   }
 
@@ -271,7 +286,10 @@ resource "azurerm_container_app" "backend" {
     }
   }
 
-  depends_on = [azurerm_role_assignment.acr_pull]
+  depends_on = [
+    azurerm_role_assignment.acr_pull,
+    azurerm_role_assignment.backend_storage_blob_contributor,
+  ]
 }
 
 

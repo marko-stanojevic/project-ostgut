@@ -35,6 +35,12 @@ func main() {
 		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+	logMediaStorageMode(
+		logger,
+		cfg.MediaUploadBaseURL,
+		cfg.MediaStorageAccountName,
+		cfg.MediaStorageContainerName,
+	)
 	warnIfSuspiciousMediaUploadBaseURL(logger, cfg.MediaUploadBaseURL)
 
 	// Connect to Postgres
@@ -67,6 +73,8 @@ func main() {
 		cfg.PaddlePriceID,
 		cfg.MediaUploadBaseURL,
 		cfg.MediaUploadSigningSecret,
+		cfg.MediaStorageAccountName,
+		cfg.MediaStorageContainerName,
 	)
 
 	// Start background station sync (Radio Browser ingestion).
@@ -186,6 +194,23 @@ func warnIfSuspiciousMediaUploadBaseURL(logger *slog.Logger, mediaUploadBaseURL 
 			"expected_host_pattern", "*.blob.core.windows.net",
 		)
 	}
+}
+
+func logMediaStorageMode(logger *slog.Logger, baseURL, storageAccount, storageContainer string) {
+	usingManagedIdentity := storageAccount != "" && storageContainer != ""
+	if usingManagedIdentity {
+		logger.Info(
+			"media storage mode: managed identity",
+			"storage_account", storageAccount,
+			"storage_container", storageContainer,
+		)
+		if baseURL == "" {
+			logger.Warn("MEDIA_UPLOAD_BASE_URL is empty; media URLs in API responses will not be resolvable")
+		}
+		return
+	}
+
+	logger.Info("media storage mode: base URL fallback")
 }
 
 func runMigrations(logger *slog.Logger, databaseURL string) error {
