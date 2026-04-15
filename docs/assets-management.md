@@ -19,7 +19,8 @@ Goals:
 
 - Storage: Azure Blob Storage
 - Delivery: Azure Front Door or Azure CDN in front of Blob
-- API orchestration: Go backend issues short-lived upload permissions
+- API orchestration: Go backend issues short-lived app upload tokens
+- Blob auth (backend): Azure Managed Identity + RBAC (no RW SAS in app config)
 - Processing: backend worker or background job for validation + derivatives
 - Persistence: Postgres stores metadata and references only (not image binaries)
 
@@ -77,14 +78,14 @@ Use deterministic blob keys.
 Examples:
 
 - avatars/{user_id}/{asset_id}/original
-- avatars/{user_id}/{asset_id}/64.webp
-- avatars/{user_id}/{asset_id}/128.webp
-- avatars/{user_id}/{asset_id}/256.webp
+- avatars/{user_id}/{asset_id}/64.png
+- avatars/{user_id}/{asset_id}/128.png
+- avatars/{user_id}/{asset_id}/256.png
 
 - stations/{station_id}/{asset_id}/original
-- stations/{station_id}/{asset_id}/96.webp
-- stations/{station_id}/{asset_id}/192.webp
-- stations/{station_id}/{asset_id}/384.webp
+- stations/{station_id}/{asset_id}/96.png
+- stations/{station_id}/{asset_id}/192.png
+- stations/{station_id}/{asset_id}/384.png
 
 Guideline:
 
@@ -97,19 +98,20 @@ Guideline:
    - includes kind (avatar or station_icon)
    - optional expected mime/size hints
 2. Backend authenticates/authorizes and returns:
-   - short-lived SAS upload URL
+   - short-lived app upload URL and token (backend endpoint)
    - target blob key
    - constraints (max size, accepted types)
-3. Client uploads directly to Blob Storage.
-4. Client calls backend complete endpoint.
-5. Backend processing pipeline:
+3. Client uploads binary to backend upload endpoint.
+4. Backend validates payload and writes original object to Blob Storage.
+5. Client calls backend complete endpoint.
+6. Backend processing pipeline:
    - verifies blob exists
    - validates file signature and dimensions
    - strips EXIF/metadata
    - generates derivatives (fixed sizes + formats)
    - stores derivative blobs
    - marks media_assets row ready or rejected
-6. Client fetches media metadata and renders CDN URLs.
+7. Client fetches media metadata and renders CDN URLs.
 
 Why this flow:
 
@@ -157,9 +159,8 @@ Recommended station icon variants:
 
 Formats:
 
-- Primary: WebP
-- Optional: AVIF
-- PNG fallback for alpha-sensitive assets when needed
+- Current implementation: PNG derivatives (pure-Go encoder, CGO-free builds)
+- Optional future target: WebP/AVIF via safe, portable encoder path
 
 Benefits:
 
@@ -215,14 +216,25 @@ Metrics to track:
 
 Suggested access model:
 
-- Original uploads: private container access
-- Derivatives: public-read through CDN (or signed if policy requires)
+- Original uploads and processing writes: backend-only access via managed identity
+- Derivatives: public-read through CDN (or signed read URLs if policy requires)
 
 Backend responsibilities:
 
-- Generate short-lived upload credentials only for authorized users
+- Generate short-lived app upload tokens only for authorized users
 - Validate owner mapping (user can only modify own avatar)
 - Restrict station icon uploads to admin/editor roles
+
+### Current runtime configuration (implemented)
+
+- `MEDIA_UPLOAD_BASE_URL`: public base URL used for resolving media URLs in API responses
+- `MEDIA_STORAGE_ACCOUNT_NAME`: enables managed identity blob client mode
+- `MEDIA_STORAGE_CONTAINER_NAME`: container used by managed identity blob client mode
+
+Security note:
+
+- Do not place long-lived RW SAS in `MEDIA_UPLOAD_BASE_URL`
+- Keep blob write privileges in Azure RBAC attached to backend managed identity
 
 ## Proposed API Contract (MVP)
 

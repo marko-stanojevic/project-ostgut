@@ -19,6 +19,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
@@ -353,7 +358,7 @@ func (h *Handler) GetMedia(c *gin.Context) {
 
 // UploadMediaObject handles PUT /media/upload/:id.
 func (h *Handler) UploadMediaObject(c *gin.Context) {
-	if h.mediaUploadBaseURL == "" {
+	if h.mediaUploadBaseURL == "" && !h.hasManagedIdentityMediaStorage() {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "media upload storage is not configured"})
 		return
 	}
@@ -707,6 +712,13 @@ func buildVariantImages(src image.Image, asset *store.MediaAsset) (map[string][]
 }
 
 func (h *Handler) putMediaObject(ctx context.Context, objectKey string, payload []byte, contentType string) error {
+	if h.hasManagedIdentityMediaStorage() {
+		return h.putMediaObjectWithManagedIdentity(ctx, objectKey, payload, contentType)
+	}
+	return h.putMediaObjectWithBaseURL(ctx, objectKey, payload, contentType)
+}
+
+func (h *Handler) putMediaObjectWithBaseURL(ctx context.Context, objectKey string, payload []byte, contentType string) error {
 	objectURL, err := buildObjectURL(h.mediaUploadBaseURL, objectKey)
 	if err != nil {
 		return err
@@ -737,40 +749,38 @@ func (h *Handler) putMediaObject(ctx context.Context, objectKey string, payload 
 	return nil
 }
 
+func (h *Handler) putMediaObjectWithManagedIdentity(ctx context.Context, objectKey string, payload []byte, contentType string) error {
+	client, err := h.mediaBlobStorageClient()
+	if err != nil {
+		return err
+	}
+
+	cacheControl := "public, max-age=31536000, immutable"
+	_, err = client.UploadBuffer(ctx, h.mediaStorageContainer, objectKey, payload, &azblob.UploadBufferOptions{
+		HTTPHeaders: &blob.HTTPHeaders{
+			BlobContentType:  to.Ptr(contentType),
+			BlobCacheControl: to.Ptr(cacheControl),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("upload media object via managed identity: %w", err)
+	}
+
+	return nil
+}
+
 func (h *Handler) processUploadedAsset(ctx context.Context, asset *store.MediaAsset) (*processedMediaResult, string, error) {
-	if h.mediaUploadBaseURL == "" {
+	if h.mediaUploadBaseURL == "" && !h.hasManagedIdentityMediaStorage() {
 		return nil, "", errors.New("MEDIA_UPLOAD_BASE_URL is not configured")
 	}
 
-	objectURL, err := buildObjectURL(h.mediaUploadBaseURL, asset.StorageKeyOriginal)
+	maxBytes := maxUploadBytesForKind(asset.Kind)
+	payload, found, err := h.readMediaObject(ctx, asset.StorageKeyOriginal, maxBytes)
 	if err != nil {
 		return nil, "", err
 	}
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, objectURL, nil)
-	if err != nil {
-		return nil, "", fmt.Errorf("build object request: %w", err)
-	}
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(request)
-	if err != nil {
-		return nil, "upload could not be verified", nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, "uploaded object not found", nil
-		}
-		return nil, "upload could not be verified", nil
-	}
-
-	maxBytes := maxUploadBytesForKind(asset.Kind)
-	limitedReader := io.LimitReader(resp.Body, maxBytes+1)
-	payload, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return nil, "", fmt.Errorf("read uploaded object: %w", err)
+	if !found {
+		return nil, "uploaded object not found", nil
 	}
 
 	if int64(len(payload)) > maxBytes {
@@ -822,4 +832,104 @@ func (h *Handler) processUploadedAsset(ctx context.Context, asset *store.MediaAs
 		ByteSize:    int64(len(payload)),
 		ContentHash: contentHash,
 	}, "", nil
+}
+
+func (h *Handler) hasManagedIdentityMediaStorage() bool {
+	return h.mediaStorageAccount != "" && h.mediaStorageContainer != ""
+}
+
+func (h *Handler) mediaBlobStorageClient() (*azblob.Client, error) {
+	h.mediaBlobClientOnce.Do(func() {
+		if !h.hasManagedIdentityMediaStorage() {
+			h.mediaBlobClientErr = errors.New("media storage account/container is not configured")
+			return
+		}
+
+		cred, err := azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			h.mediaBlobClientErr = fmt.Errorf("create azure credential: %w", err)
+			return
+		}
+
+		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", h.mediaStorageAccount)
+		client, err := azblob.NewClient(serviceURL, cred, nil)
+		if err != nil {
+			h.mediaBlobClientErr = fmt.Errorf("create blob client: %w", err)
+			return
+		}
+
+		h.mediaBlobClient = client
+	})
+
+	if h.mediaBlobClientErr != nil {
+		return nil, h.mediaBlobClientErr
+	}
+	if h.mediaBlobClient == nil {
+		return nil, errors.New("blob client is not initialized")
+	}
+
+	return h.mediaBlobClient, nil
+}
+
+func (h *Handler) readMediaObject(ctx context.Context, objectKey string, maxBytes int64) ([]byte, bool, error) {
+	if h.hasManagedIdentityMediaStorage() {
+		return h.readMediaObjectWithManagedIdentity(ctx, objectKey, maxBytes)
+	}
+	return h.readMediaObjectWithBaseURL(ctx, objectKey, maxBytes)
+}
+
+func (h *Handler) readMediaObjectWithManagedIdentity(ctx context.Context, objectKey string, maxBytes int64) ([]byte, bool, error) {
+	client, err := h.mediaBlobStorageClient()
+	if err != nil {
+		return nil, false, err
+	}
+
+	resp, err := client.DownloadStream(ctx, h.mediaStorageContainer, objectKey, nil)
+	if err != nil {
+		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("download media object via managed identity: %w", err)
+	}
+	defer resp.Body.Close()
+
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return nil, false, fmt.Errorf("read uploaded object: %w", err)
+	}
+
+	return payload, true, nil
+}
+
+func (h *Handler) readMediaObjectWithBaseURL(ctx context.Context, objectKey string, maxBytes int64) ([]byte, bool, error) {
+	objectURL, err := buildObjectURL(h.mediaUploadBaseURL, objectKey)
+	if err != nil {
+		return nil, false, err
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, objectURL, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("build object request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(request)
+	if err != nil {
+		return nil, false, fmt.Errorf("download media object: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("download media object: unexpected status %d", resp.StatusCode)
+	}
+
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return nil, false, fmt.Errorf("read uploaded object: %w", err)
+	}
+
+	return payload, true, nil
 }

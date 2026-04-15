@@ -38,6 +38,13 @@ type Config struct {
 
 	// MediaUploadSigningSecret signs short-lived backend upload URLs.
 	MediaUploadSigningSecret string
+
+	// MediaStorageAccountName is the Azure Blob Storage account used by backend
+	// server-to-server media operations when managed identity is enabled.
+	MediaStorageAccountName string
+
+	// MediaStorageContainerName is the blob container used for media objects.
+	MediaStorageContainerName string
 }
 
 // Load reads configuration from environment variables, returning an error when
@@ -72,6 +79,10 @@ func Load() (*Config, error) {
 		PaddlePriceID:            os.Getenv("PADDLE_PRICE_ID"),
 		MediaUploadBaseURL:       strings.TrimRight(os.Getenv("MEDIA_UPLOAD_BASE_URL"), "/"),
 		MediaUploadSigningSecret: getEnv("MEDIA_UPLOAD_SIGNING_SECRET", jwtSecret),
+		MediaStorageAccountName:  strings.TrimSpace(os.Getenv("MEDIA_STORAGE_ACCOUNT_NAME")),
+		MediaStorageContainerName: strings.TrimSpace(
+			os.Getenv("MEDIA_STORAGE_CONTAINER_NAME"),
+		),
 	}, nil
 }
 
