@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { usePlayer } from '@/context/PlayerContext'
 
 const mainNavItems = [
-  { href: '/stations', icon: RadioIcon, label: 'Curated' },
+  { href: '/curated', icon: RadioIcon, label: 'Curated' },
   { href: '/explore', icon: CompassIcon, label: 'Explore' },
   { href: '/shows', icon: MicrophoneIcon, label: 'Shows' },
   { href: '/talks', icon: ChatIcon, label: 'Talks' },
@@ -88,7 +88,7 @@ export function AppSidebarMobile() {
       <div className="flex items-center gap-0.5 overflow-x-auto px-3 py-1.5">
         {mainNavItems.map(({ href, icon: Icon, label }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
-          const isCuratedAndPlaying = href === '/stations' && station && state !== 'idle'
+          const isCuratedAndPlaying = href === '/curated' && station && state !== 'idle'
 
           return (
             <Link
@@ -149,7 +149,7 @@ export function AppSidebar() {
                   >
                     <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-foreground' : 'text-muted-foreground/85')} />
                     <span>{label}</span>
-                    {href === '/stations' && <NowPlayingIndicator />}
+                    {href === '/curated' && <NowPlayingIndicator />}
                   </Link>
                 )
               })}

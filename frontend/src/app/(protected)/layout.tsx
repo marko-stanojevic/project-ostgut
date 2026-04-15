@@ -93,7 +93,7 @@ export default function DashboardLayout({
         <div className="flex flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:gap-0 sm:py-0">
           {/* Logo occupies exactly the desktop sidebar width so search aligns with content */}
           <div className="flex items-center justify-between sm:w-[246px] sm:shrink-0 sm:border-r sm:border-border/40 sm:pl-4 sm:py-4">
-            <Link href="/stations" className="text-[1.6rem] font-semibold tracking-[-0.04em] text-foreground sm:text-[2rem]">
+            <Link href="/curated" className="text-[1.6rem] font-semibold tracking-[-0.04em] text-foreground sm:text-[2rem]">
               bougie.fm
             </Link>
             <div className="sm:hidden">

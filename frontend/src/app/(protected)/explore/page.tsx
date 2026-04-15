@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { usePlayer, type Station } from '@/context/PlayerContext'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CompassIcon, PlayIcon, PauseIcon, RadioIcon, SparkleIcon, XIcon } from '@phosphor-icons/react'
+import { CompassIcon, PlayIcon, PauseIcon, RadioIcon, XIcon } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const PAGE_SIZE = 24
@@ -35,6 +35,22 @@ interface CountryOption {
 interface FiltersResponse {
     genres?: string[]
     countries?: CountryOption[]
+    languages?: string[]
+}
+
+const BITRATE_OPTIONS = [
+    { value: '', label: 'Any quality' },
+    { value: '64', label: '64+ kbps' },
+    { value: '96', label: '96+ kbps' },
+    { value: '128', label: '128+ kbps' },
+    { value: '192', label: '192+ kbps' },
+]
+
+function formatFilterLabel(value: string) {
+    if (!value) return value
+    if (value.length <= 3) return value.toUpperCase()
+
+    return value.replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
 function toStation(s: ApiStation): Station {
@@ -150,17 +166,28 @@ function ExploreContent() {
     const [loadingMore, setLoadingMore] = useState(false)
     const [genres, setGenres] = useState<string[]>([])
     const [countries, setCountries] = useState<CountryOption[]>([])
+    const [languages, setLanguages] = useState<string[]>([])
 
     const query = searchParams.get('q')?.trim() ?? ''
     const genre = searchParams.get('genre') ?? ''
     const country = searchParams.get('country') ?? ''
+    const language = searchParams.get('language') ?? ''
+    const minBitrate = searchParams.get('min_bitrate') ?? ''
     const sort = searchParams.get('sort') === 'popular' ? 'popular' : 'recommended'
-    const featuredOnly = searchParams.get('featured') === 'true'
 
     const activeFilters = useMemo(
-        () => [query, genre, country, featuredOnly ? 'featured' : '', sort === 'popular' ? 'popular' : ''].filter(Boolean).length,
-        [query, genre, country, featuredOnly, sort]
+        () => [query, genre, country, language, minBitrate, sort === 'popular' ? 'popular' : ''].filter(Boolean).length,
+        [query, genre, country, language, minBitrate, sort]
     )
+
+    useEffect(() => {
+        if (searchParams.get('featured') !== 'true') return
+
+        const params = new URLSearchParams(searchParams.toString())
+        params.delete('featured')
+        const qs = params.toString()
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    }, [pathname, router, searchParams])
 
     useEffect(() => {
         fetch(`${API}/stations/filters`)
@@ -168,10 +195,12 @@ function ExploreContent() {
             .then((data: FiltersResponse) => {
                 setGenres(data.genres ?? [])
                 setCountries(data.countries ?? [])
+                setLanguages(data.languages ?? [])
             })
             .catch(() => {
                 setGenres([])
                 setCountries([])
+                setLanguages([])
             })
     }, [])
 
@@ -183,7 +212,8 @@ function ExploreContent() {
         if (query) params.set('q', query)
         if (genre) params.set('genre', genre)
         if (country) params.set('country', country)
-        if (featuredOnly) params.set('featured', 'true')
+        if (language) params.set('language', language)
+        if (minBitrate) params.set('min_bitrate', minBitrate)
         if (sort === 'popular') params.set('sort', 'popular')
 
         fetch(`${API}/stations?${params.toString()}`)
@@ -197,7 +227,7 @@ function ExploreContent() {
                 setTotal(0)
             })
             .finally(() => setLoading(false))
-    }, [query, genre, country, featuredOnly, sort])
+    }, [query, genre, country, language, minBitrate, sort])
 
     useEffect(() => {
         if (typeof window === 'undefined') return
@@ -239,7 +269,8 @@ function ExploreContent() {
             if (query) params.set('q', query)
             if (genre) params.set('genre', genre)
             if (country) params.set('country', country)
-            if (featuredOnly) params.set('featured', 'true')
+            if (language) params.set('language', language)
+            if (minBitrate) params.set('min_bitrate', minBitrate)
             if (sort === 'popular') params.set('sort', 'popular')
 
             const data = await fetch(`${API}/stations?${params.toString()}`).then((r) => r.json())
@@ -258,7 +289,7 @@ function ExploreContent() {
             sessionStorage.setItem(LIST_SCROLL_KEY, String(window.scrollY))
         }
 
-        router.push(`/stations/${stationID}?from=${encodeURIComponent(from)}`)
+        router.push(`/curated/${stationID}?from=${encodeURIComponent(from)}`)
     }
 
     const clearFilters = () => {
@@ -266,107 +297,117 @@ function ExploreContent() {
     }
 
     return (
-        <div>
+        <div className="max-w-5xl">
             <div className="mb-8 max-w-3xl">
                 <p className="ui-section-title">Explore</p>
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
                     Explore by mood, geography, and taste.
                 </h1>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
-                    A more deliberate way to browse the catalog. Filter by genre or country, surface editor picks, and follow whatever sound you want next.
+                    A broader way to browse the catalog. Filter by genre, language, country, and signal quality, then move into deeper discovery.
                 </p>
             </div>
 
-            <div className="mb-6 rounded-2xl border border-border/60 bg-background/75 p-4 shadow-sm backdrop-blur-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <label className="flex flex-col gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Genre</span>
-                            <select
-                                value={genre}
-                                onChange={(e) => updateParams({ genre: e.target.value || null })}
-                                className="h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
-                            >
-                                <option value="">All genres</option>
-                                {genres.map((option) => (
-                                    <option key={option} value={option.toLowerCase()}>{option}</option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label className="flex flex-col gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Country</span>
-                            <select
-                                value={country}
-                                onChange={(e) => updateParams({ country: e.target.value || null })}
-                                className="h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
-                            >
-                                <option value="">Any country</option>
-                                {countries.map((option) => (
-                                    <option key={option.code} value={option.code}>{option.name}</option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <div className="flex flex-col gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Sort</span>
-                            <div className="flex h-11 rounded-xl border border-border bg-background p-1">
-                                <button
-                                    type="button"
-                                    onClick={() => updateParams({ sort: null })}
-                                    className={`flex-1 rounded-lg px-3 text-sm transition-colors ${sort === 'recommended' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                                >
-                                    Recommended
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => updateParams({ sort: 'popular' })}
-                                    className={`flex-1 rounded-lg px-3 text-sm transition-colors ${sort === 'popular' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                                >
-                                    Popular
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Editorial</span>
-                            <button
-                                type="button"
-                                onClick={() => updateParams({ featured: featuredOnly ? null : 'true' })}
-                                className={`flex h-11 items-center justify-center gap-2 rounded-xl border px-3 text-sm transition-colors ${featuredOnly ? 'border-brand/35 bg-brand/8 text-foreground' : 'border-border bg-background text-muted-foreground hover:text-foreground'}`}
-                            >
-                                <SparkleIcon className="h-4 w-4" />
-                                Editor picks only
-                            </button>
-                        </div>
+            <div className="mb-6 rounded-2xl border border-border/60 bg-card/55 px-4 py-3 backdrop-blur-sm">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Filters</p>
+                        <span className="text-[11px] font-medium text-muted-foreground">{activeFilters} active</span>
                     </div>
+                    <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                        <XIcon className="h-3.5 w-3.5" /> Clear
+                    </button>
+                </div>
 
-                    <div className="flex items-center gap-3 lg:pl-4">
-                        <div className="text-right">
-                            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Active filters</p>
-                            <p className="mt-1 text-sm text-foreground">{activeFilters}</p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={clearFilters}
-                            className="inline-flex h-11 items-center gap-2 rounded-xl border border-border px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="flex min-w-0 flex-col gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Genre</span>
+                        <select
+                            value={genre}
+                            onChange={(e) => updateParams({ genre: e.target.value || null })}
+                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
                         >
-                            <XIcon className="h-4 w-4" /> Clear
-                        </button>
-                    </div>
+                            <option value="">All genres</option>
+                            {genres.map((option) => (
+                                <option key={option} value={option.toLowerCase()}>{formatFilterLabel(option)}</option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="flex min-w-0 flex-col gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Country</span>
+                        <select
+                            value={country}
+                            onChange={(e) => updateParams({ country: e.target.value || null })}
+                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
+                        >
+                            <option value="">Any country</option>
+                            {countries.map((option) => (
+                                <option key={option.code} value={option.code}>{option.name}</option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="flex min-w-0 flex-col gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Language</span>
+                        <select
+                            value={language}
+                            onChange={(e) => updateParams({ language: e.target.value || null })}
+                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
+                        >
+                            <option value="">Any language</option>
+                            {languages.map((option) => (
+                                <option key={option} value={option}>{formatFilterLabel(option)}</option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="flex min-w-0 flex-col gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Bitrate</span>
+                        <select
+                            value={minBitrate}
+                            onChange={(e) => updateParams({ min_bitrate: e.target.value || null })}
+                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
+                        >
+                            {BITRATE_OPTIONS.map((option) => (
+                                <option key={option.value || 'any'} value={option.value}>{option.label}</option>
+                            ))}
+                        </select>
+                    </label>
+
                 </div>
             </div>
 
-            <div className="mb-5 flex items-center justify-between gap-3">
-                <div>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <div className="hidden">
                     <p className="text-sm text-muted-foreground">
                         {query
                             ? <>Results for <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span></>
-                            : 'Browse across the catalog with a lighter editorial touch.'}
+                            : 'Browse across the catalog with more control than Curated.'}
                     </p>
                 </div>
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    <CompassIcon className="h-3.5 w-3.5" /> {total} matches
+                <div className="flex items-center gap-3 self-start sm:self-auto">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        <CompassIcon className="h-3.5 w-3.5" /> {total} matches
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="explore-sort" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            Sort
+                        </label>
+                        <select
+                            id="explore-sort"
+                            value={sort}
+                            onChange={(e) => updateParams({ sort: e.target.value === 'recommended' ? null : e.target.value })}
+                            className="h-9 rounded-full border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
+                        >
+                            <option value="recommended">Recommended</option>
+                            <option value="popular">Popular</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 

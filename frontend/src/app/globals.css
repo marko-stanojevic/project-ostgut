@@ -231,6 +231,11 @@
 }
 
 @layer components {
+  .explore-filter-select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+
   .ui-page-title {
     @apply text-2xl font-medium tracking-tight sm:text-3xl;
   }

@@ -76,7 +76,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <div className="p-3">
             <Link
-              href="/stations"
+              href="/curated"
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-light text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
             >
               <ArrowLeftIcon className="h-3.5 w-3.5" />
