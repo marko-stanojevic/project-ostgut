@@ -25,11 +25,12 @@ var (
 
 // User holds a row from the users table.
 type User struct {
-	ID           string
-	Email        string
-	PasswordHash string
-	Name         string
-	IsAdmin      bool
+	ID            string
+	Email         string
+	PasswordHash  string
+	Name          string
+	IsAdmin       bool
+	AvatarAssetID *string
 }
 
 // UserStore executes queries against the users and password_reset_tokens tables.
@@ -89,9 +90,9 @@ func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error)
 func (s *UserStore) GetByID(ctx context.Context, id string) (*User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, COALESCE(password_hash, ''), name, is_admin FROM users WHERE id = $1`,
+		`SELECT id, email, COALESCE(password_hash, ''), name, is_admin, avatar_asset_id FROM users WHERE id = $1`,
 		id,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.IsAdmin)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.IsAdmin, &u.AvatarAssetID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

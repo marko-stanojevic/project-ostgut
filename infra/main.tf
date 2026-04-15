@@ -22,6 +22,36 @@ resource "azurerm_resource_group" "main" {
 }
 
 # ──────────────────────────────────────────────
+# Storage account for media assets
+# ──────────────────────────────────────────────
+resource "random_string" "storage_suffix" {
+  length  = 6
+  upper   = false
+  special = false
+}
+
+resource "azurerm_storage_account" "media" {
+  name                     = "st${var.project}${var.environment}${random_string.storage_suffix.result}"
+  resource_group_name      = azurerm_resource_group.main.name
+  location                 = azurerm_resource_group.main.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  min_tls_version          = "TLS1_2"
+
+  # We intentionally keep this enabled so media objects can be served directly
+  # via URL when needed (for example through CDN origin pull).
+  allow_nested_items_to_be_public = true
+
+  tags = local.common_tags
+}
+
+resource "azurerm_storage_container" "media" {
+  name                  = var.media_container_name
+  storage_account_id    = azurerm_storage_account.media.id
+  container_access_type = "blob"
+}
+
+# ──────────────────────────────────────────────
 # PostgreSQL Flexible Server
 # Public access restricted to Azure services only — no VNet required.
 # ──────────────────────────────────────────────
@@ -206,6 +236,10 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "PADDLE_PRICE_ID"
         value = var.paddle_price_id
+      }
+      env {
+        name  = "MEDIA_UPLOAD_BASE_URL"
+        value = "${azurerm_storage_account.media.primary_blob_endpoint}${azurerm_storage_container.media.name}"
       }
     }
   }

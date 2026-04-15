@@ -31,6 +31,13 @@ type Config struct {
 	PaddleWebhookSecret string
 	PaddleClientToken   string
 	PaddlePriceID       string
+
+	// MediaUploadBaseURL is the base URL returned to clients for direct uploads.
+	// Example: https://<storage-account>.blob.core.windows.net/uploads
+	MediaUploadBaseURL string
+
+	// MediaUploadSigningSecret signs short-lived backend upload URLs.
+	MediaUploadSigningSecret string
 }
 
 // Load reads configuration from environment variables, returning an error when
@@ -54,15 +61,17 @@ func Load() (*Config, error) {
 	)
 
 	return &Config{
-		Port:                port,
-		DatabaseURL:         databaseURL,
-		JWTSecret:           jwtSecret,
-		AllowedOrigins:      allowedOrigins,
-		Env:                 getEnv("ENV", "local"),
-		PaddleAPIKey:        os.Getenv("PADDLE_API_KEY"),
-		PaddleWebhookSecret: os.Getenv("PADDLE_WEBHOOK_SECRET"),
-		PaddleClientToken:   os.Getenv("PADDLE_CLIENT_TOKEN"),
-		PaddlePriceID:       os.Getenv("PADDLE_PRICE_ID"),
+		Port:                     port,
+		DatabaseURL:              databaseURL,
+		JWTSecret:                jwtSecret,
+		AllowedOrigins:           allowedOrigins,
+		Env:                      getEnv("ENV", "local"),
+		PaddleAPIKey:             os.Getenv("PADDLE_API_KEY"),
+		PaddleWebhookSecret:      os.Getenv("PADDLE_WEBHOOK_SECRET"),
+		PaddleClientToken:        os.Getenv("PADDLE_CLIENT_TOKEN"),
+		PaddlePriceID:            os.Getenv("PADDLE_PRICE_ID"),
+		MediaUploadBaseURL:       strings.TrimRight(os.Getenv("MEDIA_UPLOAD_BASE_URL"), "/"),
+		MediaUploadSigningSecret: getEnv("MEDIA_UPLOAD_SIGNING_SECRET", jwtSecret),
 	}, nil
 }
 

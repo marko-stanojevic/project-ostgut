@@ -50,3 +50,18 @@ output "database_url" {
   value       = local.database_url
   sensitive   = true
 }
+
+output "media_storage_account_name" {
+  description = "Name of the storage account used for media assets."
+  value       = azurerm_storage_account.media.name
+}
+
+output "media_container_name" {
+  description = "Blob container name used for media assets."
+  value       = azurerm_storage_container.media.name
+}
+
+output "media_container_url" {
+  description = "Base URL of the media blob container (without SAS token)."
+  value       = "${azurerm_storage_account.media.primary_blob_endpoint}${azurerm_storage_container.media.name}"
+}

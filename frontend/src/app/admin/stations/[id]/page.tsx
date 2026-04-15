@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
+import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ import {
     ClockIcon,
     ArrowLeftIcon,
     FloppyDiskIcon,
+    UploadSimpleIcon,
 } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
@@ -70,6 +72,22 @@ interface StationForm {
     editor_notes: string
 }
 
+type UploadIntentResponse = {
+    assetId: string
+    uploadUrl: string
+    blobKey: string
+    expiresAt: string
+    constraints: {
+        maxBytes: number
+        allowedMimeTypes: string[]
+    }
+}
+
+type CompleteUploadResponse = {
+    status: string
+    asset: MediaAssetResponse
+}
+
 const statusConfig = {
     pending: { label: 'Pending', icon: ClockIcon, className: 'text-yellow-600 dark:text-yellow-400' },
     approved: { label: 'Approved', icon: CheckCircleIcon, className: 'text-green-600 dark:text-green-400' },
@@ -108,12 +126,16 @@ export default function StationEditorPage() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
     const { session } = useAuth()
+    const iconInputRef = useRef<HTMLInputElement | null>(null)
 
     const [station, setStation] = useState<AdminStation | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [error, setError] = useState('')
+    const [stationIcon, setStationIcon] = useState<MediaAssetResponse | null>(null)
+    const [uploadingIcon, setUploadingIcon] = useState(false)
+    const [iconError, setIconError] = useState('')
 
     const [form, setForm] = useState<StationForm>({
         name: '',
@@ -183,6 +205,20 @@ export default function StationEditorPage() {
                     featured: !!s.featured,
                     editor_notes: s.editor_notes ?? '',
                 })
+
+                try {
+                    const icon = await fetchJSONWithAuth<MediaAssetResponse>(
+                        `${API}/admin/stations/${id}/icon`,
+                        accessToken,
+                    )
+                    if (!cancelled) {
+                        setStationIcon(icon)
+                    }
+                } catch {
+                    if (!cancelled) {
+                        setStationIcon(null)
+                    }
+                }
             } catch (err) {
                 if (cancelled) return
                 setError(err instanceof Error ? err.message : 'Failed to load station')
@@ -199,6 +235,67 @@ export default function StationEditorPage() {
             cancelled = true
         }
     }, [id, accessToken])
+
+    const handleStationIconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        event.target.value = ''
+
+        if (!file || !accessToken) {
+            return
+        }
+
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            setIconError('Use a JPG, PNG, or WebP image.')
+            return
+        }
+
+        setIconError('')
+        setUploadingIcon(true)
+
+        try {
+            const intent = await fetchJSONWithAuth<UploadIntentResponse>(`${API}/media/upload-intent`, accessToken, {
+                method: 'POST',
+                body: JSON.stringify({
+                    kind: 'station_icon',
+                    ownerId: id,
+                    contentType: file.type,
+                    contentLength: file.size,
+                }),
+            })
+
+            const uploadResponse = await fetch(intent.uploadUrl, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': file.type,
+                },
+                body: file,
+            })
+
+            if (!uploadResponse.ok) {
+                throw new Error('Upload failed')
+            }
+
+            const completed = await fetchJSONWithAuth<CompleteUploadResponse>(`${API}/media/complete`, accessToken, {
+                method: 'POST',
+                body: JSON.stringify({
+                    assetId: intent.assetId,
+                    blobKey: intent.blobKey,
+                }),
+            })
+
+            if (completed.status === 'rejected') {
+                throw new Error(completed.asset.rejection_reason || 'Image was rejected')
+            }
+
+            setStationIcon(completed.asset)
+            setSaved(true)
+            setTimeout(() => setSaved(false), 3000)
+        } catch (err) {
+            setIconError(err instanceof Error ? err.message : 'Failed to upload station icon')
+        } finally {
+            setUploadingIcon(false)
+        }
+    }
 
     const handleSave = async () => {
         if (!accessToken) return
@@ -281,6 +378,7 @@ export default function StationEditorPage() {
     const cfg = statusConfig[form.status as keyof typeof statusConfig]
     const reliabilityPct = Math.round((Number(form.reliability_score || 0) || 0) * 100)
     const currentTags = form.tags.split(',').map((t) => t.trim()).filter(Boolean)
+    const iconUrl = getPreferredMediaUrl(stationIcon) || logoURL
 
     return (
         <div className="max-w-6xl space-y-6">
@@ -326,8 +424,8 @@ export default function StationEditorPage() {
                     <CardContent className="space-y-4">
                         <div className="flex items-center gap-3">
                             <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-                                {logoURL ? (
-                                    <Image src={logoURL} alt="" fill className="object-cover" unoptimized />
+                                {iconUrl ? (
+                                    <Image src={iconUrl} alt="" fill className="object-cover" unoptimized />
                                 ) : (
                                     <RadioIcon className="h-5 w-5 text-muted-foreground" />
                                 )}
@@ -353,6 +451,34 @@ export default function StationEditorPage() {
 
                         <SourceField label="Stream URL" value={streamURL} />
                         <SourceField label="Website" value={websiteURL} />
+
+                        <Separator />
+
+                        <div>
+                            <p className="mb-1.5 text-xs text-muted-foreground">Station icon</p>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    ref={iconInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    className="hidden"
+                                    onChange={handleStationIconUpload}
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-2"
+                                    onClick={() => iconInputRef.current?.click()}
+                                    disabled={uploadingIcon}
+                                >
+                                    <UploadSimpleIcon className="h-4 w-4" />
+                                    {uploadingIcon ? 'Uploading…' : 'Upload icon'}
+                                </Button>
+                                <p className="text-xs text-muted-foreground">JPG, PNG, or WebP up to 10 MB.</p>
+                            </div>
+                            {iconError && <p className="mt-2 text-xs text-destructive">{iconError}</p>}
+                        </div>
 
                         {currentTags.length > 0 && (
                             <div>
