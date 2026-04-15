@@ -187,7 +187,7 @@ jobs:
           FORCE="${{ github.event_name == 'workflow_dispatch' }}"
           CHANGED="${{ needs.changes.outputs.backend }}"
           if [[ "$FORCE" == "true" || "$CHANGED" == "true" ]]; then
-            echo "tag=${{ steps.gitversion.outputs.semVer }}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ steps.gitversion.outputs.semVer }}" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             CURRENT=$(az containerapp show \
@@ -218,7 +218,7 @@ jobs:
           FORCE="${{ github.event_name == 'workflow_dispatch' }}"
           CHANGED="${{ needs.changes.outputs.frontend }}"
           if [[ "$FORCE" == "true" || "$CHANGED" == "true" ]]; then
-            echo "tag=${{ steps.gitversion.outputs.semVer }}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ steps.gitversion.outputs.semVer }}" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             CURRENT=$(az containerapp show \
