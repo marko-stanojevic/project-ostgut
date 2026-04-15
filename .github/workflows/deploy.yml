@@ -18,6 +18,16 @@ on:
         options:
           - staging
           - production
+      force_frontend_build:
+        description: "Force frontend image rebuild even when no frontend changes are detected"
+        required: false
+        default: false
+        type: boolean
+      force_backend_build:
+        description: "Force backend image rebuild even when no backend changes are detected"
+        required: false
+        default: false
+        type: boolean
 
 # Prevent concurrent deployments to the same environment.
 concurrency:
@@ -35,7 +45,8 @@ env:
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # 0. Detect which parts of the repo changed.
-  #    On workflow_dispatch, all services are treated as changed.
+  #    Manual workflow runs do NOT force builds by default.
+  #    Use force_backend_build / force_frontend_build for explicit overrides.
   # ──────────────────────────────────────────────────────────────────────────
   changes:
     name: Detect changes
@@ -184,9 +195,9 @@ jobs:
       - name: Determine backend image tag
         id: backend-tag
         run: |
-          FORCE="${{ github.event_name == 'workflow_dispatch' }}"
+          FORCE_BACKEND="${{ github.event.inputs.force_backend_build || 'false' }}"
           CHANGED="${{ needs.changes.outputs.backend }}"
-          if [[ "$FORCE" == "true" || "$CHANGED" == "true" ]]; then
+          if [[ "$FORCE_BACKEND" == "true" || "$CHANGED" == "true" ]]; then
             echo "tag=${{ steps.gitversion.outputs.semVer }}" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
@@ -215,9 +226,9 @@ jobs:
       - name: Determine frontend image tag
         id: frontend-tag
         run: |
-          FORCE="${{ github.event_name == 'workflow_dispatch' }}"
+          FORCE_FRONTEND="${{ github.event.inputs.force_frontend_build || 'false' }}"
           CHANGED="${{ needs.changes.outputs.frontend }}"
-          if [[ "$FORCE" == "true" || "$CHANGED" == "true" ]]; then
+          if [[ "$FORCE_FRONTEND" == "true" || "$CHANGED" == "true" ]]; then
             echo "tag=${{ steps.gitversion.outputs.semVer }}" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
