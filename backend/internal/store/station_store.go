@@ -46,6 +46,7 @@ type StationFilter struct {
 	Genre        string
 	CountryCode  string
 	Language     string
+	MinBitrate   int
 	Search       string
 	Sort         string // "popular" = click_count DESC
 	FeaturedOnly bool
@@ -155,6 +156,11 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 	if f.Language != "" {
 		where += fmt.Sprintf(" AND lower(language) = $%d", i)
 		args = append(args, f.Language)
+		i++
+	}
+	if f.MinBitrate > 0 {
+		where += fmt.Sprintf(" AND bitrate >= $%d", i)
+		args = append(args, f.MinBitrate)
 		i++
 	}
 	if f.FeaturedOnly {
@@ -332,6 +338,11 @@ func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) 
 		args = append(args, f.Language)
 		i++
 	}
+	if f.MinBitrate > 0 {
+		where += fmt.Sprintf(" AND bitrate >= $%d", i)
+		args = append(args, f.MinBitrate)
+		i++
+	}
 	if f.FeaturedOnly {
 		where += " AND featured = true"
 	}
@@ -446,4 +457,25 @@ func (s *StationStore) Countries(ctx context.Context) ([][2]string, error) {
 		result = append(result, [2]string{code, name})
 	}
 	return result, rows.Err()
+}
+
+// Languages returns distinct non-empty languages present in approved stations.
+func (s *StationStore) Languages(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT lower(language) FROM stations
+		WHERE is_active = true AND status = 'approved' AND language != ''
+		ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var languages []string
+	for rows.Next() {
+		var language string
+		if err := rows.Scan(&language); err != nil {
+			return nil, err
+		}
+		languages = append(languages, language)
+	}
+	return languages, rows.Err()
 }

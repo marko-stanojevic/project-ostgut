@@ -5,7 +5,6 @@ import { usePlayer } from '@/context/PlayerContext'
 import {
   PlayIcon,
   PauseIcon,
-  StopIcon,
   SpeakerHighIcon,
   SpeakerXIcon,
   RadioIcon,
@@ -31,7 +30,7 @@ function WaveformBars() {
 }
 
 export function PlayerBar() {
-  const { station, state, volume, pause, resume, stop, setVolume } = usePlayer()
+  const { station, state, volume, pause, resume, setVolume } = usePlayer()
 
   if (!station && state === 'idle') return null
 
@@ -49,11 +48,10 @@ export function PlayerBar() {
         {/* Station identity — left */}
         <div className="flex min-w-0 items-center gap-3">
           <div
-            className={`relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-zinc-800 flex items-center justify-center transition-all duration-500 ${
-              isPlaying
+            className={`relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-zinc-800 flex items-center justify-center transition-all duration-500 ${isPlaying
                 ? 'ring-2 ring-brand/50 shadow-[0_0_16px_rgba(200,116,58,0.25)]'
                 : 'ring-1 ring-white/8'
-            }`}
+              }`}
           >
             {station?.favicon ? (
               <Image src={station.favicon} alt="" fill className="object-cover" unoptimized />
@@ -102,13 +100,6 @@ export function PlayerBar() {
               <PlayIcon weight="fill" className="h-5 w-5 ml-0.5" />
             </button>
           )}
-          <button
-            onClick={stop}
-            title="Stop"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 transition-all hover:bg-zinc-800 hover:text-zinc-300"
-          >
-            <StopIcon weight="fill" className="h-4 w-4" />
-          </button>
         </div>
 
         {/* Volume + bitrate — right */}

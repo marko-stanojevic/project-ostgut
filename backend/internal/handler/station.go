@@ -75,12 +75,14 @@ func toStationResponse(s *store.Station) stationResponse {
 }
 
 // ListStations handles GET /stations
-// Query params: genre, country, language, featured, limit, offset
+// Query params: q, genre, country, language, min_bitrate, featured, sort, limit, offset
 func (h *Handler) ListStations(c *gin.Context) {
 	f := store.StationFilter{
+		Search:       strings.TrimSpace(c.Query("q")),
 		Genre:        strings.ToLower(c.Query("genre")),
 		CountryCode:  strings.ToUpper(c.Query("country")),
 		Language:     strings.ToLower(c.Query("language")),
+		MinBitrate:   queryInt(c, "min_bitrate", 0),
 		Sort:         c.Query("sort"),
 		FeaturedOnly: c.Query("featured") == "true",
 		Limit:        queryInt(c, "limit", 50),
@@ -162,11 +164,18 @@ func (h *Handler) SearchStations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"stations": resp, "total": total})
 }
 
-// GetFilters handles GET /stations/filters — returns available genres + countries.
+// GetFilters handles GET /stations/filters — returns available genres, countries, and languages.
 func (h *Handler) GetFilters(c *gin.Context) {
 	genres, err := h.stationStore.Genres(c.Request.Context())
 	if err != nil {
 		h.log.Error("get genres", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	languages, err := h.stationStore.Languages(c.Request.Context())
+	if err != nil {
+		h.log.Error("get languages", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -190,12 +199,13 @@ func (h *Handler) GetFilters(c *gin.Context) {
 	if genres == nil {
 		genres = []string{}
 	}
-	if countryResp == nil {
-		countryResp = []countryItem{}
+	if languages == nil {
+		languages = []string{}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"genres":    genres,
 		"countries": countryResp,
+		"languages": languages,
 	})
 }
 

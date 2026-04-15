@@ -191,11 +191,51 @@
 }
 
 @keyframes wave-bar {
-  0%, 100% { transform: scaleY(0.35); }
-  50% { transform: scaleY(1); }
+
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes bg-fade-drift {
+  0% {
+    background-position: 0% 0%, 100% 0%;
+  }
+
+  50% {
+    background-position: 6% 3%, 96% 4%;
+  }
+
+  100% {
+    background-position: 2% 6%, 92% 2%;
+  }
+}
+
+@keyframes bg-fade-drift-alt {
+  0% {
+    background-position: 100% 100%, 0% 100%;
+  }
+
+  50% {
+    background-position: 95% 96%, 4% 97%;
+  }
+
+  100% {
+    background-position: 92% 98%, 8% 94%;
+  }
 }
 
 @layer components {
+  .explore-filter-select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+
   .ui-page-title {
     @apply text-2xl font-medium tracking-tight sm:text-3xl;
   }

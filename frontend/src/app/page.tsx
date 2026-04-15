@@ -15,7 +15,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace('/stations')
+      router.replace('/curated')
     }
   }, [loading, user, router])
 
