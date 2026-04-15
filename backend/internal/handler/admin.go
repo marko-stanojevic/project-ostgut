@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -108,6 +109,95 @@ func toAdminStationResponse(s *store.Station) adminStationResponse {
 		CustomDescription: s.CustomDescription,
 		EditorNotes:       s.EditorNotes,
 	}
+}
+
+// AdminCreateStation handles POST /admin/stations.
+// Creates a station manually from admin input.
+func (h *Handler) AdminCreateStation(c *gin.Context) {
+	var req struct {
+		Name             string   `json:"name" binding:"required"`
+		StreamURL        string   `json:"stream_url" binding:"required"`
+		Homepage         string   `json:"homepage"`
+		Logo             string   `json:"logo"`
+		Genre            string   `json:"genre"`
+		Language         string   `json:"language"`
+		Country          string   `json:"country"`
+		CountryCode      string   `json:"country_code"`
+		Tags             []string `json:"tags"`
+		Bitrate          int      `json:"bitrate"`
+		Codec            string   `json:"codec"`
+		ReliabilityScore float64  `json:"reliability_score"`
+		Status           string   `json:"status"`
+		Featured         bool     `json:"featured"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	streamURL := strings.TrimSpace(req.StreamURL)
+	if name == "" || streamURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
+		return
+	}
+	parsed, err := url.ParseRequestURI(streamURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "stream_url must be a valid absolute URL"})
+		return
+	}
+
+	status := strings.TrimSpace(req.Status)
+	if status == "" {
+		status = "approved"
+	}
+	switch status {
+	case "approved", "rejected", "pending":
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, approved, or rejected"})
+		return
+	}
+
+	bitrate := req.Bitrate
+	if bitrate < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bitrate cannot be negative"})
+		return
+	}
+
+	reliability := req.ReliabilityScore
+	if reliability == 0 {
+		reliability = 0.8
+	}
+	if reliability < 0 || reliability > 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "reliability_score must be between 0 and 1"})
+		return
+	}
+
+	manual := store.ManualStationInput{
+		Name:             name,
+		StreamURL:        streamURL,
+		Homepage:         strings.TrimSpace(req.Homepage),
+		Favicon:          strings.TrimSpace(req.Logo),
+		Genre:            strings.TrimSpace(req.Genre),
+		Language:         strings.TrimSpace(req.Language),
+		Country:          strings.TrimSpace(req.Country),
+		CountryCode:      strings.ToUpper(strings.TrimSpace(req.CountryCode)),
+		Tags:             req.Tags,
+		Bitrate:          bitrate,
+		Codec:            strings.TrimSpace(req.Codec),
+		ReliabilityScore: reliability,
+		Status:           status,
+		Featured:         req.Featured,
+	}
+
+	created, err := h.stationStore.CreateManual(c.Request.Context(), manual)
+	if err != nil {
+		h.log.Error("admin create station", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, toAdminStationResponse(created))
 }
 
 // AdminListStations handles GET /admin/stations?status=pending|approved|rejected

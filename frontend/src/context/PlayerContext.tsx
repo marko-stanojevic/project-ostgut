@@ -26,7 +26,12 @@ interface PlayerContextValue {
   station: Station | null
   state: PlayerState
   volume: number
+  queue: Station[]
+  queueIndex: number
   play: (station: Station) => void
+  setQueue: (stations: Station[], index: number) => void
+  playNext: () => void
+  playPrev: () => void
   pause: () => void
   resume: () => void
   stop: () => void
@@ -39,6 +44,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [station, setStation] = useState<Station | null>(null)
   const [state, setState] = useState<PlayerState>('idle')
   const [volume, setVolumeState] = useState(0.8)
+  const [queue, setQueueArr] = useState<Station[]>([])
+  const [queueIndex, setQueueIdx] = useState(-1)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // Create the audio element once.
@@ -62,6 +69,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const startStation = (s: Station) => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.pause()
+    audio.src = s.streamUrl
+    setState('loading')
+    setStation(s)
+    audio.load()
+    audio.play().catch(() => setState('error'))
+  }
+
   const play = (s: Station) => {
     const audio = audioRef.current
     if (!audio) return
@@ -76,12 +94,31 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    audio.pause()
-    audio.src = s.streamUrl
-    setState('loading')
-    setStation(s)
-    audio.load()
-    audio.play().catch(() => setState('error'))
+    setQueueArr([s])
+    setQueueIdx(0)
+    startStation(s)
+  }
+
+  const setQueue = (stations: Station[], index: number) => {
+    if (!stations.length) return
+    const i = Math.max(0, Math.min(stations.length - 1, index))
+    setQueueArr(stations)
+    setQueueIdx(i)
+    startStation(stations[i])
+  }
+
+  const playNext = () => {
+    const nextIdx = queueIndex + 1
+    if (nextIdx >= queue.length) return
+    setQueueIdx(nextIdx)
+    startStation(queue[nextIdx])
+  }
+
+  const playPrev = () => {
+    const prevIdx = queueIndex - 1
+    if (prevIdx < 0) return
+    setQueueIdx(prevIdx)
+    startStation(queue[prevIdx])
   }
 
   const pause = () => {
@@ -107,6 +144,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio.removeAttribute('src')
     audio.load()
     setState('idle')
+    setQueueArr([])
+    setQueueIdx(-1)
   }
 
   const setVolume = (v: number) => {
@@ -117,7 +156,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <PlayerContext.Provider value={{ station, state, volume, play, pause, resume, stop, setVolume }}>
+    <PlayerContext.Provider value={{ station, state, volume, queue, queueIndex, play, setQueue, playNext, playPrev, pause, resume, stop, setVolume }}>
       {children}
     </PlayerContext.Provider>
   )

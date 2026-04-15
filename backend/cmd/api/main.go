@@ -112,6 +112,7 @@ func main() {
 	{
 		admin.GET("/stats", h.AdminStats)
 		admin.GET("/stations", h.AdminListStations)
+		admin.POST("/stations", h.AdminCreateStation)
 		admin.POST("/stations/bulk", h.AdminBulkAction)
 		admin.GET("/stations/:id", h.AdminGetStation)
 		admin.PUT("/stations/:id", h.AdminUpdateStation)

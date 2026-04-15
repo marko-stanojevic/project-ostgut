@@ -66,6 +66,24 @@ type EnrichmentUpdate struct {
 	Featured          bool
 }
 
+// ManualStationInput carries fields for creating a station directly from admin.
+type ManualStationInput struct {
+	Name             string
+	StreamURL        string
+	Homepage         string
+	Favicon          string
+	Genre            string
+	Language         string
+	Country          string
+	CountryCode      string
+	Tags             []string
+	Bitrate          int
+	Codec            string
+	ReliabilityScore float64
+	Status           string
+	Featured         bool
+}
+
 // StationStore executes queries against the stations table.
 type StationStore struct {
 	pool *pgxpool.Pool
@@ -289,6 +307,43 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 		st.IsActive,
 	)
 	return err
+}
+
+// CreateManual inserts a new station from admin input and returns the created row.
+func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) (*Station, error) {
+	if in.Status == "" {
+		in.Status = "approved"
+	}
+
+	var id string
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO stations (
+			external_id, name, stream_url, homepage, favicon,
+			genre, language, country, country_code, tags,
+			bitrate, codec, votes, click_count, reliability_score,
+			is_active, featured, status, last_synced_at, updated_at
+		) VALUES (
+			'manual:' || gen_random_uuid()::text,
+			$1, $2, $3, $4,
+			$5, $6, $7, $8, $9,
+			$10, $11, 0, 0, $12,
+			true, $13, $14, NOW(), NOW()
+		)
+		RETURNING id`,
+		in.Name, in.StreamURL, in.Homepage, in.Favicon,
+		in.Genre, in.Language, in.Country, in.CountryCode, in.Tags,
+		in.Bitrate, in.Codec, in.ReliabilityScore,
+		in.Featured, in.Status,
+	).Scan(&id)
+	if err != nil {
+		return nil, fmt.Errorf("create manual station: %w", err)
+	}
+
+	st, err := s.GetByIDAdmin(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get created manual station: %w", err)
+	}
+	return st, nil
 }
 
 // UpdateEnrichment saves editorial fields and status for a station.
