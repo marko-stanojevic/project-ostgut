@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import {
@@ -17,6 +18,8 @@ import {
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
+import { fetchJSONWithAuth } from '@/lib/auth-fetch'
+import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
 import { cn } from '@/lib/utils'
 import {
     DropdownMenu,
@@ -29,6 +32,12 @@ import {
 interface AccountMenuProps {
     className?: string
     avatarSize?: number
+}
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+
+type AccountProfileResponse = {
+    avatar?: MediaAssetResponse | null
 }
 
 function Avatar({ name, image, size = 32 }: { name?: string | null; image?: string | null; size?: number }) {
@@ -63,10 +72,35 @@ function Avatar({ name, image, size = 32 }: { name?: string | null; image?: stri
 export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
     const router = useRouter()
     const { resolvedTheme, setTheme } = useTheme()
-    const { user, signOut } = useAuth()
+    const { user, session, signOut } = useAuth()
     const { isAdmin } = useAdminStatus()
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.image ?? null)
 
     const isDark = resolvedTheme === 'dark'
+
+    useEffect(() => {
+        if (!session?.accessToken) {
+            return
+        }
+
+        let active = true
+
+        fetchJSONWithAuth<AccountProfileResponse>(`${API}/users/me`, session.accessToken, {
+            cache: 'no-store',
+        })
+            .then((data) => {
+                if (!active) return
+                setAvatarUrl(getPreferredMediaUrl(data.avatar) ?? user?.image ?? null)
+            })
+            .catch(() => {
+                if (!active) return
+                setAvatarUrl(user?.image ?? null)
+            })
+
+        return () => {
+            active = false
+        }
+    }, [session?.accessToken, user?.image])
 
     return (
         <DropdownMenu>
@@ -81,14 +115,14 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
                     />
                 }
             >
-                <Avatar name={user?.name} image={user?.image} size={avatarSize} />
+                <Avatar name={user?.name} image={avatarUrl} size={avatarSize} />
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-56 p-0 overflow-hidden">
 
                 {/* Profile header */}
                 <div className="flex items-center gap-3 px-3 py-3 border-b border-border/60">
-                    <Avatar name={user?.name} image={user?.image} size={36} />
+                    <Avatar name={user?.name} image={avatarUrl} size={36} />
                     <div className="min-w-0">
                         {user?.name && <p className="text-sm font-medium truncate">{user.name}</p>}
                         {user?.email && <p className="text-xs text-muted-foreground truncate">{user.email}</p>}

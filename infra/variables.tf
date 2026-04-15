@@ -42,6 +42,12 @@ variable "project" {
   default     = "ostgut"
 }
 
+variable "media_container_name" {
+  type        = string
+  description = "Blob container name used for uploaded/processed media assets."
+  default     = "media"
+}
+
 # ──────────────────────────────────────────────
 # Container images
 # ──────────────────────────────────────────────

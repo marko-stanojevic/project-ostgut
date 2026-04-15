@@ -236,6 +236,38 @@ func (h *Handler) AdminGetStation(c *gin.Context) {
 	c.JSON(http.StatusOK, toAdminStationResponse(s))
 }
 
+// AdminGetStationIcon handles GET /admin/stations/:id/icon
+func (h *Handler) AdminGetStationIcon(c *gin.Context) {
+	stationID := c.Param("id")
+
+	if _, err := h.stationStore.GetByIDAdmin(c.Request.Context(), stationID); errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	} else if err != nil {
+		h.log.Error("admin get station icon station", "station_id", stationID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	asset, err := h.mediaAssetStore.GetLatestByOwnerAndKind(
+		c.Request.Context(),
+		store.MediaAssetOwnerStation,
+		stationID,
+		store.MediaAssetKindStationIcon,
+	)
+	if errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "station icon not found"})
+		return
+	}
+	if err != nil {
+		h.log.Error("admin get station icon", "station_id", stationID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, h.mediaResponse(asset))
+}
+
 // AdminUpdateStation handles PUT /admin/stations/:id.
 // Accepts editable original station fields + moderation/editorial fields.
 func (h *Handler) AdminUpdateStation(c *gin.Context) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -34,6 +35,7 @@ func main() {
 		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+	warnIfSuspiciousMediaUploadBaseURL(logger, cfg.MediaUploadBaseURL)
 
 	// Connect to Postgres
 	pool, err := db.New(context.Background(), cfg.DatabaseURL)
@@ -53,7 +55,19 @@ func main() {
 	userStore := store.NewUserStore(pool)
 	subStore := store.NewSubscriptionStore(pool)
 	stationStore := store.NewStationStore(pool)
-	h := handler.New(userStore, subStore, stationStore, logger, cfg.PaddleWebhookSecret, cfg.PaddleClientToken, cfg.PaddlePriceID)
+	mediaAssetStore := store.NewMediaAssetStore(pool)
+	h := handler.New(
+		userStore,
+		subStore,
+		stationStore,
+		mediaAssetStore,
+		logger,
+		cfg.PaddleWebhookSecret,
+		cfg.PaddleClientToken,
+		cfg.PaddlePriceID,
+		cfg.MediaUploadBaseURL,
+		cfg.MediaUploadSigningSecret,
+	)
 
 	// Start background station sync (Radio Browser ingestion).
 	syncCtx, syncCancel := context.WithCancel(context.Background())
@@ -94,6 +108,7 @@ func main() {
 
 	// Paddle webhook (public — signature-verified internally)
 	router.POST("/billing/webhook", h.PaddleWebhook)
+	router.PUT("/media/upload/:id", h.UploadMediaObject)
 
 	// Protected routes (JWT required)
 	protected := router.Group("/")
@@ -103,6 +118,9 @@ func main() {
 		protected.PUT("/users/me", h.UpdateProfile)
 		protected.GET("/billing/subscription", h.GetSubscription)
 		protected.GET("/billing/checkout-config", h.GetCheckoutConfig)
+		protected.POST("/media/upload-intent", h.CreateUploadIntent)
+		protected.POST("/media/complete", h.CompleteUpload)
+		protected.GET("/media/:id", h.GetMedia)
 	}
 
 	// Admin routes (JWT + is_admin required)
@@ -115,6 +133,7 @@ func main() {
 		admin.POST("/stations", h.AdminCreateStation)
 		admin.POST("/stations/bulk", h.AdminBulkAction)
 		admin.GET("/stations/:id", h.AdminGetStation)
+		admin.GET("/stations/:id/icon", h.AdminGetStationIcon)
 		admin.PUT("/stations/:id", h.AdminUpdateStation)
 		admin.GET("/users", h.AdminListUsers)
 		admin.PUT("/users/:id/admin", h.AdminSetUserAdmin)
@@ -145,6 +164,28 @@ func main() {
 		logger.Error("server forced to shutdown", "error", err)
 	}
 	logger.Info("server exited")
+}
+
+func warnIfSuspiciousMediaUploadBaseURL(logger *slog.Logger, mediaUploadBaseURL string) {
+	if mediaUploadBaseURL == "" {
+		logger.Warn("MEDIA_UPLOAD_BASE_URL is not set; media uploads will fail")
+		return
+	}
+
+	parsed, err := url.Parse(mediaUploadBaseURL)
+	if err != nil {
+		logger.Warn("MEDIA_UPLOAD_BASE_URL is not a valid URL", "value", mediaUploadBaseURL, "error", err)
+		return
+	}
+
+	host := strings.ToLower(parsed.Host)
+	if !strings.Contains(host, ".blob.core.windows.net") {
+		logger.Warn(
+			"MEDIA_UPLOAD_BASE_URL does not look like an Azure Blob container URL",
+			"value", mediaUploadBaseURL,
+			"expected_host_pattern", "*.blob.core.windows.net",
+		)
+	}
 }
 
 func runMigrations(logger *slog.Logger, databaseURL string) error {

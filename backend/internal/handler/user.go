@@ -29,11 +29,25 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		return
 	}
 
+	var avatar any
+	if u.AvatarAssetID != nil {
+		asset, assetErr := h.mediaAssetStore.GetByID(c.Request.Context(), *u.AvatarAssetID)
+		if assetErr != nil && !errors.Is(assetErr, store.ErrNotFound) {
+			h.log.Error("get profile avatar", "user_id", userID, "error", assetErr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		if assetErr == nil {
+			avatar = h.mediaResponse(asset)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"id":       u.ID,
 		"email":    u.Email,
 		"name":     u.Name,
 		"is_admin": u.IsAdmin,
+		"avatar":   avatar,
 	})
 }
 

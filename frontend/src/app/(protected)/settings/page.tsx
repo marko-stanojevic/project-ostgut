@@ -1,7 +1,8 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { useAuth } from '@/context/AuthContext'
@@ -10,6 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { SubscriptionCard } from '@/components/subscription-card'
+import { fetchJSONWithAuth } from '@/lib/auth-fetch'
+import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
 import {
   UserIcon,
   CreditCardIcon,
@@ -20,11 +23,36 @@ import {
   SignOutIcon,
   SunIcon,
   MoonIcon,
+  UploadSimpleIcon,
 } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
 type SettingsSection = 'overview' | 'plan' | 'profile' | 'security' | 'notifications' | 'preferences'
+
+type ProfileResponse = {
+  id: string
+  email: string
+  name: string
+  is_admin: boolean
+  avatar?: MediaAssetResponse | null
+}
+
+type UploadIntentResponse = {
+  assetId: string
+  uploadUrl: string
+  blobKey: string
+  expiresAt: string
+  constraints: {
+    maxBytes: number
+    allowedMimeTypes: string[]
+  }
+}
+
+type CompleteUploadResponse = {
+  status: string
+  asset: MediaAssetResponse
+}
 
 // ─── Overview ────────────────────────────────────────────────────────────────
 
@@ -62,9 +90,8 @@ function OverviewSection() {
           <Link
             key={section}
             href={`/settings?section=${section}`}
-            className={`flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-muted/40 ${
-              i !== quickLinks.length - 1 ? 'border-b border-border/40' : ''
-            }`}
+            className={`flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-muted/40 ${i !== quickLinks.length - 1 ? 'border-b border-border/40' : ''
+              }`}
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary">
               <Icon className="h-4 w-4 text-muted-foreground" />
@@ -86,20 +113,33 @@ function OverviewSection() {
 function ProfileSection() {
   const { user, session, signOut } = useAuth()
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [displayName, setDisplayName] = useState('')
+  const [avatar, setAvatar] = useState<MediaAssetResponse | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarError, setAvatarError] = useState('')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (!session?.accessToken) return
-    fetch(`${API}/users/me`, {
-      headers: { Authorization: `Bearer ${session.accessToken}` },
+
+    let active = true
+
+    fetchJSONWithAuth<ProfileResponse>(`${API}/users/me`, session.accessToken, {
       cache: 'no-store',
     })
-      .then((r) => r.json())
-      .then((data) => { if (data.name) setDisplayName(data.name) })
-      .catch(() => {})
+      .then((data) => {
+        if (!active) return
+        setDisplayName(data.name ?? '')
+        setAvatar(data.avatar ?? null)
+      })
+      .catch(() => { })
+
+    return () => {
+      active = false
+    }
   }, [session?.accessToken])
 
   const handleSave = async () => {
@@ -124,11 +164,110 @@ function ProfileSection() {
     }
   }
 
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file || !session?.accessToken) {
+      return
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setAvatarError('Use a JPG, PNG, or WebP image.')
+      return
+    }
+
+    setAvatarError('')
+    setUploadingAvatar(true)
+
+    try {
+      const intent = await fetchJSONWithAuth<UploadIntentResponse>(`${API}/media/upload-intent`, session.accessToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: 'avatar',
+          contentType: file.type,
+          contentLength: file.size,
+        }),
+      })
+
+      const uploadResponse = await fetch(intent.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type,
+        },
+        body: file,
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed')
+      }
+
+      const completed = await fetchJSONWithAuth<CompleteUploadResponse>(`${API}/media/complete`, session.accessToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          assetId: intent.assetId,
+          blobKey: intent.blobKey,
+        }),
+      })
+
+      if (completed.status === 'rejected') {
+        throw new Error(completed.asset.rejection_reason || 'Image was rejected')
+      }
+
+      setAvatar(completed.asset)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (error) {
+      setAvatarError(error instanceof Error ? error.message : 'Avatar upload failed')
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  const avatarUrl = getPreferredMediaUrl(avatar)
+  const initials = displayName.trim()
+    ? displayName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+    : (user?.email?.[0] ?? '?').toUpperCase()
+
   return (
     <div className="space-y-6">
       <SectionHeader title="Profile" description="Your public identity on bougie.fm." />
 
       <div className="rounded-xl border border-border/50 bg-card/50 p-5 space-y-4">
+        <div className="flex items-center gap-4 rounded-xl border border-border/40 bg-background/40 p-4">
+          {avatarUrl ? (
+            <Image
+              src={avatarUrl}
+              alt={displayName || user?.email || 'Avatar'}
+              width={72}
+              height={72}
+              className="h-[72px] w-[72px] rounded-full object-cover"
+              unoptimized
+            />
+          ) : (
+            <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-foreground text-lg font-medium text-background">
+              {initials}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Avatar</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Square images work best. JPG, PNG, or WebP up to 5 MB.</p>
+            <div className="mt-3 flex items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarUpload}
+              />
+              <Button type="button" size="sm" variant="outline" className="gap-2" onClick={() => fileInputRef.current?.click()} disabled={uploadingAvatar}>
+                <UploadSimpleIcon className="h-4 w-4" />
+                {uploadingAvatar ? 'Uploading…' : 'Upload avatar'}
+              </Button>
+              {avatarError && <span className="text-xs text-destructive">{avatarError}</span>}
+            </div>
+          </div>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="settings-email">Email</Label>
           <Input id="settings-email" value={user?.email ?? ''} disabled className="bg-muted/40" />
