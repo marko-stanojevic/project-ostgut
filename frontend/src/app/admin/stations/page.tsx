@@ -10,9 +10,18 @@ import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -46,8 +55,23 @@ interface AdminStation {
   reliability_score: number
   featured: boolean
   status: string
-  custom_description?: string
   editor_notes?: string
+}
+
+interface CreateStationForm {
+  name: string
+  stream_url: string
+  genre: string
+  country: string
+  country_code: string
+  language: string
+  bitrate: string
+  codec: string
+  logo: string
+  homepage: string
+  tags: string
+  status: 'pending' | 'approved' | 'rejected'
+  featured: boolean
 }
 
 const statusConfig = {
@@ -69,6 +93,16 @@ function ReliabilityBar({ score }: { score: number }) {
   )
 }
 
+function isValidAbsoluteURL(value: string) {
+  if (!value) return false
+  try {
+    const u = new URL(value)
+    return (u.protocol === 'http:' || u.protocol === 'https:') && Boolean(u.host)
+  } catch {
+    return false
+  }
+}
+
 export default function AdminStationsPage() {
   const { session } = useAuth()
   const router = useRouter()
@@ -85,6 +119,33 @@ export default function AdminStationsPage() {
   const [bulkLoading, setBulkLoading] = useState(false)
   const [updatingStaffPickIDs, setUpdatingStaffPickIDs] = useState<Set<string>>(new Set())
   const [error, setError] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createForm, setCreateForm] = useState<CreateStationForm>({
+    name: '',
+    stream_url: '',
+    genre: '',
+    country: '',
+    country_code: '',
+    language: '',
+    bitrate: '',
+    codec: '',
+    logo: '',
+    homepage: '',
+    tags: '',
+    status: 'approved',
+    featured: false,
+  })
+
+  const streamURL = createForm.stream_url.trim()
+  const logoURL = createForm.logo.trim()
+  const homepageURL = createForm.homepage.trim()
+
+  const isStreamURLValid = isValidAbsoluteURL(streamURL)
+  const isLogoURLValid = logoURL === '' || isValidAbsoluteURL(logoURL)
+  const isHomepageURLValid = homepageURL === '' || isValidAbsoluteURL(homepageURL)
+  const canCreateStation = createForm.name.trim() !== '' && isStreamURLValid && isLogoURLValid && isHomepageURLValid
 
   const fetchStations = useCallback(async () => {
     if (!session?.accessToken) return
@@ -197,6 +258,79 @@ export default function AdminStationsPage() {
     }
   }
 
+  const handleCreateStation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!session?.accessToken) return
+
+    if (!canCreateStation) {
+      setCreateError('Please fix URL fields before creating the station.')
+      return
+    }
+
+    setCreateLoading(true)
+    setCreateError('')
+
+    try {
+      const created = await fetchJSONWithAuth<AdminStation>(
+        `${API}/admin/stations`,
+        session.accessToken,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: createForm.name.trim(),
+            stream_url: createForm.stream_url.trim(),
+            genre: createForm.genre.trim(),
+            country: createForm.country.trim(),
+            country_code: createForm.country_code.trim().toUpperCase(),
+            language: createForm.language.trim(),
+            bitrate: createForm.bitrate.trim() ? Number(createForm.bitrate) : 0,
+            codec: createForm.codec.trim(),
+            logo: createForm.logo.trim(),
+            homepage: createForm.homepage.trim(),
+            tags: createForm.tags
+              .split(',')
+              .map((v) => v.trim())
+              .filter(Boolean),
+            status: createForm.status,
+            featured: createForm.featured,
+          }),
+        },
+      )
+
+      setCreateOpen(false)
+      setCreateForm({
+        name: '',
+        stream_url: '',
+        genre: '',
+        country: '',
+        country_code: '',
+        language: '',
+        bitrate: '',
+        codec: '',
+        logo: '',
+        homepage: '',
+        tags: '',
+        status: 'approved',
+        featured: false,
+      })
+
+      const nextStatus = created.status || createForm.status
+      if (nextStatus !== activeTab) {
+        setActiveTab(nextStatus)
+        setPage(0)
+        setSearch('')
+        setSearchInput('')
+        router.replace(`/admin/stations?status=${nextStatus}`)
+      } else {
+        await fetchStations()
+      }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create station')
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
@@ -206,6 +340,7 @@ export default function AdminStationsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Stations</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage the curated station catalog</p>
         </div>
+        <Button onClick={() => setCreateOpen(true)}>Add station</Button>
       </div>
 
       {/* Tabs */}
@@ -303,8 +438,8 @@ export default function AdminStationsPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium leading-tight">{s.name}</span>
-                        {s.custom_description && (
-                          <span className="text-xs text-muted-foreground line-clamp-1">{s.custom_description}</span>
+                        {s.editor_notes && (
+                          <span className="text-xs text-muted-foreground line-clamp-1">{s.editor_notes}</span>
                         )}
                       </div>
                     </td>
@@ -354,6 +489,140 @@ export default function AdminStationsPage() {
         onPrev={() => setPage((p) => p - 1)}
         onNext={() => setPage((p) => p + 1)}
       />
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Add Station Manually</DialogTitle>
+            <DialogDescription>
+              Add a station directly to the catalog. Name and stream URL are required.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form id="create-station-form" onSubmit={handleCreateStation} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Name *</label>
+                <Input
+                  required
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Stream URL *</label>
+                <Input
+                  required
+                  type="url"
+                  value={createForm.stream_url}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, stream_url: e.target.value }))}
+                />
+                {streamURL && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className={isStreamURLValid ? 'text-muted-foreground' : 'text-destructive'}>
+                      {isStreamURLValid ? 'Valid URL' : 'Enter a valid absolute URL'}
+                    </span>
+                    {isStreamURLValid && (
+                      <a href={streamURL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                        Open link
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Genre</label>
+                <Input value={createForm.genre} onChange={(e) => setCreateForm((p) => ({ ...p, genre: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Language</label>
+                <Input value={createForm.language} onChange={(e) => setCreateForm((p) => ({ ...p, language: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Country</label>
+                <Input value={createForm.country} onChange={(e) => setCreateForm((p) => ({ ...p, country: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Country code</label>
+                <Input value={createForm.country_code} onChange={(e) => setCreateForm((p) => ({ ...p, country_code: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Bitrate (kbps)</label>
+                <Input type="number" min={0} value={createForm.bitrate} onChange={(e) => setCreateForm((p) => ({ ...p, bitrate: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Codec</label>
+                <Input value={createForm.codec} onChange={(e) => setCreateForm((p) => ({ ...p, codec: e.target.value }))} />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Logo URL</label>
+                <Input type="url" value={createForm.logo} onChange={(e) => setCreateForm((p) => ({ ...p, logo: e.target.value }))} />
+                {logoURL && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className={isLogoURLValid ? 'text-muted-foreground' : 'text-destructive'}>
+                      {isLogoURLValid ? 'Valid URL' : 'Enter a valid absolute URL'}
+                    </span>
+                    {isLogoURLValid && (
+                      <a href={logoURL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                        Open link
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Homepage URL</label>
+                <Input type="url" value={createForm.homepage} onChange={(e) => setCreateForm((p) => ({ ...p, homepage: e.target.value }))} />
+                {homepageURL && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className={isHomepageURLValid ? 'text-muted-foreground' : 'text-destructive'}>
+                      {isHomepageURLValid ? 'Valid URL' : 'Enter a valid absolute URL'}
+                    </span>
+                    {isHomepageURLValid && (
+                      <a href={homepageURL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                        Open link
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Tags (comma-separated)</label>
+                <Input value={createForm.tags} onChange={(e) => setCreateForm((p) => ({ ...p, tags: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Status</label>
+                <select
+                  value={createForm.status}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, status: e.target.value as CreateStationForm['status'] }))}
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring"
+                >
+                  <option value="approved">Approved</option>
+                  <option value="pending">Pending</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+              <div className="flex items-end gap-2 pb-1">
+                <Switch
+                  checked={createForm.featured}
+                  onCheckedChange={(checked) => setCreateForm((p) => ({ ...p, featured: !!checked }))}
+                  aria-label="Set as staff pick"
+                />
+                <span className="text-xs text-muted-foreground">Staff Pick</span>
+              </div>
+            </div>
+
+            {createError && <p className="text-sm text-destructive">{createError}</p>}
+          </form>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createLoading}>Cancel</Button>
+            <Button type="submit" form="create-station-form" disabled={createLoading || !canCreateStation}>
+              {createLoading ? 'Creating…' : 'Create station'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

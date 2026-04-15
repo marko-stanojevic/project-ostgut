@@ -73,12 +73,14 @@ function StationCard({
     isPlaying,
     imagePriority,
     onOpen,
+    onPlay,
 }: {
     s: ApiStation
     isActive: boolean
     isPlaying: boolean
     imagePriority?: boolean
     onOpen: () => void
+    onPlay?: () => void
 }) {
     const { play, pause } = usePlayer()
 
@@ -87,7 +89,11 @@ function StationCard({
             pause()
             return
         }
-        play(toStation(s))
+        if (onPlay) {
+            onPlay()
+        } else {
+            play(toStation(s))
+        }
         onOpen()
     }
 
@@ -158,7 +164,7 @@ function ExploreContent() {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
-    const { station: activeStation, state } = usePlayer()
+    const { station: activeStation, state, setQueue } = usePlayer()
 
     const [stations, setStations] = useState<ApiStation[]>([])
     const [total, setTotal] = useState(0)
@@ -430,6 +436,7 @@ function ExploreContent() {
                                 s={s}
                                 imagePriority={index < 3}
                                 onOpen={() => openStation(s.id)}
+                                onPlay={() => setQueue(stations.map(toStation), index)}
                                 isActive={activeStation?.id === s.id}
                                 isPlaying={activeStation?.id === s.id && state === 'playing'}
                             />

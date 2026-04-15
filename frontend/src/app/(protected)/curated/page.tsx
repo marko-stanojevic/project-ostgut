@@ -53,18 +53,24 @@ function StationCard({
     isPlaying,
     imagePriority,
     onOpen,
+    onPlay,
 }: {
     s: ApiStation
     isActive: boolean
     isPlaying: boolean
     imagePriority?: boolean
     onOpen: () => void
+    onPlay?: () => void
 }) {
     const { play, pause } = usePlayer()
 
     const handleTogglePlay = () => {
         if (isActive && isPlaying) { pause(); return }
-        play(toStation(s))
+        if (onPlay) {
+            onPlay()
+        } else {
+            play(toStation(s))
+        }
         onOpen()
     }
 
@@ -138,7 +144,7 @@ function CuratedContent() {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
-    const { station: activeStation, state } = usePlayer()
+    const { station: activeStation, state, setQueue } = usePlayer()
 
     const [recommended, setRecommended] = useState<ApiStation[]>([])
     const [recommendedTotal, setRecommendedTotal] = useState(0)
@@ -338,7 +344,7 @@ function CuratedContent() {
                             <>
                                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
                                     {searchResults.map((s, index) => (
-                                        <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                                        <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(searchResults.map(toStation), index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                                     ))}
                                     {loadingMoreSearch && Array.from({ length: 8 }).map((_, i) => <StationCardSkeleton key={`more-${i}`} />)}
                                 </div>
@@ -376,7 +382,7 @@ function CuratedContent() {
                                     <>
                                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                                             {recommended.map((s, index) => (
-                                                <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                                                <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(recommended.map(toStation), index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                                             ))}
                                             {loadingMoreRecommended && Array.from({ length: 8 }).map((_, i) => <StationCardSkeleton key={`more-${i}`} />)}
                                         </div>
@@ -413,7 +419,7 @@ function CuratedContent() {
                                     <>
                                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                                             {mostPlayed.map((s, index) => (
-                                                <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                                                <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(mostPlayed.map(toStation), index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                                             ))}
                                             {loadingMoreMostPlayed && Array.from({ length: 8 }).map((_, i) => <StationCardSkeleton key={`more-${i}`} />)}
                                         </div>

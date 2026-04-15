@@ -11,14 +11,11 @@ import (
 )
 
 // stationResponse is the public API shape for a station.
-// Custom fields override the Radio Browser defaults when present.
 type stationResponse struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	StreamURL string `json:"stream_url"`
-	// Logo: custom_logo if set, else favicon
-	Logo string `json:"logo,omitempty"`
-	// Website: custom_website if set, else homepage
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	StreamURL        string   `json:"stream_url"`
+	Logo             string   `json:"logo,omitempty"`
 	Website          string   `json:"website,omitempty"`
 	Description      *string  `json:"description,omitempty"`
 	EditorNotes      *string  `json:"editor_notes,omitempty"`
@@ -39,28 +36,13 @@ func toStationResponse(s *store.Station) stationResponse {
 		tags = []string{}
 	}
 
-	logo := s.Favicon
-	if s.CustomLogo != nil && *s.CustomLogo != "" {
-		logo = *s.CustomLogo
-	}
-
-	website := s.Homepage
-	if s.CustomWebsite != nil && *s.CustomWebsite != "" {
-		website = *s.CustomWebsite
-	}
-
-	name := s.Name
-	if s.CustomName != nil && *s.CustomName != "" {
-		name = *s.CustomName
-	}
-
 	return stationResponse{
 		ID:               s.ID,
-		Name:             name,
+		Name:             s.Name,
 		StreamURL:        s.StreamURL,
-		Logo:             logo,
-		Website:          website,
-		Description:      s.CustomDescription,
+		Logo:             s.Favicon,
+		Website:          s.Homepage,
+		Description:      nil,
 		EditorNotes:      s.EditorNotes,
 		Genre:            s.Genre,
 		Language:         s.Language,
