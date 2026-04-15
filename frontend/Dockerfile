@@ -16,6 +16,19 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
+# Next standalone output can be either:
+# - .next/standalone/server.js
+# - .next/standalone/frontend/server.js
+# Normalize to .next/standalone/server.js for the runtime image.
+RUN if [ -f .next/standalone/server.js ]; then \
+    true; \
+    elif [ -f .next/standalone/frontend/server.js ]; then \
+    cp -R .next/standalone/frontend/. .next/standalone/; \
+    else \
+    echo "standalone server.js not found" >&2; \
+    exit 1; \
+    fi
+
 # Runtime stage
 FROM gcr.io/distroless/nodejs20-debian12:nonroot
 

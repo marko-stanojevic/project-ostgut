@@ -168,8 +168,8 @@ jobs:
     environment: ${{ github.event.inputs.environment || 'staging' }}
 
     outputs:
-      backend_image_tag: ${{ steps.backend-tag.outputs.tag }}
-      frontend_image_tag: ${{ steps.frontend-tag.outputs.tag }}
+      backend_image_tag: ${{ steps.backend-tag.outputs.deploy_tag }}
+      frontend_image_tag: ${{ steps.frontend-tag.outputs.deploy_tag }}
 
     steps:
       - uses: actions/checkout@v6
@@ -207,14 +207,18 @@ jobs:
           FORCE_BACKEND="${{ github.event.inputs.force_backend_build || 'false' }}"
           CHANGED="${{ needs.changes.outputs.backend }}"
           if [[ "$FORCE_BACKEND" == "true" || "$CHANGED" == "true" ]]; then
-            echo "tag=${{ steps.gitversion.outputs.semVer }}" >> "$GITHUB_OUTPUT"
+            SEMVER_TAG="${{ steps.gitversion.outputs.semVer }}"
+            IMMUTABLE_TAG="${SEMVER_TAG}-${GITHUB_SHA::7}"
+            echo "deploy_tag=${IMMUTABLE_TAG}" >> "$GITHUB_OUTPUT"
+            echo "semver_tag=${SEMVER_TAG}" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             CURRENT=$(az containerapp show \
               --name "ca-ostgut-${{ env.ENVIRONMENT }}-backend" \
               --resource-group "rg-ostgut-${{ env.ENVIRONMENT }}" \
               --query "properties.template.containers[0].image" -o tsv 2>/dev/null || echo ":latest")
-            echo "tag=${CURRENT##*:}" >> "$GITHUB_OUTPUT"
+            echo "deploy_tag=${CURRENT##*:}" >> "$GITHUB_OUTPUT"
+            echo "semver_tag=${CURRENT##*:}" >> "$GITHUB_OUTPUT"
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -226,7 +230,8 @@ jobs:
           file: backend/Dockerfile
           push: true
           tags: |
-            ${{ needs.provision.outputs.acr_login_server }}/backend:${{ steps.backend-tag.outputs.tag }}
+            ${{ needs.provision.outputs.acr_login_server }}/backend:${{ steps.backend-tag.outputs.deploy_tag }}
+            ${{ needs.provision.outputs.acr_login_server }}/backend:${{ steps.backend-tag.outputs.semver_tag }}
             ${{ needs.provision.outputs.acr_login_server }}/backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -238,14 +243,18 @@ jobs:
           FORCE_FRONTEND="${{ github.event.inputs.force_frontend_build || 'false' }}"
           CHANGED="${{ needs.changes.outputs.frontend }}"
           if [[ "$FORCE_FRONTEND" == "true" || "$CHANGED" == "true" ]]; then
-            echo "tag=${{ steps.gitversion.outputs.semVer }}" >> "$GITHUB_OUTPUT"
+            SEMVER_TAG="${{ steps.gitversion.outputs.semVer }}"
+            IMMUTABLE_TAG="${SEMVER_TAG}-${GITHUB_SHA::7}"
+            echo "deploy_tag=${IMMUTABLE_TAG}" >> "$GITHUB_OUTPUT"
+            echo "semver_tag=${SEMVER_TAG}" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             CURRENT=$(az containerapp show \
               --name "ca-ostgut-${{ env.ENVIRONMENT }}-frontend" \
               --resource-group "rg-ostgut-${{ env.ENVIRONMENT }}" \
               --query "properties.template.containers[0].image" -o tsv 2>/dev/null || echo ":latest")
-            echo "tag=${CURRENT##*:}" >> "$GITHUB_OUTPUT"
+            echo "deploy_tag=${CURRENT##*:}" >> "$GITHUB_OUTPUT"
+            echo "semver_tag=${CURRENT##*:}" >> "$GITHUB_OUTPUT"
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -257,7 +266,8 @@ jobs:
           file: frontend/Dockerfile
           push: true
           tags: |
-            ${{ needs.provision.outputs.acr_login_server }}/frontend:${{ steps.frontend-tag.outputs.tag }}
+            ${{ needs.provision.outputs.acr_login_server }}/frontend:${{ steps.frontend-tag.outputs.deploy_tag }}
+            ${{ needs.provision.outputs.acr_login_server }}/frontend:${{ steps.frontend-tag.outputs.semver_tag }}
             ${{ needs.provision.outputs.acr_login_server }}/frontend:latest
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
