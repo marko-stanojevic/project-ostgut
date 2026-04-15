@@ -11,7 +11,7 @@ import (
 	"image/color"
 	stddraw "image/draw"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chai2010/webp"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
@@ -485,13 +484,13 @@ func buildVariantKeys(asset *store.MediaAsset) map[string]string {
 
 	if asset.Kind == store.MediaAssetKindAvatar {
 		for _, size := range []string{"64", "128", "256"} {
-			variants["webp_"+size] = path.Join("avatars", asset.OwnerID, asset.ID, size+".webp")
+			variants["png_"+size] = path.Join("avatars", asset.OwnerID, asset.ID, size+".png")
 		}
 		return variants
 	}
 
 	for _, size := range []string{"96", "192", "384"} {
-		variants["webp_"+size] = path.Join("stations", asset.OwnerID, asset.ID, size+".webp")
+		variants["png_"+size] = path.Join("stations", asset.OwnerID, asset.ID, size+".png")
 	}
 	return variants
 }
@@ -679,10 +678,10 @@ func maxInt(a, b int) int {
 	return b
 }
 
-func encodeWebPImage(img image.Image) ([]byte, error) {
+func encodePNGImage(img image.Image) ([]byte, error) {
 	var output bytes.Buffer
-	if err := webp.Encode(&output, img, &webp.Options{Quality: 85}); err != nil {
-		return nil, fmt.Errorf("encode webp: %w", err)
+	if err := png.Encode(&output, img); err != nil {
+		return nil, fmt.Errorf("encode png: %w", err)
 	}
 	return output.Bytes(), nil
 }
@@ -697,11 +696,11 @@ func buildVariantImages(src image.Image, asset *store.MediaAsset) (map[string][]
 			transformed = containOnSquareCanvas(src, size)
 		}
 
-		encoded, err := encodeWebPImage(transformed)
+		encoded, err := encodePNGImage(transformed)
 		if err != nil {
 			return nil, err
 		}
-		variantImages[fmt.Sprintf("webp_%d", size)] = encoded
+		variantImages[fmt.Sprintf("png_%d", size)] = encoded
 	}
 
 	return variantImages, nil
@@ -810,7 +809,7 @@ func (h *Handler) processUploadedAsset(ctx context.Context, asset *store.MediaAs
 		if !ok {
 			return nil, "", fmt.Errorf("missing object key for variant %s", variantName)
 		}
-		if err := h.putMediaObject(ctx, objectKey, encoded, "image/webp"); err != nil {
+		if err := h.putMediaObject(ctx, objectKey, encoded, "image/png"); err != nil {
 			return nil, "", err
 		}
 	}

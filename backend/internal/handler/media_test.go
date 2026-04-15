@@ -65,7 +65,7 @@ func TestProcessUploadedAssetUploadsVariants(t *testing.T) {
 			_, _ = w.Write(originalPayload)
 		case http.MethodPut:
 			putRequests[r.URL.Path] = r.URL.RawQuery
-			if got := r.Header.Get("Content-Type"); got != "image/webp" {
+			if got := r.Header.Get("Content-Type"); got != "image/png" {
 				t.Fatalf("unexpected PUT content-type: %s", got)
 			}
 			if got := r.Header.Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
@@ -103,9 +103,9 @@ func TestProcessUploadedAssetUploadsVariants(t *testing.T) {
 	}
 
 	for _, variantPath := range []string{
-		"/container/avatars/user-1/asset-1/64.webp",
-		"/container/avatars/user-1/asset-1/128.webp",
-		"/container/avatars/user-1/asset-1/256.webp",
+		"/container/avatars/user-1/asset-1/64.png",
+		"/container/avatars/user-1/asset-1/128.png",
+		"/container/avatars/user-1/asset-1/256.png",
 	} {
 		query, ok := putRequests[variantPath]
 		if !ok {

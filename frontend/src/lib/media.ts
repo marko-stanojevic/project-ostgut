@@ -19,6 +19,10 @@ export function getPreferredMediaUrl(asset?: MediaAssetResponse | null): string 
         variants.webp_96 ??
         variants.webp_256 ??
         variants.webp_64 ??
+        variants.png_128 ??
+        variants.png_96 ??
+        variants.png_256 ??
+        variants.png_64 ??
         asset.original_url ??
         null
     )
