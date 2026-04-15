@@ -55,15 +55,23 @@ type StationFilter struct {
 	Offset       int
 }
 
-// EnrichmentUpdate carries the editable editorial fields for a station.
+// EnrichmentUpdate carries editable station fields for admin updates.
 type EnrichmentUpdate struct {
-	Status            string
-	CustomName        *string
-	CustomLogo        *string
-	CustomWebsite     *string
-	CustomDescription *string
-	EditorNotes       *string
-	Featured          bool
+	Name             string
+	StreamURL        string
+	Homepage         string
+	Favicon          string
+	Genre            string
+	Language         string
+	Country          string
+	CountryCode      string
+	Tags             []string
+	Bitrate          int
+	Codec            string
+	ReliabilityScore float64
+	Status           string
+	EditorNotes      *string
+	Featured         bool
 }
 
 // ManualStationInput carries fields for creating a station directly from admin.
@@ -119,6 +127,13 @@ func scanStation(row pgx.Row) (*Station, error) {
 		return nil, err
 	}
 	return &s, nil
+}
+
+func normalizeTags(tags []string) []string {
+	if tags == nil {
+		return []string{}
+	}
+	return tags
 }
 
 // GetByID returns a single approved station by its internal UUID.
@@ -270,9 +285,11 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 }
 
 // Upsert inserts or updates a station by external_id.
-// On conflict it updates everything EXCEPT status — so approved stations
-// remain approved after a re-sync.
+// On conflict it updates operational sync fields while preserving core station
+// metadata, so admin edits to original station fields are not overwritten.
 func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
+	tags := normalizeTags(st.Tags)
+
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, favicon,
@@ -283,26 +300,17 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending',NOW(),NOW()
 		)
 		ON CONFLICT (external_id) DO UPDATE SET
-			name              = EXCLUDED.name,
-			stream_url        = EXCLUDED.stream_url,
-			homepage          = EXCLUDED.homepage,
-			favicon           = EXCLUDED.favicon,
-			genre             = EXCLUDED.genre,
-			language          = EXCLUDED.language,
-			country           = EXCLUDED.country,
-			country_code      = EXCLUDED.country_code,
-			tags              = EXCLUDED.tags,
-			bitrate           = EXCLUDED.bitrate,
-			codec             = EXCLUDED.codec,
 			votes             = EXCLUDED.votes,
 			click_count       = EXCLUDED.click_count,
 			reliability_score = EXCLUDED.reliability_score,
 			is_active         = EXCLUDED.is_active,
 			last_synced_at    = NOW(),
 			updated_at        = NOW()
-			-- NOTE: status, custom_name, custom_*, editor_notes, featured are intentionally NOT updated`,
+			-- NOTE: name, stream_url, homepage, favicon, genre, language,
+			-- country, country_code, tags, bitrate, codec, status,
+			-- editor_notes, featured are intentionally NOT updated`,
 		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Favicon,
-		st.Genre, st.Language, st.Country, st.CountryCode, st.Tags,
+		st.Genre, st.Language, st.Country, st.CountryCode, tags,
 		st.Bitrate, st.Codec, st.Votes, st.ClickCount, st.ReliabilityScore,
 		st.IsActive,
 	)
@@ -314,6 +322,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 	if in.Status == "" {
 		in.Status = "approved"
 	}
+	tags := normalizeTags(in.Tags)
 
 	var id string
 	err := s.pool.QueryRow(ctx, `
@@ -331,7 +340,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 		)
 		RETURNING id`,
 		in.Name, in.StreamURL, in.Homepage, in.Favicon,
-		in.Genre, in.Language, in.Country, in.CountryCode, in.Tags,
+		in.Genre, in.Language, in.Country, in.CountryCode, tags,
 		in.Bitrate, in.Codec, in.ReliabilityScore,
 		in.Featured, in.Status,
 	).Scan(&id)
@@ -346,20 +355,33 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 	return st, nil
 }
 
-// UpdateEnrichment saves editorial fields and status for a station.
+// UpdateEnrichment saves editable station fields for a station.
 func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u EnrichmentUpdate) error {
+	tags := normalizeTags(u.Tags)
+
 	_, err := s.pool.Exec(ctx, `
 		UPDATE stations SET
-			status             = $1,
-			custom_name        = $2,
-			custom_logo        = $3,
-			custom_website     = $4,
-			custom_description = $5,
-			editor_notes       = $6,
-			featured           = $7,
+			name              = $1,
+			stream_url        = $2,
+			homepage          = $3,
+			favicon           = $4,
+			genre             = $5,
+			language          = $6,
+			country           = $7,
+			country_code      = $8,
+			tags              = $9,
+			bitrate           = $10,
+			codec             = $11,
+			reliability_score = $12,
+			status            = $13,
+			editor_notes      = $14,
+			featured          = $15,
 			updated_at         = NOW()
-		WHERE id = $8`,
-		u.Status, u.CustomName, u.CustomLogo, u.CustomWebsite, u.CustomDescription, u.EditorNotes, u.Featured, id,
+		WHERE id = $16`,
+		u.Name, u.StreamURL, u.Homepage, u.Favicon,
+		u.Genre, u.Language, u.Country, u.CountryCode, tags,
+		u.Bitrate, u.Codec, u.ReliabilityScore,
+		u.Status, u.EditorNotes, u.Featured, id,
 	)
 	return err
 }

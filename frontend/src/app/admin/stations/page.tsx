@@ -55,7 +55,6 @@ interface AdminStation {
   reliability_score: number
   featured: boolean
   status: string
-  custom_description?: string
   editor_notes?: string
 }
 
@@ -439,8 +438,8 @@ export default function AdminStationsPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium leading-tight">{s.name}</span>
-                        {s.custom_description && (
-                          <span className="text-xs text-muted-foreground line-clamp-1">{s.custom_description}</span>
+                        {s.editor_notes && (
+                          <span className="text-xs text-muted-foreground line-clamp-1">{s.editor_notes}</span>
                         )}
                       </div>
                     </td>

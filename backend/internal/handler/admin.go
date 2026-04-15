@@ -91,23 +91,13 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 // adminStationResponse extends the public response with editorial + status fields.
 type adminStationResponse struct {
 	stationResponse
-	Status            string  `json:"status"`
-	CustomName        *string `json:"custom_name"`
-	CustomLogo        *string `json:"custom_logo"`
-	CustomWebsite     *string `json:"custom_website"`
-	CustomDescription *string `json:"custom_description"`
-	EditorNotes       *string `json:"editor_notes"`
+	Status string `json:"status"`
 }
 
 func toAdminStationResponse(s *store.Station) adminStationResponse {
 	return adminStationResponse{
-		stationResponse:   toStationResponse(s),
-		Status:            s.Status,
-		CustomName:        s.CustomName,
-		CustomLogo:        s.CustomLogo,
-		CustomWebsite:     s.CustomWebsite,
-		CustomDescription: s.CustomDescription,
-		EditorNotes:       s.EditorNotes,
+		stationResponse: toStationResponse(s),
+		Status:          s.Status,
 	}
 }
 
@@ -246,8 +236,8 @@ func (h *Handler) AdminGetStation(c *gin.Context) {
 	c.JSON(http.StatusOK, toAdminStationResponse(s))
 }
 
-// AdminUpdateStation handles PUT /admin/stations/:id
-// Accepts: status, custom_logo, custom_website, custom_description, editor_notes, featured
+// AdminUpdateStation handles PUT /admin/stations/:id.
+// Accepts editable original station fields + moderation/editorial fields.
 func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	id := c.Param("id")
 
@@ -264,13 +254,21 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 
 	var req struct {
-		Name              *string `json:"name"`
-		Status            *string `json:"status"`
-		CustomLogo        *string `json:"custom_logo"`
-		CustomWebsite     *string `json:"custom_website"`
-		CustomDescription *string `json:"custom_description"`
-		EditorNotes       *string `json:"editor_notes"`
-		Featured          *bool   `json:"featured"`
+		Name             *string   `json:"name"`
+		StreamURL        *string   `json:"stream_url"`
+		Website          *string   `json:"website"`
+		Logo             *string   `json:"logo"`
+		Genre            *string   `json:"genre"`
+		Language         *string   `json:"language"`
+		Country          *string   `json:"country"`
+		CountryCode      *string   `json:"country_code"`
+		Tags             *[]string `json:"tags"`
+		Bitrate          *int      `json:"bitrate"`
+		Codec            *string   `json:"codec"`
+		ReliabilityScore *float64  `json:"reliability_score"`
+		Status           *string   `json:"status"`
+		EditorNotes      *string   `json:"editor_notes"`
+		Featured         *bool     `json:"featured"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -279,13 +277,21 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 
 	// Merge: use incoming value if provided, else keep current.
 	u := store.EnrichmentUpdate{
-		Status:            current.Status,
-		CustomName:        current.CustomName,
-		CustomLogo:        current.CustomLogo,
-		CustomWebsite:     current.CustomWebsite,
-		CustomDescription: current.CustomDescription,
-		EditorNotes:       current.EditorNotes,
-		Featured:          current.Featured,
+		Name:             current.Name,
+		StreamURL:        current.StreamURL,
+		Homepage:         current.Homepage,
+		Favicon:          current.Favicon,
+		Genre:            current.Genre,
+		Language:         current.Language,
+		Country:          current.Country,
+		CountryCode:      current.CountryCode,
+		Tags:             current.Tags,
+		Bitrate:          current.Bitrate,
+		Codec:            current.Codec,
+		ReliabilityScore: current.ReliabilityScore,
+		Status:           current.Status,
+		EditorNotes:      current.EditorNotes,
+		Featured:         current.Featured,
 	}
 	if req.Name != nil {
 		trimmed := strings.TrimSpace(*req.Name)
@@ -293,7 +299,58 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "name cannot be empty"})
 			return
 		}
-		u.CustomName = &trimmed
+		u.Name = trimmed
+	}
+	if req.StreamURL != nil {
+		trimmed := strings.TrimSpace(*req.StreamURL)
+		if trimmed == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "stream_url cannot be empty"})
+			return
+		}
+		parsed, err := url.ParseRequestURI(trimmed)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "stream_url must be a valid absolute URL"})
+			return
+		}
+		u.StreamURL = trimmed
+	}
+	if req.Website != nil {
+		u.Homepage = strings.TrimSpace(*req.Website)
+	}
+	if req.Logo != nil {
+		u.Favicon = strings.TrimSpace(*req.Logo)
+	}
+	if req.Genre != nil {
+		u.Genre = strings.TrimSpace(*req.Genre)
+	}
+	if req.Language != nil {
+		u.Language = strings.TrimSpace(*req.Language)
+	}
+	if req.Country != nil {
+		u.Country = strings.TrimSpace(*req.Country)
+	}
+	if req.CountryCode != nil {
+		u.CountryCode = strings.ToUpper(strings.TrimSpace(*req.CountryCode))
+	}
+	if req.Tags != nil {
+		u.Tags = *req.Tags
+	}
+	if req.Bitrate != nil {
+		if *req.Bitrate < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "bitrate cannot be negative"})
+			return
+		}
+		u.Bitrate = *req.Bitrate
+	}
+	if req.Codec != nil {
+		u.Codec = strings.TrimSpace(*req.Codec)
+	}
+	if req.ReliabilityScore != nil {
+		if *req.ReliabilityScore < 0 || *req.ReliabilityScore > 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "reliability_score must be between 0 and 1"})
+			return
+		}
+		u.ReliabilityScore = *req.ReliabilityScore
 	}
 	if req.Status != nil {
 		switch *req.Status {
@@ -303,15 +360,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, approved, or rejected"})
 			return
 		}
-	}
-	if req.CustomLogo != nil {
-		u.CustomLogo = req.CustomLogo
-	}
-	if req.CustomWebsite != nil {
-		u.CustomWebsite = req.CustomWebsite
-	}
-	if req.CustomDescription != nil {
-		u.CustomDescription = req.CustomDescription
 	}
 	if req.EditorNotes != nil {
 		u.EditorNotes = req.EditorNotes
