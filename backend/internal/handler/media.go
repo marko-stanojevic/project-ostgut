@@ -508,7 +508,7 @@ func buildVariantKeys(asset *store.MediaAsset) map[string]string {
 		return variants
 	}
 
-	for _, size := range []string{"96", "192", "384"} {
+	for _, size := range []string{"96", "192", "512"} {
 		variants["png_"+size] = path.Join("stations", asset.OwnerID, asset.ID, size+".png")
 	}
 	return variants
