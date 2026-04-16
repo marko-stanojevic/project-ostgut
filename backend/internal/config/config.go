@@ -45,6 +45,10 @@ type Config struct {
 
 	// MediaStorageContainerName is the blob container used for media objects.
 	MediaStorageContainerName string
+
+	// MediaStorageManagedIdentityClientID selects which user-assigned managed
+	// identity the backend should use for blob operations.
+	MediaStorageManagedIdentityClientID string
 }
 
 // Load reads configuration from environment variables, returning an error when
@@ -82,6 +86,9 @@ func Load() (*Config, error) {
 		MediaStorageAccountName:  strings.TrimSpace(os.Getenv("MEDIA_STORAGE_ACCOUNT_NAME")),
 		MediaStorageContainerName: strings.TrimSpace(
 			os.Getenv("MEDIA_STORAGE_CONTAINER_NAME"),
+		),
+		MediaStorageManagedIdentityClientID: strings.TrimSpace(
+			getEnv("MEDIA_STORAGE_MANAGED_IDENTITY_CLIENT_ID", os.Getenv("AZURE_CLIENT_ID")),
 		),
 	}, nil
 }
