@@ -839,35 +839,37 @@ func (h *Handler) hasManagedIdentityMediaStorage() bool {
 }
 
 func (h *Handler) mediaBlobStorageClient() (*azblob.Client, error) {
-	h.mediaBlobClientOnce.Do(func() {
-		if !h.hasManagedIdentityMediaStorage() {
-			h.mediaBlobClientErr = errors.New("media storage account/container is not configured")
-			return
-		}
-
-		cred, err := azidentity.NewDefaultAzureCredential(nil)
-		if err != nil {
-			h.mediaBlobClientErr = fmt.Errorf("create azure credential: %w", err)
-			return
-		}
-
-		serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", h.mediaStorageAccount)
-		client, err := azblob.NewClient(serviceURL, cred, nil)
-		if err != nil {
-			h.mediaBlobClientErr = fmt.Errorf("create blob client: %w", err)
-			return
-		}
-
-		h.mediaBlobClient = client
-	})
-
-	if h.mediaBlobClientErr != nil {
-		return nil, h.mediaBlobClientErr
-	}
-	if h.mediaBlobClient == nil {
-		return nil, errors.New("blob client is not initialized")
+	if !h.hasManagedIdentityMediaStorage() {
+		return nil, errors.New("media storage account/container is not configured")
 	}
 
+	h.mediaBlobClientMu.Lock()
+	defer h.mediaBlobClientMu.Unlock()
+
+	if h.mediaBlobClient != nil {
+		return h.mediaBlobClient, nil
+	}
+
+	credentialOpts := &azidentity.ManagedIdentityCredentialOptions{}
+	clientID := strings.TrimSpace(h.mediaManagedIdentityClientID)
+	if clientID != "" {
+		credentialOpts.ID = azidentity.ClientID(clientID)
+	}
+
+	cred, err := azidentity.NewManagedIdentityCredential(credentialOpts)
+	if err != nil {
+		h.log.Error("create managed identity credential", "error", err)
+		return nil, fmt.Errorf("create managed identity credential: %w", err)
+	}
+
+	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", h.mediaStorageAccount)
+	client, err := azblob.NewClient(serviceURL, cred, nil)
+	if err != nil {
+		h.log.Error("create blob client", "service_url", serviceURL, "error", err)
+		return nil, fmt.Errorf("create blob client: %w", err)
+	}
+
+	h.mediaBlobClient = client
 	return h.mediaBlobClient, nil
 }
 

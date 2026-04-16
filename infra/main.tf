@@ -256,6 +256,10 @@ resource "azurerm_container_app" "backend" {
         name  = "MEDIA_STORAGE_CONTAINER_NAME"
         value = azurerm_storage_container.media.name
       }
+      env {
+        name  = "MEDIA_STORAGE_MANAGED_IDENTITY_CLIENT_ID"
+        value = azurerm_user_assigned_identity.backend.client_id
+      }
     }
   }
 
