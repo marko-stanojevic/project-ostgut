@@ -34,7 +34,7 @@ const PAGE_SIZE = 50
 
 const stationSkeletonCells = [
   { tdClassName: 'px-4 py-3', skeletonClassName: 'h-4 w-4' },
-  { tdClassName: 'px-4 py-3', skeletonClassName: 'h-4 w-40' },
+  { tdClassName: 'px-4 py-3', items: ['h-7 w-7 rounded shrink-0', 'h-4 w-36'] },
   { tdClassName: 'px-4 py-3 hidden md:table-cell', skeletonClassName: 'h-4 w-20' },
   { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-16' },
   { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-16' },
@@ -436,11 +436,26 @@ export default function AdminStationsPage() {
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium leading-tight">{s.name}</span>
-                        {s.editor_notes && (
-                          <span className="text-xs text-muted-foreground line-clamp-1">{s.editor_notes}</span>
+                      <div className="flex items-center gap-2.5">
+                        {s.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={s.logo}
+                            alt=""
+                            className="h-7 w-7 rounded shrink-0 object-cover bg-muted"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="h-7 w-7 rounded shrink-0 bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground uppercase select-none">
+                            {s.name.charAt(0)}
+                          </div>
                         )}
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="font-medium leading-tight truncate">{s.name}</span>
+                          {s.editor_notes && (
+                            <span className="text-xs text-muted-foreground line-clamp-1">{s.editor_notes}</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{s.genre || '—'}</td>
@@ -488,6 +503,7 @@ export default function AdminStationsPage() {
         itemLabel="stations"
         onPrev={() => setPage((p) => p - 1)}
         onNext={() => setPage((p) => p + 1)}
+        onGoTo={(p) => setPage(p)}
       />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

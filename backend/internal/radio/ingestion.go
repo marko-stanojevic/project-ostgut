@@ -197,7 +197,7 @@ func curate(raw []radioBrowserStation) []*store.Station {
 			Name:             name,
 			StreamURL:        r.URL,
 			Homepage:         r.Homepage,
-			Favicon:          r.Favicon,
+			Logo:             r.Favicon,
 			Genre:            genre,
 			Language:         primaryLanguage(r.Language, r.LanguageCodes),
 			Country:          r.Country,

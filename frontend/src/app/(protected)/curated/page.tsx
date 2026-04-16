@@ -38,7 +38,7 @@ function toStation(s: ApiStation): Station {
         id: s.id,
         name: s.name,
         streamUrl: s.stream_url,
-        favicon: s.logo,
+        logo: s.logo,
         genre: s.genre,
         country: s.country,
         countryCode: s.country_code,

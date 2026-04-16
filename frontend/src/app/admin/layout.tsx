@@ -20,8 +20,9 @@ const navItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, session } = useAuth()
-  const { isAdmin, loading } = useAdminStatus()
+  const { user, session, loading: authLoading } = useAuth()
+  const { isAdmin, loading: adminLoading } = useAdminStatus()
+  const loading = authLoading || adminLoading
 
   useEffect(() => {
     if (!loading && isAdmin === false) {

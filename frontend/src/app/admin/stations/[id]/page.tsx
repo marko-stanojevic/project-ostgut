@@ -288,6 +288,10 @@ export default function StationEditorPage() {
             }
 
             setStationIcon(completed.asset)
+            const uploadedUrl = getPreferredMediaUrl(completed.asset)
+            if (uploadedUrl) {
+                setForm((prev) => ({ ...prev, logo: uploadedUrl }))
+            }
             setSaved(true)
             setTimeout(() => setSaved(false), 3000)
         } catch (err) {

@@ -19,7 +19,7 @@ type Station struct {
 	CustomName        *string
 	StreamURL         string
 	Homepage          string
-	Favicon           string
+	Logo              string
 	Genre             string
 	Language          string
 	Country           string
@@ -33,7 +33,6 @@ type Station struct {
 	IsActive          bool
 	Featured          bool
 	Status            string // pending | approved | rejected
-	CustomLogo        *string
 	CustomWebsite     *string
 	CustomDescription *string
 	EditorNotes       *string
@@ -60,7 +59,7 @@ type EnrichmentUpdate struct {
 	Name             string
 	StreamURL        string
 	Homepage         string
-	Favicon          string
+	Logo          string
 	Genre            string
 	Language         string
 	Country          string
@@ -79,7 +78,7 @@ type ManualStationInput struct {
 	Name             string
 	StreamURL        string
 	Homepage         string
-	Favicon          string
+	Logo          string
 	Genre            string
 	Language         string
 	Country          string
@@ -103,21 +102,21 @@ func NewStationStore(pool *pgxpool.Pool) *StationStore {
 }
 
 const stationColumns = `
-	id, external_id, name, custom_name, stream_url, homepage, favicon,
+	id, external_id, name, custom_name, stream_url, homepage, logo,
 	genre, language, country, country_code, tags,
 	bitrate, codec, votes, click_count, reliability_score,
 	is_active, featured, status,
-	custom_logo, custom_website, custom_description, editor_notes,
+	custom_website, custom_description, editor_notes,
 	last_checked_at, last_synced_at`
 
 func scanStation(row pgx.Row) (*Station, error) {
 	var s Station
 	err := row.Scan(
-		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Favicon,
+		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Logo,
 		&s.Genre, &s.Language, &s.Country, &s.CountryCode, &s.Tags,
 		&s.Bitrate, &s.Codec, &s.Votes, &s.ClickCount, &s.ReliabilityScore,
 		&s.IsActive, &s.Featured, &s.Status,
-		&s.CustomLogo, &s.CustomWebsite, &s.CustomDescription, &s.EditorNotes,
+		&s.CustomWebsite, &s.CustomDescription, &s.EditorNotes,
 		&s.LastCheckedAt, &s.LastSyncedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -292,7 +291,7 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO stations (
-			external_id, name, stream_url, homepage, favicon,
+			external_id, name, stream_url, homepage, logo,
 			genre, language, country, country_code, tags,
 			bitrate, codec, votes, click_count, reliability_score,
 			is_active, status, last_synced_at, updated_at
@@ -306,10 +305,10 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 			is_active         = EXCLUDED.is_active,
 			last_synced_at    = NOW(),
 			updated_at        = NOW()
-			-- NOTE: name, stream_url, homepage, favicon, genre, language,
+			-- NOTE: name, stream_url, homepage, logo, genre, language,
 			-- country, country_code, tags, bitrate, codec, status,
 			-- editor_notes, featured are intentionally NOT updated`,
-		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Favicon,
+		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Logo,
 		st.Genre, st.Language, st.Country, st.CountryCode, tags,
 		st.Bitrate, st.Codec, st.Votes, st.ClickCount, st.ReliabilityScore,
 		st.IsActive,
@@ -327,7 +326,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
-			external_id, name, stream_url, homepage, favicon,
+			external_id, name, stream_url, homepage, logo,
 			genre, language, country, country_code, tags,
 			bitrate, codec, votes, click_count, reliability_score,
 			is_active, featured, status,
@@ -341,7 +340,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
-		in.Name, in.StreamURL, in.Homepage, in.Favicon,
+		in.Name, in.StreamURL, in.Homepage, in.Logo,
 		in.Genre, in.Language, in.Country, in.CountryCode, tags,
 		in.Bitrate, in.Codec, in.ReliabilityScore,
 		in.Featured, in.Status,
@@ -366,7 +365,7 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			name              = $1,
 			stream_url        = $2,
 			homepage          = $3,
-			favicon           = $4,
+			logo           = $4,
 			genre             = $5,
 			language          = $6,
 			country           = $7,
@@ -381,10 +380,19 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
 		WHERE id = $16`,
-		u.Name, u.StreamURL, u.Homepage, u.Favicon,
+		u.Name, u.StreamURL, u.Homepage, u.Logo,
 		u.Genre, u.Language, u.Country, u.CountryCode, tags,
 		u.Bitrate, u.Codec, u.ReliabilityScore,
 		u.Status, u.EditorNotes, u.Featured, id,
+	)
+	return err
+}
+
+// UpdateLogo sets the logo field for a station.
+func (s *StationStore) UpdateLogo(ctx context.Context, id, logoURL string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE stations SET logo = $1, last_editor_action_at = NOW(), updated_at = NOW() WHERE id = $2`,
+		logoURL, id,
 	)
 	return err
 }

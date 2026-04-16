@@ -7,7 +7,6 @@ SET last_editor_action_at = updated_at
 WHERE status != 'pending'
    OR featured = true
    OR custom_name IS NOT NULL
-   OR custom_logo IS NOT NULL
    OR custom_website IS NOT NULL
    OR custom_description IS NOT NULL
    OR editor_notes IS NOT NULL
