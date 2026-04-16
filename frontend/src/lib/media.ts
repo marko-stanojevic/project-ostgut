@@ -15,6 +15,8 @@ export function getPreferredMediaUrl(asset?: MediaAssetResponse | null): string 
 
     const variants = asset.variants ?? {}
     return (
+        variants.png_512 ??
+        variants.png_192 ??
         variants.webp_128 ??
         variants.webp_96 ??
         variants.webp_256 ??

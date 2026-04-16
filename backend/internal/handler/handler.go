@@ -21,9 +21,9 @@ type Handler struct {
 	paddlePriceID                string
 	mediaUploadBaseURL           string
 	mediaUploadSecret            string
-	mediaStorageAccount          string
-	mediaStorageContainer        string
-	mediaManagedIdentityClientID string
+	mediaStorageAccount    string
+	mediaStorageContainer  string
+	mediaStorageAccountKey string // local dev only; takes priority over managed identity / az login
 	mediaBlobClientMu            sync.Mutex
 	mediaBlobClient              *azblob.Client
 }
@@ -36,21 +36,21 @@ func New(
 	mediaAssets *store.MediaAssetStore,
 	log *slog.Logger,
 	paddleWebhookSecret, paddleClientToken, paddlePriceID, mediaUploadBaseURL, mediaUploadSecret,
-	mediaStorageAccount, mediaStorageContainer, mediaManagedIdentityClientID string,
+	mediaStorageAccount, mediaStorageContainer, mediaStorageAccountKey string,
 ) *Handler {
 	return &Handler{
-		store:                        s,
-		subStore:                     sub,
-		stationStore:                 stations,
-		mediaAssetStore:              mediaAssets,
-		log:                          log,
-		paddleWebhookSecret:          paddleWebhookSecret,
-		paddleClientToken:            paddleClientToken,
-		paddlePriceID:                paddlePriceID,
-		mediaUploadBaseURL:           mediaUploadBaseURL,
-		mediaUploadSecret:            mediaUploadSecret,
-		mediaStorageAccount:          mediaStorageAccount,
-		mediaStorageContainer:        mediaStorageContainer,
-		mediaManagedIdentityClientID: mediaManagedIdentityClientID,
+		store:                  s,
+		subStore:               sub,
+		stationStore:           stations,
+		mediaAssetStore:        mediaAssets,
+		log:                    log,
+		paddleWebhookSecret:    paddleWebhookSecret,
+		paddleClientToken:      paddleClientToken,
+		paddlePriceID:          paddlePriceID,
+		mediaUploadBaseURL:     mediaUploadBaseURL,
+		mediaUploadSecret:      mediaUploadSecret,
+		mediaStorageAccount:    mediaStorageAccount,
+		mediaStorageContainer:  mediaStorageContainer,
+		mediaStorageAccountKey: mediaStorageAccountKey,
 	}
 }

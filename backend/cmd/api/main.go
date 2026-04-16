@@ -40,7 +40,7 @@ func main() {
 		cfg.MediaUploadBaseURL,
 		cfg.MediaStorageAccountName,
 		cfg.MediaStorageContainerName,
-		cfg.MediaStorageManagedIdentityClientID,
+		cfg.MediaStorageAccountKey,
 	)
 	warnIfSuspiciousMediaUploadBaseURL(logger, cfg.MediaUploadBaseURL)
 
@@ -76,7 +76,7 @@ func main() {
 		cfg.MediaUploadSigningSecret,
 		cfg.MediaStorageAccountName,
 		cfg.MediaStorageContainerName,
-		cfg.MediaStorageManagedIdentityClientID,
+		cfg.MediaStorageAccountKey,
 	)
 
 	// Start background station sync (Radio Browser ingestion).
@@ -198,34 +198,24 @@ func warnIfSuspiciousMediaUploadBaseURL(logger *slog.Logger, mediaUploadBaseURL 
 	}
 }
 
-func logMediaStorageMode(logger *slog.Logger, baseURL, storageAccount, storageContainer, managedIdentityClientID string) {
-	usingManagedIdentity := storageAccount != "" && storageContainer != ""
-	if usingManagedIdentity {
-		logger.Info(
-			"media storage mode: managed identity",
-			"storage_account", storageAccount,
-			"storage_container", storageContainer,
-			"managed_identity_client_id_configured", strings.TrimSpace(managedIdentityClientID) != "",
-			"managed_identity_client_id", maskManagedIdentityClientID(managedIdentityClientID),
-		)
-		if baseURL == "" {
-			logger.Warn("MEDIA_UPLOAD_BASE_URL is empty; media URLs in API responses will not be resolvable")
-		}
+func logMediaStorageMode(logger *slog.Logger, baseURL, storageAccount, storageContainer, accountKey string) {
+	if storageAccount == "" || storageContainer == "" {
+		logger.Info("media storage mode: base URL fallback")
 		return
 	}
-
-	logger.Info("media storage mode: base URL fallback")
-}
-
-func maskManagedIdentityClientID(clientID string) string {
-	trimmed := strings.TrimSpace(clientID)
-	if trimmed == "" {
-		return ""
+	authMode := "DefaultAzureCredential (managed identity / az login)"
+	if accountKey != "" {
+		authMode = "shared key (local dev)"
 	}
-	if len(trimmed) <= 8 {
-		return "****"
+	logger.Info(
+		"media storage mode: azure blob",
+		"storage_account", storageAccount,
+		"storage_container", storageContainer,
+		"auth", authMode,
+	)
+	if baseURL == "" {
+		logger.Warn("MEDIA_UPLOAD_BASE_URL is empty; media URLs in API responses will not be resolvable")
 	}
-	return trimmed[:4] + "..." + trimmed[len(trimmed)-4:]
 }
 
 func runMigrations(logger *slog.Logger, databaseURL string) error {

@@ -57,8 +57,8 @@ export function PlayerBar() {
               : ''
               }`}
           >
-            {station?.favicon ? (
-              <Image src={station.favicon} alt="" fill className="object-cover" unoptimized />
+            {station?.logo ? (
+              <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
             ) : (
               <RadioIcon className="h-5 w-5 text-zinc-600 sm:h-6 sm:w-6" />
             )}

@@ -68,25 +68,25 @@ do_export() {
   psql "$src_url" -t -A -q <<'SQL' > "$out_file"
 SELECT format(
   $f$INSERT INTO stations (
-  external_id, name, stream_url, homepage, favicon,
+  external_id, name, stream_url, homepage, logo,
   genre, language, country, country_code, tags,
   bitrate, codec, reliability_score,
   is_active, status, featured,
-  custom_name, custom_logo, custom_website, custom_description, editor_notes,
+  custom_name, custom_website, custom_description, editor_notes,
   last_editor_action_at, last_synced_at, updated_at
 ) VALUES (
   %L, %L, %L, %L, %L,
   %L, %L, %L, %L, %L::text[],
   %L::int, %L, %L::float8,
   true, %L, %L::bool,
-  %L, %L, %L, %L, %L,
+  %L, %L, %L, %L,
   %L::timestamptz, NOW(), NOW()
 )
 ON CONFLICT (external_id) DO UPDATE SET
   status                = EXCLUDED.status,
   featured              = EXCLUDED.featured,
+  logo                  = EXCLUDED.logo,
   custom_name           = EXCLUDED.custom_name,
-  custom_logo           = EXCLUDED.custom_logo,
   custom_website        = EXCLUDED.custom_website,
   custom_description    = EXCLUDED.custom_description,
   editor_notes          = EXCLUDED.editor_notes,
@@ -95,11 +95,11 @@ ON CONFLICT (external_id) DO UPDATE SET
 WHERE stations.last_editor_action_at IS NULL
    OR stations.last_editor_action_at < EXCLUDED.last_editor_action_at;
 $f$,
-  external_id, name, stream_url, homepage, favicon,
+  external_id, name, stream_url, homepage, logo,
   genre, language, country, country_code, tags,
   bitrate, codec, reliability_score,
   status, featured,
-  custom_name, custom_logo, custom_website, custom_description, editor_notes,
+  custom_name, custom_website, custom_description, editor_notes,
   last_editor_action_at
 )
 FROM stations

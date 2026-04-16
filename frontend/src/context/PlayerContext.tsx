@@ -12,7 +12,7 @@ export interface Station {
   id: string
   name: string
   streamUrl: string
-  favicon?: string
+  logo?: string
   genre: string
   country: string
   countryCode: string

@@ -467,6 +467,20 @@ func (h *Handler) linkOwnerAsset(c *gin.Context, asset *store.MediaAsset) {
 		err = h.mediaAssetStore.SetUserAvatarAsset(c.Request.Context(), asset.OwnerID, asset.ID)
 	case store.MediaAssetKindStationIcon:
 		err = h.mediaAssetStore.SetStationIconAsset(c.Request.Context(), asset.OwnerID, asset.ID)
+		if err == nil {
+			// Resolve the best available variant URL and write it directly to logo.
+			for _, size := range []string{"png_512", "png_192", "png_96", "original"} {
+				if key, ok := asset.Variants[size]; ok && key != "" {
+					iconURL := resolveMediaObjectURL(key, h.mediaUploadBaseURL)
+					if iconURL != "" {
+						if uerr := h.stationStore.UpdateLogo(c.Request.Context(), asset.OwnerID, iconURL); uerr != nil {
+							h.log.Error("update station logo after icon upload", "station_id", asset.OwnerID, "error", uerr)
+						}
+					}
+					break
+				}
+			}
+		}
 	default:
 		return
 	}
@@ -504,7 +518,7 @@ func variantSizesForKind(kind string) []int {
 	if kind == store.MediaAssetKindAvatar {
 		return []int{64, 128, 256}
 	}
-	return []int{96, 192, 384}
+	return []int{96, 192, 512}
 }
 
 func buildObjectURL(baseURL, objectKey string) (string, error) {
@@ -850,23 +864,35 @@ func (h *Handler) mediaBlobStorageClient() (*azblob.Client, error) {
 		return h.mediaBlobClient, nil
 	}
 
-	credentialOpts := &azidentity.ManagedIdentityCredentialOptions{}
-	clientID := strings.TrimSpace(h.mediaManagedIdentityClientID)
-	if clientID != "" {
-		credentialOpts.ID = azidentity.ClientID(clientID)
-	}
-
-	cred, err := azidentity.NewManagedIdentityCredential(credentialOpts)
-	if err != nil {
-		h.log.Error("create managed identity credential", "error", err)
-		return nil, fmt.Errorf("create managed identity credential: %w", err)
-	}
-
 	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", h.mediaStorageAccount)
-	client, err := azblob.NewClient(serviceURL, cred, nil)
-	if err != nil {
-		h.log.Error("create blob client", "service_url", serviceURL, "error", err)
-		return nil, fmt.Errorf("create blob client: %w", err)
+
+	var client *azblob.Client
+	if h.mediaStorageAccountKey != "" {
+		// Local dev: shared key auth — no managed identity or az login required.
+		sharedKey, err := azblob.NewSharedKeyCredential(h.mediaStorageAccount, h.mediaStorageAccountKey)
+		if err != nil {
+			return nil, fmt.Errorf("create shared key credential: %w", err)
+		}
+		client, err = azblob.NewClientWithSharedKeyCredential(serviceURL, sharedKey, nil)
+		if err != nil {
+			h.log.Error("create blob client (shared key)", "service_url", serviceURL, "error", err)
+			return nil, fmt.Errorf("create blob client: %w", err)
+		}
+	} else {
+		// Staging/production: DefaultAzureCredential covers managed identity on
+		// Azure and az login for local development without an account key.
+		// The managed identity client ID is picked up automatically from
+		// AZURE_CLIENT_ID, which the infra sets on the container app.
+		cred, err := azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			h.log.Error("create azure credential", "error", err)
+			return nil, fmt.Errorf("create azure credential: %w", err)
+		}
+		client, err = azblob.NewClient(serviceURL, cred, nil)
+		if err != nil {
+			h.log.Error("create blob client", "service_url", serviceURL, "error", err)
+			return nil, fmt.Errorf("create blob client: %w", err)
+		}
 	}
 
 	h.mediaBlobClient = client

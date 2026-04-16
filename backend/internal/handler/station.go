@@ -40,7 +40,7 @@ func toStationResponse(s *store.Station) stationResponse {
 		ID:               s.ID,
 		Name:             s.Name,
 		StreamURL:        s.StreamURL,
-		Logo:             s.Favicon,
+		Logo:             s.Logo,
 		Website:          s.Homepage,
 		Description:      nil,
 		EditorNotes:      s.EditorNotes,

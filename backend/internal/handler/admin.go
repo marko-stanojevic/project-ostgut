@@ -167,7 +167,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Name:             name,
 		StreamURL:        streamURL,
 		Homepage:         strings.TrimSpace(req.Homepage),
-		Favicon:          strings.TrimSpace(req.Logo),
+		Logo:          strings.TrimSpace(req.Logo),
 		Genre:            strings.TrimSpace(req.Genre),
 		Language:         strings.TrimSpace(req.Language),
 		Country:          strings.TrimSpace(req.Country),
@@ -312,7 +312,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		Name:             current.Name,
 		StreamURL:        current.StreamURL,
 		Homepage:         current.Homepage,
-		Favicon:          current.Favicon,
+		Logo:          current.Logo,
 		Genre:            current.Genre,
 		Language:         current.Language,
 		Country:          current.Country,
@@ -350,7 +350,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		u.Homepage = strings.TrimSpace(*req.Website)
 	}
 	if req.Logo != nil {
-		u.Favicon = strings.TrimSpace(*req.Logo)
+		u.Logo = strings.TrimSpace(*req.Logo)
 	}
 	if req.Genre != nil {
 		u.Genre = strings.TrimSpace(*req.Genre)
