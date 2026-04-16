@@ -1,0 +1,290 @@
+name: Sync Editorial Stations
+
+# Syncs editorial station decisions (status, featured, custom_*, editor_notes)
+# using Azure Blob Storage as a versioned intermediate artifact.
+#
+# Modes:
+#   sync   — export from source DB → blob, then import blob → target DB (default)
+#   export — export from source DB → blob only (snapshot / backup)
+#   import — download latest blob for source env → import into target DB
+#
+# The blob is stored in the source environment's media storage account under the
+# editorial-syncs container, named: YYYY-MM-DDTHHMMSSZ-<source>.sql
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "sync = export+import | export = snapshot only | import = apply latest snapshot"
+        required: true
+        default: "sync"
+        type: choice
+        options:
+          - sync
+          - export
+          - import
+      source:
+        description: "Source environment (export from / locate blob)"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      target:
+        description: "Target environment (import into — ignored for export mode)"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      dry_run:
+        description: "Dry run — print SQL without applying to target"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: sync-editorial
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Export: source DB → Azure Blob Storage
+# ──────────────────────────────────────────────────────────────────────────────
+jobs:
+  export:
+    name: Export (${{ inputs.source }}) → blob
+    if: inputs.mode == 'sync' || inputs.mode == 'export'
+    runs-on: ubuntu-latest
+    environment: staging
+
+    env:
+      SOURCE_ENV: ${{ inputs.source }}
+      DB_USER: ostgutadmin
+      DB_NAME: ostgut
+      EDITORIAL_CONTAINER: editorial-syncs
+      FW_RULE: gh-sync-${{ github.run_id }}
+
+    outputs:
+      blob_name: ${{ steps.upload.outputs.blob_name }}
+      storage_account: ${{ steps.storage.outputs.name }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install psql
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve source storage account
+        id: storage
+        run: |
+          # The media storage account is the only one in the env resource group.
+          NAME=$(az storage account list \
+            --resource-group "rg-ostgut-${SOURCE_ENV}" \
+            --query "[?starts_with(name, 'stostgut')].name | [0]" \
+            -o tsv)
+          if [[ -z "$NAME" ]]; then
+            echo "Error: no media storage account found in rg-ostgut-${SOURCE_ENV}"
+            exit 1
+          fi
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Get runner public IP
+        id: runner-ip
+        run: echo "ip=$(curl -sf https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+
+      - name: Open source DB firewall
+        run: |
+          az postgres flexible-server firewall-rule create \
+            --name "$FW_RULE" \
+            --resource-group "rg-ostgut-${SOURCE_ENV}" \
+            --server-name "psql-ostgut-${SOURCE_ENV}" \
+            --start-ip-address "${{ steps.runner-ip.outputs.ip }}" \
+            --end-ip-address   "${{ steps.runner-ip.outputs.ip }}" \
+            --output none
+
+      - name: Export editorial SQL
+        env:
+          SOURCE_DATABASE_URL: postgres://${{ env.DB_USER }}:${{ secrets.DB_ADMIN_PASSWORD }}@psql-ostgut-${{ inputs.source }}.postgres.database.azure.com:5432/${{ env.DB_NAME }}?sslmode=require
+        run: |
+          # Blob stored under <env>/ prefix so the import job can filter by env.
+          BLOB_NAME="${SOURCE_ENV}/$(date -u +%Y-%m-%dT%H%M%SZ).sql"
+          echo "BLOB_NAME=${BLOB_NAME}" >> "$GITHUB_ENV"
+          bash scripts/sync-editorial.sh --export "$SOURCE_DATABASE_URL" "/tmp/editorial-export.sql"
+
+      - name: Close source DB firewall
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --name "$FW_RULE" \
+            --resource-group "rg-ostgut-${SOURCE_ENV}" \
+            --server-name "psql-ostgut-${SOURCE_ENV}" \
+            --yes --output none || true
+
+      - name: Ensure editorial-syncs container exists
+        run: |
+          ACCOUNT_KEY=$(az storage account keys list \
+            --account-name "${{ steps.storage.outputs.name }}" \
+            --resource-group "rg-ostgut-${SOURCE_ENV}" \
+            --query "[0].value" -o tsv)
+          az storage container create \
+            --name "$EDITORIAL_CONTAINER" \
+            --account-name "${{ steps.storage.outputs.name }}" \
+            --account-key "$ACCOUNT_KEY" \
+            --public-access off \
+            --output none || true
+          echo "ACCOUNT_KEY=${ACCOUNT_KEY}" >> "$GITHUB_ENV"
+
+      - name: Upload blob
+        id: upload
+        run: |
+          az storage blob upload \
+            --account-name "${{ steps.storage.outputs.name }}" \
+            --account-key "$ACCOUNT_KEY" \
+            --container-name "$EDITORIAL_CONTAINER" \
+            --name "$BLOB_NAME" \
+            --file "/tmp/editorial-export.sql" \
+            --overwrite
+          echo "blob_name=${BLOB_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Uploaded: $BLOB_NAME → ${{ steps.storage.outputs.name }}/${EDITORIAL_CONTAINER}"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Import: Azure Blob Storage → target DB
+# ──────────────────────────────────────────────────────────────────────────────
+  import:
+    name: blob → Import (${{ inputs.target }})
+    needs: [export]
+    # Run when:
+    #   sync mode: export must have succeeded
+    #   import mode: export is skipped, which is fine — we find the latest blob
+    if: |
+      always() &&
+      (inputs.mode == 'sync' || inputs.mode == 'import') &&
+      (needs.export.result == 'success' || needs.export.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: staging
+
+    env:
+      SOURCE_ENV: ${{ inputs.source }}
+      TARGET_ENV: ${{ inputs.target }}
+      DB_USER: ostgutadmin
+      DB_NAME: ostgut
+      EDITORIAL_CONTAINER: editorial-syncs
+      FW_RULE: gh-sync-${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate source != target
+        run: |
+          if [[ "$SOURCE_ENV" == "$TARGET_ENV" ]]; then
+            echo "Error: source and target must be different environments."
+            exit 1
+          fi
+
+      - name: Install psql
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve source storage account
+        id: storage
+        run: |
+          NAME=$(az storage account list \
+            --resource-group "rg-ostgut-${SOURCE_ENV}" \
+            --query "[?starts_with(name, 'stostgut')].name | [0]" \
+            -o tsv)
+          if [[ -z "$NAME" ]]; then
+            echo "Error: no media storage account found in rg-ostgut-${SOURCE_ENV}"
+            exit 1
+          fi
+          ACCOUNT_KEY=$(az storage account keys list \
+            --account-name "$NAME" \
+            --resource-group "rg-ostgut-${SOURCE_ENV}" \
+            --query "[0].value" -o tsv)
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "key=${ACCOUNT_KEY}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve blob to download
+        id: blob
+        run: |
+          # sync mode: use the blob just uploaded by the export job.
+          # import mode: find the latest blob for this source env.
+          if [[ "${{ inputs.mode }}" == "sync" ]]; then
+            BLOB_NAME="${{ needs.export.outputs.blob_name }}"
+          else
+            BLOB_NAME=$(az storage blob list \
+              --account-name "${{ steps.storage.outputs.name }}" \
+              --account-key  "${{ steps.storage.outputs.key }}" \
+              --container-name "$EDITORIAL_CONTAINER" \
+              --prefix "${SOURCE_ENV}/" \
+              --query "sort_by([], &properties.lastModified)[-1].name" \
+              -o tsv)
+          fi
+          if [[ -z "$BLOB_NAME" ]]; then
+            echo "Error: no editorial blob found for source env '${SOURCE_ENV}'."
+            exit 1
+          fi
+          echo "name=${BLOB_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Resolved blob: ${BLOB_NAME}"
+
+      - name: Download blob
+        run: |
+          az storage blob download \
+            --account-name "${{ steps.storage.outputs.name }}" \
+            --account-key  "${{ steps.storage.outputs.key }}" \
+            --container-name "$EDITORIAL_CONTAINER" \
+            --name "${{ steps.blob.outputs.name }}" \
+            --file /tmp/editorial-import.sql \
+            --output none
+          echo "Downloaded ${{ steps.blob.outputs.name }} ($(wc -l < /tmp/editorial-import.sql) statements)"
+
+      - name: Get runner public IP
+        id: runner-ip
+        run: echo "ip=$(curl -sf https://api.ipify.org)" >> "$GITHUB_OUTPUT"
+
+      - name: Open target DB firewall
+        run: |
+          az postgres flexible-server firewall-rule create \
+            --name "$FW_RULE" \
+            --resource-group "rg-ostgut-${TARGET_ENV}" \
+            --server-name "psql-ostgut-${TARGET_ENV}" \
+            --start-ip-address "${{ steps.runner-ip.outputs.ip }}" \
+            --end-ip-address   "${{ steps.runner-ip.outputs.ip }}" \
+            --output none
+
+      - name: Apply editorial SQL to target
+        env:
+          TARGET_DATABASE_URL: postgres://${{ env.DB_USER }}:${{ secrets.DB_ADMIN_PASSWORD }}@psql-ostgut-${{ inputs.target }}.postgres.database.azure.com:5432/${{ env.DB_NAME }}?sslmode=require
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: bash scripts/sync-editorial.sh --import /tmp/editorial-import.sql "$TARGET_DATABASE_URL"
+
+      - name: Close target DB firewall
+        if: always()
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --name "$FW_RULE" \
+            --resource-group "rg-ostgut-${TARGET_ENV}" \
+            --server-name "psql-ostgut-${TARGET_ENV}" \
+            --yes --output none || true
