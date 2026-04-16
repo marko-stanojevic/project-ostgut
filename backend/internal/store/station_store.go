@@ -330,13 +330,15 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 			external_id, name, stream_url, homepage, favicon,
 			genre, language, country, country_code, tags,
 			bitrate, codec, votes, click_count, reliability_score,
-			is_active, featured, status, last_synced_at, updated_at
+			is_active, featured, status,
+			last_editor_action_at, last_synced_at, updated_at
 		) VALUES (
 			'manual:' || gen_random_uuid()::text,
 			$1, $2, $3, $4,
 			$5, $6, $7, $8, $9,
 			$10, $11, 0, 0, $12,
-			true, $13, $14, NOW(), NOW()
+			true, $13, $14,
+			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
 		in.Name, in.StreamURL, in.Homepage, in.Favicon,
@@ -370,13 +372,14 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			country           = $7,
 			country_code      = $8,
 			tags              = $9,
-			bitrate           = $10,
-			codec             = $11,
-			reliability_score = $12,
-			status            = $13,
-			editor_notes      = $14,
-			featured          = $15,
-			updated_at         = NOW()
+			bitrate               = $10,
+			codec                 = $11,
+			reliability_score     = $12,
+			status                = $13,
+			editor_notes          = $14,
+			featured              = $15,
+			last_editor_action_at = NOW(),
+			updated_at            = NOW()
 		WHERE id = $16`,
 		u.Name, u.StreamURL, u.Homepage, u.Favicon,
 		u.Genre, u.Language, u.Country, u.CountryCode, tags,
