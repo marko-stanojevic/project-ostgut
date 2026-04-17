@@ -26,6 +26,9 @@ type stationResponse struct {
 	City             string   `json:"city"`
 	CountryCode      string   `json:"country_code"`
 	Tags             []string `json:"tags"`
+	StyleTags        []string `json:"style_tags"`
+	FormatTags       []string `json:"format_tags"`
+	TextureTags      []string `json:"texture_tags"`
 	Bitrate          int      `json:"bitrate"`
 	Codec            string   `json:"codec"`
 	ReliabilityScore float64  `json:"reliability_score"`
@@ -33,10 +36,24 @@ type stationResponse struct {
 }
 
 func toStationResponse(s *store.Station) stationResponse {
-	tags := s.Tags
-	if tags == nil {
-		tags = []string{}
+	styleTags := s.StyleTags
+	if styleTags == nil {
+		styleTags = []string{}
 	}
+	formatTags := s.FormatTags
+	if formatTags == nil {
+		formatTags = []string{}
+	}
+	textureTags := s.TextureTags
+	if textureTags == nil {
+		textureTags = []string{}
+	}
+
+	// tags = combined union of all three editorial tag categories
+	combined := make([]string, 0, len(styleTags)+len(formatTags)+len(textureTags))
+	combined = append(combined, styleTags...)
+	combined = append(combined, formatTags...)
+	combined = append(combined, textureTags...)
 
 	return stationResponse{
 		ID:               s.ID,
@@ -52,7 +69,10 @@ func toStationResponse(s *store.Station) stationResponse {
 		Country:          s.Country,
 		City:             s.City,
 		CountryCode:      s.CountryCode,
-		Tags:             tags,
+		Tags:             combined,
+		StyleTags:        styleTags,
+		FormatTags:       formatTags,
+		TextureTags:      textureTags,
 		Bitrate:          s.Bitrate,
 		Codec:            s.Codec,
 		ReliabilityScore: s.ReliabilityScore,
@@ -61,7 +81,7 @@ func toStationResponse(s *store.Station) stationResponse {
 }
 
 // ListStations handles GET /stations
-// Query params: q, genre, country, language, min_bitrate, featured, sort, limit, offset
+// Query params: q, genre, country, language, min_bitrate, style, format, texture, featured, sort, limit, offset
 func (h *Handler) ListStations(c *gin.Context) {
 	f := store.StationFilter{
 		Search:       strings.TrimSpace(c.Query("q")),
@@ -69,6 +89,9 @@ func (h *Handler) ListStations(c *gin.Context) {
 		CountryCode:  strings.ToUpper(c.Query("country")),
 		Language:     strings.ToLower(c.Query("language")),
 		MinBitrate:   queryInt(c, "min_bitrate", 0),
+		Style:        strings.ToLower(c.Query("style")),
+		Format:       strings.ToLower(c.Query("format")),
+		Texture:      strings.ToLower(c.Query("texture")),
 		Sort:         c.Query("sort"),
 		FeaturedOnly: c.Query("featured") == "true",
 		Limit:        queryInt(c, "limit", 50),
@@ -150,48 +173,55 @@ func (h *Handler) SearchStations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"stations": resp, "total": total})
 }
 
-// GetFilters handles GET /stations/filters — returns available genres, countries, and languages.
+// GetFilters handles GET /stations/filters — returns available genres, styles, formats, and textures.
 func (h *Handler) GetFilters(c *gin.Context) {
-	genres, err := h.stationStore.Genres(c.Request.Context())
+	ctx := c.Request.Context()
+
+	genres, err := h.stationStore.Genres(ctx)
 	if err != nil {
 		h.log.Error("get genres", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	languages, err := h.stationStore.Languages(c.Request.Context())
+	styles, err := h.stationStore.Styles(ctx)
 	if err != nil {
-		h.log.Error("get languages", "error", err)
+		h.log.Error("get styles", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	countries, err := h.stationStore.Countries(c.Request.Context())
+	formats, err := h.stationStore.Formats(ctx)
 	if err != nil {
-		h.log.Error("get countries", "error", err)
+		h.log.Error("get formats", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	type countryItem struct {
-		Code string `json:"code"`
-		Name string `json:"name"`
-	}
-	countryResp := make([]countryItem, len(countries))
-	for i, c := range countries {
-		countryResp[i] = countryItem{Code: c[0], Name: c[1]}
+	textures, err := h.stationStore.Textures(ctx)
+	if err != nil {
+		h.log.Error("get textures", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
 	}
 
 	if genres == nil {
 		genres = []string{}
 	}
-	if languages == nil {
-		languages = []string{}
+	if styles == nil {
+		styles = []string{}
+	}
+	if formats == nil {
+		formats = []string{}
+	}
+	if textures == nil {
+		textures = []string{}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"genres":    genres,
-		"countries": countryResp,
-		"languages": languages,
+		"genres":   genres,
+		"styles":   styles,
+		"formats":  formats,
+		"textures": textures,
 	})
 }
 

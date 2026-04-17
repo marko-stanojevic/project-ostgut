@@ -26,6 +26,9 @@ type Station struct {
 	City             string
 	CountryCode      string
 	Tags             []string
+	StyleTags        []string
+	FormatTags       []string
+	TextureTags      []string
 	Bitrate          int
 	Codec            string
 	Votes            int
@@ -47,6 +50,9 @@ type StationFilter struct {
 	CountryCode  string
 	Language     string
 	MinBitrate   int
+	Style        string
+	Format       string
+	Texture      string
 	Search       string
 	Sort         string // "popular" = click_count DESC
 	FeaturedOnly bool
@@ -67,6 +73,9 @@ type EnrichmentUpdate struct {
 	City             string
 	CountryCode      string
 	Tags             []string
+	StyleTags        []string
+	FormatTags       []string
+	TextureTags      []string
 	Bitrate          int
 	Codec            string
 	ReliabilityScore float64
@@ -88,6 +97,9 @@ type ManualStationInput struct {
 	City             string
 	CountryCode      string
 	Tags             []string
+	StyleTags        []string
+	FormatTags       []string
+	TextureTags      []string
 	Bitrate          int
 	Codec            string
 	ReliabilityScore float64
@@ -109,6 +121,7 @@ func NewStationStore(pool *pgxpool.Pool) *StationStore {
 const stationColumns = `
 	id, external_id, name, custom_name, stream_url, homepage, logo,
 	genre, language, country, city, country_code, tags,
+	style_tags, format_tags, texture_tags,
 	bitrate, codec, votes, click_count, reliability_score,
 	is_active, featured, status,
 	custom_website, overview, editor_notes,
@@ -119,6 +132,7 @@ func scanStation(row pgx.Row) (*Station, error) {
 	err := row.Scan(
 		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Logo,
 		&s.Genre, &s.Language, &s.Country, &s.City, &s.CountryCode, &s.Tags,
+		&s.StyleTags, &s.FormatTags, &s.TextureTags,
 		&s.Bitrate, &s.Codec, &s.Votes, &s.ClickCount, &s.ReliabilityScore,
 		&s.IsActive, &s.Featured, &s.Status,
 		&s.CustomWebsite, &s.Overview, &s.EditorNotes,
@@ -198,6 +212,21 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 	if f.MinBitrate > 0 {
 		where += fmt.Sprintf(" AND bitrate >= $%d", i)
 		args = append(args, f.MinBitrate)
+		i++
+	}
+	if f.Style != "" {
+		where += fmt.Sprintf(" AND $%d = ANY(style_tags)", i)
+		args = append(args, f.Style)
+		i++
+	}
+	if f.Format != "" {
+		where += fmt.Sprintf(" AND $%d = ANY(format_tags)", i)
+		args = append(args, f.Format)
+		i++
+	}
+	if f.Texture != "" {
+		where += fmt.Sprintf(" AND $%d = ANY(texture_tags)", i)
+		args = append(args, f.Texture)
 		i++
 	}
 	if f.FeaturedOnly {
@@ -328,12 +357,16 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 		in.Status = "approved"
 	}
 	tags := normalizeTags(in.Tags)
+	styleTags := normalizeTags(in.StyleTags)
+	formatTags := normalizeTags(in.FormatTags)
+	textureTags := normalizeTags(in.TextureTags)
 
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, logo,
 			genre, language, country, city, country_code, tags,
+			style_tags, format_tags, texture_tags,
 			bitrate, codec, votes, click_count, reliability_score,
 			is_active, featured, status, overview,
 			last_editor_action_at, last_synced_at, updated_at
@@ -341,13 +374,15 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 			'manual:' || gen_random_uuid()::text,
 			$1, $2, $3, $4,
 			$5, $6, $7, $8, $9, $10,
-			$11, $12, 0, 0, $13,
-			true, $14, $15, $16,
+			$11, $12, $13,
+			$14, $15, 0, 0, $16,
+			true, $17, $18, $19,
 			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
 		in.Name, in.StreamURL, in.Homepage, in.Logo,
 		in.Genre, in.Language, in.Country, in.City, in.CountryCode, tags,
+		styleTags, formatTags, textureTags,
 		in.Bitrate, in.Codec, in.ReliabilityScore,
 		in.Featured, in.Status, in.Overview,
 	).Scan(&id)
@@ -365,31 +400,38 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 // UpdateEnrichment saves editable station fields for a station.
 func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u EnrichmentUpdate) error {
 	tags := normalizeTags(u.Tags)
+	styleTags := normalizeTags(u.StyleTags)
+	formatTags := normalizeTags(u.FormatTags)
+	textureTags := normalizeTags(u.TextureTags)
 
 	_, err := s.pool.Exec(ctx, `
 		UPDATE stations SET
 			name              = $1,
 			stream_url        = $2,
 			homepage          = $3,
-			logo           = $4,
+			logo              = $4,
 			genre             = $5,
 			language          = $6,
 			country           = $7,
 			city              = $8,
 			country_code      = $9,
 			tags              = $10,
-			bitrate               = $11,
-			codec                 = $12,
-			reliability_score     = $13,
-			status                = $14,
-			editor_notes          = $15,
-			overview              = $16,
-			featured              = $17,
+			style_tags            = $11,
+			format_tags           = $12,
+			texture_tags          = $13,
+			bitrate               = $14,
+			codec                 = $15,
+			reliability_score     = $16,
+			status                = $17,
+			editor_notes          = $18,
+			overview              = $19,
+			featured              = $20,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $18`,
+		WHERE id = $21`,
 		u.Name, u.StreamURL, u.Homepage, u.Logo,
 		u.Genre, u.Language, u.Country, u.City, u.CountryCode, tags,
+		styleTags, formatTags, textureTags,
 		u.Bitrate, u.Codec, u.ReliabilityScore,
 		u.Status, u.EditorNotes, u.Overview, u.Featured, id,
 	)
@@ -437,6 +479,21 @@ func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) 
 	if f.MinBitrate > 0 {
 		where += fmt.Sprintf(" AND bitrate >= $%d", i)
 		args = append(args, f.MinBitrate)
+		i++
+	}
+	if f.Style != "" {
+		where += fmt.Sprintf(" AND $%d = ANY(style_tags)", i)
+		args = append(args, f.Style)
+		i++
+	}
+	if f.Format != "" {
+		where += fmt.Sprintf(" AND $%d = ANY(format_tags)", i)
+		args = append(args, f.Format)
+		i++
+	}
+	if f.Texture != "" {
+		where += fmt.Sprintf(" AND $%d = ANY(texture_tags)", i)
+		args = append(args, f.Texture)
 		i++
 	}
 	if f.FeaturedOnly {
@@ -575,4 +632,39 @@ func (s *StationStore) Languages(ctx context.Context) ([]string, error) {
 		languages = append(languages, language)
 	}
 	return languages, rows.Err()
+}
+
+// Styles returns distinct non-empty style tags present in approved stations.
+func (s *StationStore) Styles(ctx context.Context) ([]string, error) {
+	return s.distinctTagValues(ctx, "style_tags")
+}
+
+// Formats returns distinct non-empty format tags present in approved stations.
+func (s *StationStore) Formats(ctx context.Context) ([]string, error) {
+	return s.distinctTagValues(ctx, "format_tags")
+}
+
+// Textures returns distinct non-empty texture tags present in approved stations.
+func (s *StationStore) Textures(ctx context.Context) ([]string, error) {
+	return s.distinctTagValues(ctx, "texture_tags")
+}
+
+func (s *StationStore) distinctTagValues(ctx context.Context, column string) ([]string, error) {
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT DISTINCT tag FROM stations, unnest(%s) AS tag
+		WHERE is_active = true AND status = 'approved'
+		ORDER BY 1`, column))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var values []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		values = append(values, v)
+	}
+	return values, rows.Err()
 }
