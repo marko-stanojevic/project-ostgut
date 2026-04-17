@@ -15,6 +15,7 @@ export interface Station {
   logo?: string
   genre: string
   country: string
+  city?: string
   countryCode: string
   bitrate: number
   codec: string

@@ -44,6 +44,7 @@ interface AdminStation {
     genre: string
     language: string
     country: string
+    city: string
     country_code: string
     tags: string[]
     bitrate: number
@@ -51,6 +52,7 @@ interface AdminStation {
     reliability_score: number
     featured: boolean
     status: string
+    overview?: string
     editor_notes?: string
 }
 
@@ -62,11 +64,13 @@ interface StationForm {
     genre: string
     language: string
     country: string
+    city: string
     country_code: string
     tags: string
     bitrate: string
     codec: string
     reliability_score: string
+    overview: string
     status: 'pending' | 'approved' | 'rejected'
     featured: boolean
     editor_notes: string
@@ -145,11 +149,13 @@ export default function StationEditorPage() {
         genre: '',
         language: '',
         country: '',
+        city: '',
         country_code: '',
         tags: '',
         bitrate: '',
         codec: '',
         reliability_score: '',
+        overview: '',
         status: 'pending',
         featured: false,
         editor_notes: '',
@@ -196,11 +202,13 @@ export default function StationEditorPage() {
                     genre: s.genre,
                     language: s.language,
                     country: s.country,
+                    city: s.city ?? '',
                     country_code: s.country_code,
                     tags: (s.tags ?? []).join(', '),
                     bitrate: String(s.bitrate ?? 0),
                     codec: s.codec ?? '',
                     reliability_score: String(s.reliability_score ?? 0),
+                    overview: s.overview ?? '',
                     status: (s.status as StationForm['status']) || 'pending',
                     featured: !!s.featured,
                     editor_notes: s.editor_notes ?? '',
@@ -320,11 +328,13 @@ export default function StationEditorPage() {
             genre: form.genre.trim(),
             language: form.language.trim(),
             country: form.country.trim(),
+            city: form.city.trim(),
             country_code: form.country_code.trim().toUpperCase(),
             tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
             bitrate: bitrateNum,
             codec: form.codec.trim(),
             reliability_score: reliabilityNum,
+            overview: form.overview.trim() || null,
             status: form.status,
             featured: form.featured,
             editor_notes: form.editor_notes.trim() || null,
@@ -345,11 +355,13 @@ export default function StationEditorPage() {
                 genre: updated.genre,
                 language: updated.language,
                 country: updated.country,
+                city: updated.city ?? '',
                 country_code: updated.country_code,
                 tags: (updated.tags ?? []).join(', '),
                 bitrate: String(updated.bitrate ?? 0),
                 codec: updated.codec ?? '',
                 reliability_score: String(updated.reliability_score ?? 0),
+                overview: updated.overview ?? '',
                 status: (updated.status as StationForm['status']) || 'pending',
                 featured: !!updated.featured,
                 editor_notes: updated.editor_notes ?? '',
@@ -436,7 +448,7 @@ export default function StationEditorPage() {
                             </div>
                             <div>
                                 <p className="text-sm font-medium">{trimmedName || '-'}</p>
-                                <p className="text-xs text-muted-foreground">{form.genre || '-'} · {form.country || '-'}</p>
+                                <p className="text-xs text-muted-foreground">{form.genre || '-'} · {[form.city, form.country].filter(Boolean).join(', ') || '-'}</p>
                             </div>
                         </div>
 
@@ -446,6 +458,7 @@ export default function StationEditorPage() {
                             <SourceField label="Genre" value={form.genre} />
                             <SourceField label="Language" value={form.language} />
                             <SourceField label="Country" value={form.country} />
+                            <SourceField label="City" value={form.city} />
                             <SourceField label="Country Code" value={form.country_code.toUpperCase()} />
                             <SourceField label="Bitrate" value={hasValidBitrate ? `${bitrateNum} kbps` : undefined} />
                             <SourceField label="Codec" value={form.codec} />
@@ -617,6 +630,10 @@ export default function StationEditorPage() {
                                     <Input id="country" value={form.country} onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))} />
                                 </div>
                                 <div className="space-y-1.5">
+                                    <Label htmlFor="city">City</Label>
+                                    <Input id="city" value={form.city} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1.5">
                                     <Label htmlFor="country-code">Country Code</Label>
                                     <Input id="country-code" value={form.country_code} onChange={(e) => setForm((prev) => ({ ...prev, country_code: e.target.value.toUpperCase() }))} />
                                 </div>
@@ -638,6 +655,17 @@ export default function StationEditorPage() {
                                     <Input id="reliability" type="number" min={0} max={1} step="0.01" value={form.reliability_score} onChange={(e) => setForm((prev) => ({ ...prev, reliability_score: e.target.value }))} />
                                     {!hasValidReliability && <p className="text-xs text-destructive">Reliability score must be between 0 and 1</p>}
                                 </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label htmlFor="overview">Overview</Label>
+                                <Textarea
+                                    id="overview"
+                                    placeholder="Short station summary shown on detail page"
+                                    value={form.overview}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, overview: e.target.value }))}
+                                    rows={3}
+                                />
                             </div>
 
                             <div className="space-y-1.5">

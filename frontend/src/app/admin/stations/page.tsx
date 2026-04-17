@@ -11,6 +11,7 @@ import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
@@ -50,6 +51,7 @@ interface AdminStation {
   logo?: string
   genre: string
   country: string
+  city: string
   bitrate: number
   codec: string
   reliability_score: number
@@ -63,6 +65,7 @@ interface CreateStationForm {
   stream_url: string
   genre: string
   country: string
+  city: string
   country_code: string
   language: string
   bitrate: string
@@ -70,6 +73,7 @@ interface CreateStationForm {
   logo: string
   homepage: string
   tags: string
+  overview: string
   status: 'pending' | 'approved' | 'rejected'
   featured: boolean
 }
@@ -127,6 +131,7 @@ export default function AdminStationsPage() {
     stream_url: '',
     genre: '',
     country: '',
+    city: '',
     country_code: '',
     language: '',
     bitrate: '',
@@ -134,6 +139,7 @@ export default function AdminStationsPage() {
     logo: '',
     homepage: '',
     tags: '',
+    overview: '',
     status: 'approved',
     featured: false,
   })
@@ -281,6 +287,7 @@ export default function AdminStationsPage() {
             stream_url: createForm.stream_url.trim(),
             genre: createForm.genre.trim(),
             country: createForm.country.trim(),
+            city: createForm.city.trim(),
             country_code: createForm.country_code.trim().toUpperCase(),
             language: createForm.language.trim(),
             bitrate: createForm.bitrate.trim() ? Number(createForm.bitrate) : 0,
@@ -291,6 +298,7 @@ export default function AdminStationsPage() {
               .split(',')
               .map((v) => v.trim())
               .filter(Boolean),
+            overview: createForm.overview.trim() || null,
             status: createForm.status,
             featured: createForm.featured,
           }),
@@ -303,6 +311,7 @@ export default function AdminStationsPage() {
         stream_url: '',
         genre: '',
         country: '',
+        city: '',
         country_code: '',
         language: '',
         bitrate: '',
@@ -310,6 +319,7 @@ export default function AdminStationsPage() {
         logo: '',
         homepage: '',
         tags: '',
+        overview: '',
         status: 'approved',
         featured: false,
       })
@@ -559,6 +569,10 @@ export default function AdminStationsPage() {
                 <Input value={createForm.country} onChange={(e) => setCreateForm((p) => ({ ...p, country: e.target.value }))} />
               </div>
               <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">City</label>
+                <Input value={createForm.city} onChange={(e) => setCreateForm((p) => ({ ...p, city: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Country code</label>
                 <Input value={createForm.country_code} onChange={(e) => setCreateForm((p) => ({ ...p, country_code: e.target.value }))} />
               </div>
@@ -605,6 +619,15 @@ export default function AdminStationsPage() {
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">Tags (comma-separated)</label>
                 <Input value={createForm.tags} onChange={(e) => setCreateForm((p) => ({ ...p, tags: e.target.value }))} />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Overview</label>
+                <Textarea
+                  rows={3}
+                  value={createForm.overview}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, overview: e.target.value }))}
+                  placeholder="Short station summary shown on detail page"
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Status</label>

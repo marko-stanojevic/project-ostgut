@@ -15,11 +15,13 @@ interface ApiStationDetail {
     stream_url: string
     logo?: string
     website?: string
+    overview?: string
     description?: string
     editor_notes?: string
     genre: string
     language: string
     country: string
+    city: string
     country_code: string
     tags: string[]
     bitrate: number
@@ -36,6 +38,7 @@ function toStation(s: ApiStationDetail): Station {
         logo: s.logo,
         genre: s.genre,
         country: s.country,
+        city: s.city,
         countryCode: s.country_code,
         bitrate: s.bitrate,
         codec: s.codec,
@@ -87,6 +90,7 @@ function CuratedDetailsContent() {
         if (!station) return []
         return [
             { label: 'Country', value: station.country || 'Unknown' },
+            { label: 'City', value: station.city || '—' },
             { label: 'Language', value: station.language || '—' },
             { label: 'Genre', value: station.genre || '—' },
             { label: 'Codec', value: station.codec || '—' },
@@ -161,8 +165,8 @@ function CuratedDetailsContent() {
                                 type="button"
                                 onClick={() => isPlaying ? pause() : play(toStation(station))}
                                 className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all ${isPlaying
-                                        ? 'bg-secondary text-foreground ring-1 ring-border hover:bg-secondary/80'
-                                        : 'bg-foreground text-background hover:opacity-85'
+                                    ? 'bg-secondary text-foreground ring-1 ring-border hover:bg-secondary/80'
+                                    : 'bg-foreground text-background hover:opacity-85'
                                     }`}
                             >
                                 {isPlaying
@@ -196,8 +200,8 @@ function CuratedDetailsContent() {
                                 type="button"
                                 onClick={() => isPlaying ? pause() : play(toStation(station))}
                                 className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all ${isPlaying
-                                        ? 'bg-secondary text-foreground ring-1 ring-border hover:bg-secondary/80'
-                                        : 'bg-foreground text-background hover:opacity-85'
+                                    ? 'bg-secondary text-foreground ring-1 ring-border hover:bg-secondary/80'
+                                    : 'bg-foreground text-background hover:opacity-85'
                                     }`}
                             >
                                 {isPlaying
@@ -241,10 +245,10 @@ function CuratedDetailsContent() {
                             </div>
                         ) : null}
 
-                        {station.description && (
+                        {(station.overview || station.description) && (
                             <div className="mt-6 rounded-xl border border-border/50 bg-card/40 p-4">
                                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">About</p>
-                                <p className="text-sm leading-relaxed text-foreground/80">{station.description}</p>
+                                <p className="text-sm leading-relaxed text-foreground/80">{station.overview || station.description}</p>
                             </div>
                         )}
 

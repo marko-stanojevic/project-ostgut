@@ -112,6 +112,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Genre            string   `json:"genre"`
 		Language         string   `json:"language"`
 		Country          string   `json:"country"`
+		City             string   `json:"city"`
 		CountryCode      string   `json:"country_code"`
 		Tags             []string `json:"tags"`
 		Bitrate          int      `json:"bitrate"`
@@ -119,6 +120,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		ReliabilityScore float64  `json:"reliability_score"`
 		Status           string   `json:"status"`
 		Featured         bool     `json:"featured"`
+		Overview         *string  `json:"overview"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
@@ -167,10 +169,11 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Name:             name,
 		StreamURL:        streamURL,
 		Homepage:         strings.TrimSpace(req.Homepage),
-		Logo:          strings.TrimSpace(req.Logo),
+		Logo:             strings.TrimSpace(req.Logo),
 		Genre:            strings.TrimSpace(req.Genre),
 		Language:         strings.TrimSpace(req.Language),
 		Country:          strings.TrimSpace(req.Country),
+		City:             strings.TrimSpace(req.City),
 		CountryCode:      strings.ToUpper(strings.TrimSpace(req.CountryCode)),
 		Tags:             req.Tags,
 		Bitrate:          bitrate,
@@ -178,6 +181,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		ReliabilityScore: reliability,
 		Status:           status,
 		Featured:         req.Featured,
+		Overview:         normalizeOptionalText(req.Overview),
 	}
 
 	created, err := h.stationStore.CreateManual(c.Request.Context(), manual)
@@ -293,12 +297,14 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		Genre            *string   `json:"genre"`
 		Language         *string   `json:"language"`
 		Country          *string   `json:"country"`
+		City             *string   `json:"city"`
 		CountryCode      *string   `json:"country_code"`
 		Tags             *[]string `json:"tags"`
 		Bitrate          *int      `json:"bitrate"`
 		Codec            *string   `json:"codec"`
 		ReliabilityScore *float64  `json:"reliability_score"`
 		Status           *string   `json:"status"`
+		Overview         *string   `json:"overview"`
 		EditorNotes      *string   `json:"editor_notes"`
 		Featured         *bool     `json:"featured"`
 	}
@@ -312,10 +318,11 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		Name:             current.Name,
 		StreamURL:        current.StreamURL,
 		Homepage:         current.Homepage,
-		Logo:          current.Logo,
+		Logo:             current.Logo,
 		Genre:            current.Genre,
 		Language:         current.Language,
 		Country:          current.Country,
+		City:             current.City,
 		CountryCode:      current.CountryCode,
 		Tags:             current.Tags,
 		Bitrate:          current.Bitrate,
@@ -361,6 +368,9 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	if req.Country != nil {
 		u.Country = strings.TrimSpace(*req.Country)
 	}
+	if req.City != nil {
+		u.City = strings.TrimSpace(*req.City)
+	}
 	if req.CountryCode != nil {
 		u.CountryCode = strings.ToUpper(strings.TrimSpace(*req.CountryCode))
 	}
@@ -384,6 +394,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		}
 		u.ReliabilityScore = *req.ReliabilityScore
 	}
+	u.Overview = current.Overview
 	if req.Status != nil {
 		switch *req.Status {
 		case "approved", "rejected", "pending":
@@ -392,6 +403,9 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, approved, or rejected"})
 			return
 		}
+	}
+	if req.Overview != nil {
+		u.Overview = normalizeOptionalText(req.Overview)
 	}
 	if req.EditorNotes != nil {
 		u.EditorNotes = req.EditorNotes
@@ -408,6 +422,17 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 
 	updated, _ := h.stationStore.GetByIDAdmin(c.Request.Context(), id)
 	c.JSON(http.StatusOK, toAdminStationResponse(updated))
+}
+
+func normalizeOptionalText(raw *string) *string {
+	if raw == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*raw)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 
 // AdminSetUserAdmin handles PUT /admin/users/:id/admin

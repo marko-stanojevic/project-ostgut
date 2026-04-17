@@ -17,11 +17,13 @@ type stationResponse struct {
 	StreamURL        string   `json:"stream_url"`
 	Logo             string   `json:"logo,omitempty"`
 	Website          string   `json:"website,omitempty"`
+	Overview         *string  `json:"overview,omitempty"`
 	Description      *string  `json:"description,omitempty"`
 	EditorNotes      *string  `json:"editor_notes,omitempty"`
 	Genre            string   `json:"genre"`
 	Language         string   `json:"language"`
 	Country          string   `json:"country"`
+	City             string   `json:"city"`
 	CountryCode      string   `json:"country_code"`
 	Tags             []string `json:"tags"`
 	Bitrate          int      `json:"bitrate"`
@@ -42,11 +44,13 @@ func toStationResponse(s *store.Station) stationResponse {
 		StreamURL:        s.StreamURL,
 		Logo:             s.Logo,
 		Website:          s.Homepage,
-		Description:      nil,
+		Overview:         s.Overview,
+		Description:      s.Overview,
 		EditorNotes:      s.EditorNotes,
 		Genre:            s.Genre,
 		Language:         s.Language,
 		Country:          s.Country,
+		City:             s.City,
 		CountryCode:      s.CountryCode,
 		Tags:             tags,
 		Bitrate:          s.Bitrate,

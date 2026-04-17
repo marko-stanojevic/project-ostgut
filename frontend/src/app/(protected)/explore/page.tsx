@@ -20,6 +20,7 @@ interface ApiStation {
     genre: string
     language: string
     country: string
+    city: string
     country_code: string
     bitrate: number
     codec: string
@@ -61,6 +62,7 @@ function toStation(s: ApiStation): Station {
         logo: s.logo,
         genre: s.genre,
         country: s.country,
+        city: s.city,
         countryCode: s.country_code,
         bitrate: s.bitrate,
         codec: s.codec,

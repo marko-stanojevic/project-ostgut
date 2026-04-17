@@ -75,7 +75,7 @@ export function PlayerBar() {
                 ? 'Stream unavailable'
                 : isLoading
                   ? 'Connecting…'
-                  : [station?.genre, station?.country].filter(Boolean).join(' · ')}
+                  : [station?.genre, [station?.city, station?.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
             </p>
           </div>
         </div>

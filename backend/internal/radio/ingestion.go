@@ -33,21 +33,22 @@ const (
 
 // radioBrowserStation is the raw shape returned by Radio Browser API.
 type radioBrowserStation struct {
-	StationUUID  string `json:"stationuuid"`
-	Name         string `json:"name"`
-	URL          string `json:"url_resolved"`
-	Homepage     string `json:"homepage"`
-	Favicon      string `json:"favicon"`
-	Tags         string `json:"tags"`         // comma-separated
-	Country      string `json:"country"`
-	CountryCode  string `json:"countrycode"`
-	Language     string `json:"language"`
+	StationUUID   string `json:"stationuuid"`
+	Name          string `json:"name"`
+	URL           string `json:"url_resolved"`
+	Homepage      string `json:"homepage"`
+	Favicon       string `json:"favicon"`
+	Tags          string `json:"tags"` // comma-separated
+	Country       string `json:"country"`
+	State         string `json:"state"`
+	CountryCode   string `json:"countrycode"`
+	Language      string `json:"language"`
 	LanguageCodes string `json:"languagecodes"`
-	Codec        string `json:"codec"`
-	Bitrate      int    `json:"bitrate"`
-	Votes        int    `json:"votes"`
-	ClickCount   int    `json:"clickcount"`
-	LastCheckOK  int    `json:"lastcheckok"` // 1 = OK, 0 = down
+	Codec         string `json:"codec"`
+	Bitrate       int    `json:"bitrate"`
+	Votes         int    `json:"votes"`
+	ClickCount    int    `json:"clickcount"`
+	LastCheckOK   int    `json:"lastcheckok"` // 1 = OK, 0 = down
 }
 
 // Syncer fetches stations from Radio Browser and writes them to the store.
@@ -201,6 +202,7 @@ func curate(raw []radioBrowserStation) []*store.Station {
 			Genre:            genre,
 			Language:         primaryLanguage(r.Language, r.LanguageCodes),
 			Country:          r.Country,
+			City:             strings.TrimSpace(r.State),
 			CountryCode:      strings.ToUpper(r.CountryCode),
 			Tags:             tags,
 			Bitrate:          r.Bitrate,
