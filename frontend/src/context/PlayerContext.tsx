@@ -2,26 +2,25 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
+import { useAuth } from '@/context/AuthContext'
+import {
+  type Station,
+  type PlayerState,
+  clampVolume,
+  readPersistedPlayerState,
+} from '@/types/player'
+import { usePlayerStorage } from '@/hooks/usePlayerStorage'
+import { usePlayerSync } from '@/hooks/usePlayerSync'
 
-export interface Station {
-  id: string
-  name: string
-  streamUrl: string
-  logo?: string
-  genre: string
-  country: string
-  city?: string
-  countryCode: string
-  bitrate: number
-  codec: string
-}
-
-type PlayerState = 'idle' | 'loading' | 'playing' | 'paused' | 'error'
+// Re-export Station so existing consumers don't need to change their imports.
+export type { Station } from '@/types/player'
 
 interface PlayerContextValue {
   station: Station | null
@@ -42,9 +41,12 @@ interface PlayerContextValue {
 const PlayerContext = createContext<PlayerContextValue | null>(null)
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const [station, setStation] = useState<Station | null>(null)
+  const { session } = useAuth()
+  const initialState = useMemo(() => readPersistedPlayerState(), [])
+  const [station, setStation] = useState<Station | null>(initialState?.station ?? null)
   const [state, setState] = useState<PlayerState>('idle')
-  const [volume, setVolumeState] = useState(0.8)
+  const [volume, setVolumeState] = useState(initialState?.volume ?? 0.8)
+  const [prefsUpdatedAt, setPrefsUpdatedAt] = useState(initialState?.updatedAt ?? new Date().toISOString())
   const [queue, setQueueArr] = useState<Station[]>([])
   const [queueIndex, setQueueIdx] = useState(-1)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -70,6 +72,42 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const applyPreferenceUpdate = useCallback(
+    (update: { volume: number; station: Station | null; updatedAt: string }) => {
+      setVolumeState(update.volume)
+      if (audioRef.current) audioRef.current.volume = update.volume
+      setStation(update.station)
+      setPrefsUpdatedAt(update.updatedAt)
+      setQueueArr(update.station ? [update.station] : [])
+      setQueueIdx(update.station ? 0 : -1)
+      setState((prev) =>
+        prev !== 'playing' && prev !== 'loading'
+          ? update.station ? 'paused' : 'idle'
+          : prev,
+      )
+    },
+    [],
+  )
+
+  usePlayerStorage({
+    volume,
+    station,
+    updatedAt: prefsUpdatedAt,
+    onExternalUpdate: applyPreferenceUpdate,
+  })
+
+  usePlayerSync({
+    volume,
+    station,
+    updatedAt: prefsUpdatedAt,
+    accessToken: session?.accessToken,
+    onRemoteUpdate: applyPreferenceUpdate,
+  })
+
+  const touchPreferences = () => {
+    setPrefsUpdatedAt(new Date().toISOString())
+  }
+
   const startStation = (s: Station) => {
     const audio = audioRef.current
     if (!audio) return
@@ -77,6 +115,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio.src = s.streamUrl
     setState('loading')
     setStation(s)
+    touchPreferences()
     audio.load()
     audio.play().catch(() => setState('error'))
   }
@@ -145,14 +184,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio.removeAttribute('src')
     audio.load()
     setState('idle')
+    setStation(null)
+    touchPreferences()
     setQueueArr([])
     setQueueIdx(-1)
   }
 
   const setVolume = (v: number) => {
-    if (!Number.isFinite(v)) return
-    const clamped = Math.max(0, Math.min(1, v))
+    const clamped = clampVolume(v)
     setVolumeState(clamped)
+    touchPreferences()
     if (audioRef.current) audioRef.current.volume = clamped
   }
 
