@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -31,6 +32,27 @@ type User struct {
 	Name          string
 	IsAdmin       bool
 	AvatarAssetID *string
+}
+
+// PlayerStation is the persisted station snapshot used for player resume.
+type PlayerStation struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	StreamURL   string `json:"streamUrl"`
+	Logo        string `json:"logo,omitempty"`
+	Genre       string `json:"genre"`
+	Country     string `json:"country"`
+	City        string `json:"city,omitempty"`
+	CountryCode string `json:"countryCode"`
+	Bitrate     int    `json:"bitrate"`
+	Codec       string `json:"codec"`
+}
+
+// PlayerPreferences stores user-level player state for cross-device continuity.
+type PlayerPreferences struct {
+	Volume    float64
+	Station   *PlayerStation
+	UpdatedAt time.Time
 }
 
 // UserStore executes queries against the users and password_reset_tokens tables.
@@ -195,6 +217,77 @@ func (s *UserStore) UpdateName(ctx context.Context, id, name string) error {
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
+	return nil
+}
+
+// GetPlayerPreferences fetches persisted player preferences for a user.
+func (s *UserStore) GetPlayerPreferences(ctx context.Context, id string) (*PlayerPreferences, error) {
+	var prefs PlayerPreferences
+	var stationRaw []byte
+
+	err := s.pool.QueryRow(ctx,
+		`SELECT player_volume, player_last_station, player_prefs_updated_at FROM users WHERE id = $1`,
+		id,
+	).Scan(&prefs.Volume, &stationRaw, &prefs.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get player preferences: %w", err)
+	}
+
+	if len(stationRaw) > 0 {
+		var station PlayerStation
+		if err := json.Unmarshal(stationRaw, &station); err != nil {
+			return nil, fmt.Errorf("unmarshal player station: %w", err)
+		}
+		prefs.Station = &station
+	}
+
+	return &prefs, nil
+}
+
+// UpdatePlayerPreferences upserts persisted player preferences for a user.
+func (s *UserStore) UpdatePlayerPreferences(ctx context.Context, id string, prefs PlayerPreferences) error {
+	var stationRaw []byte
+	if prefs.Station != nil {
+		b, err := json.Marshal(prefs.Station)
+		if err != nil {
+			return fmt.Errorf("marshal player station: %w", err)
+		}
+		stationRaw = b
+	}
+
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users
+		 SET player_volume = $1,
+		     player_last_station = $2,
+		     player_prefs_updated_at = $3,
+		     updated_at = NOW()
+		 WHERE id = $4
+		   AND player_prefs_updated_at <= $3`,
+		prefs.Volume,
+		stationRaw,
+		prefs.UpdatedAt,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("update player preferences: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		var exists bool
+		existsErr := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, id).Scan(&exists)
+		if existsErr != nil {
+			return fmt.Errorf("check user exists for player preferences: %w", existsErr)
+		}
+		if !exists {
+			return ErrNotFound
+		}
+
+		// Ignore stale updates from older clients/tabs.
+		return nil
+	}
+
 	return nil
 }
 

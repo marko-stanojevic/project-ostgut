@@ -133,6 +133,8 @@ func main() {
 	{
 		protected.GET("/users/me", h.GetProfile)
 		protected.PUT("/users/me", h.UpdateProfile)
+		protected.GET("/users/me/player-preferences", h.GetPlayerPreferences)
+		protected.PUT("/users/me/player-preferences", h.UpdatePlayerPreferences)
 		protected.GET("/billing/subscription", h.GetSubscription)
 		protected.GET("/billing/checkout-config", h.GetCheckoutConfig)
 		protected.POST("/media/upload-intent", h.CreateUploadIntent)
