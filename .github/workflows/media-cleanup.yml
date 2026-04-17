@@ -1,0 +1,264 @@
+name: Cleanup Unreferenced Media Assets
+
+on:
+    schedule:
+        - cron: "0 4 * * 1" # Weekly, Monday at 04:00 UTC
+    workflow_dispatch:
+        inputs:
+            environment:
+                description: "Target environment"
+                required: true
+                default: "staging"
+                type: choice
+                options:
+                    - staging
+                    - production
+            cutoff_days:
+                description: "Delete assets older than this many days"
+                required: true
+                default: "7"
+                type: string
+            dry_run:
+                description: "List candidates only (no deletions)"
+                required: true
+                default: true
+                type: boolean
+
+permissions:
+    contents: read
+    id-token: write
+
+env:
+    ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+    CUTOFF_DAYS: ${{ github.event.inputs.cutoff_days || '7' }}
+    DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+
+jobs:
+    cleanup-media:
+        name: Cleanup media (${{ github.event.inputs.environment || 'staging' }})
+        runs-on: ubuntu-latest
+        environment: ${{ github.event.inputs.environment || 'staging' }}
+
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Azure login (OIDC)
+              uses: azure/login@v3
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+            - name: Install psql client
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y postgresql-client
+
+            - name: Resolve runtime config
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  RG="rg-ostgut-${ENVIRONMENT}"
+                  APP="ca-ostgut-${ENVIRONMENT}-backend"
+
+                  echo "Using resource group: ${RG}"
+                  echo "Using container app: ${APP}"
+
+                  DB_URL=$(az containerapp secret show \
+                    --name "${APP}" \
+                    --resource-group "${RG}" \
+                    --secret-name database-url \
+                    --query value -o tsv)
+
+                  if [[ -z "${DB_URL}" ]]; then
+                    echo "database-url secret is empty or missing"
+                    exit 1
+                  fi
+
+                  MEDIA_STORAGE_ACCOUNT=$(az containerapp show \
+                    --name "${APP}" \
+                    --resource-group "${RG}" \
+                    --query "properties.template.containers[0].env[?name=='MEDIA_STORAGE_ACCOUNT_NAME'].value | [0]" \
+                    -o tsv)
+
+                  MEDIA_STORAGE_CONTAINER=$(az containerapp show \
+                    --name "${APP}" \
+                    --resource-group "${RG}" \
+                    --query "properties.template.containers[0].env[?name=='MEDIA_STORAGE_CONTAINER_NAME'].value | [0]" \
+                    -o tsv)
+
+                  if [[ -z "${MEDIA_STORAGE_ACCOUNT}" || -z "${MEDIA_STORAGE_CONTAINER}" ]]; then
+                    echo "media storage env vars are missing on backend app"
+                    exit 1
+                  fi
+
+                  STORAGE_KEY=$(az storage account keys list \
+                    --account-name "${MEDIA_STORAGE_ACCOUNT}" \
+                    --resource-group "${RG}" \
+                    --query "[0].value" -o tsv)
+
+                  if [[ -z "${STORAGE_KEY}" ]]; then
+                    echo "failed to resolve storage account key"
+                    exit 1
+                  fi
+
+                  echo "::add-mask::${DB_URL}"
+                  echo "::add-mask::${STORAGE_KEY}"
+
+                    DB_URL="${DB_URL}" python3 - <<'PY' >> "$GITHUB_ENV"
+                    import os
+                    from urllib.parse import urlparse, unquote
+
+                    db_url = os.environ["DB_URL"]
+                    u = urlparse(db_url)
+                    if not u.hostname or not u.username:
+                      raise SystemExit("invalid DATABASE_URL")
+
+                    db_name = (u.path or "").lstrip("/") or "ostgut"
+                    print(f"DB_HOST={u.hostname}")
+                    print(f"DB_USER={u.username}")
+                    print(f"DB_PASSWORD={unquote(u.password or '')}")
+                    print(f"DB_NAME={db_name}")
+                    PY
+
+                  echo "MEDIA_STORAGE_ACCOUNT=${MEDIA_STORAGE_ACCOUNT}" >> "$GITHUB_ENV"
+                  echo "MEDIA_STORAGE_CONTAINER=${MEDIA_STORAGE_CONTAINER}" >> "$GITHUB_ENV"
+                  echo "STORAGE_KEY=${STORAGE_KEY}" >> "$GITHUB_ENV"
+
+            - name: Find candidate media keys
+              id: candidates
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  export PGPASSWORD="${DB_PASSWORD}"
+
+                  CANDIDATE_COUNT=$(psql \
+                    -h "${DB_HOST}" \
+                    -U "${DB_USER}" \
+                    -d "${DB_NAME}" \
+                    -t -A \
+                    -v cutoff_days="${CUTOFF_DAYS}" \
+                    -c "
+                      SELECT COUNT(*)
+                      FROM media_assets m
+                      WHERE m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+                        AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
+                        AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id);
+                    ")
+
+                  CANDIDATE_COUNT=$(echo "${CANDIDATE_COUNT}" | xargs)
+                  echo "candidate_count=${CANDIDATE_COUNT}" >> "$GITHUB_OUTPUT"
+                  echo "Candidate assets: ${CANDIDATE_COUNT}"
+
+                  if [[ "${CANDIDATE_COUNT}" == "0" ]]; then
+                    : > "$RUNNER_TEMP/media-asset-keys.tsv"
+                    : > "$RUNNER_TEMP/media-asset-ids.txt"
+                    exit 0
+                  fi
+
+                  psql \
+                    -h "${DB_HOST}" \
+                    -U "${DB_USER}" \
+                    -d "${DB_NAME}" \
+                    -v ON_ERROR_STOP=1 \
+                    -v cutoff_days="${CUTOFF_DAYS}" \
+                    -t -A \
+                    -F $'\t' \
+                    -c "
+                      WITH candidates AS (
+                        SELECT m.id, m.storage_key_original, COALESCE(m.variants, '{}'::jsonb) AS variants
+                        FROM media_assets m
+                        WHERE m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+                          AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
+                          AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id)
+                      )
+                      SELECT id::text, storage_key_original AS object_key
+                      FROM candidates
+                      WHERE storage_key_original <> ''
+                      UNION
+                      SELECT c.id::text, v.value AS object_key
+                      FROM candidates c
+                      CROSS JOIN LATERAL jsonb_each_text(c.variants) v
+                      WHERE v.value <> ''
+                      ORDER BY 1, 2;
+                    " > "$RUNNER_TEMP/media-asset-keys.tsv"
+
+                  cut -f1 "$RUNNER_TEMP/media-asset-keys.tsv" | sort -u > "$RUNNER_TEMP/media-asset-ids.txt"
+
+                  echo "Unique assets to process: $(wc -l < "$RUNNER_TEMP/media-asset-ids.txt" | xargs)"
+                  echo "Blob objects to process: $(wc -l < "$RUNNER_TEMP/media-asset-keys.tsv" | xargs)"
+
+                  if [[ "${DRY_RUN}" == "true" ]]; then
+                    echo "Dry-run enabled. Showing up to 25 candidate objects:"
+                    head -n 25 "$RUNNER_TEMP/media-asset-keys.tsv" || true
+                  fi
+
+            - name: Delete blob objects
+              if: steps.candidates.outputs.candidate_count != '0' && env.DRY_RUN != 'true'
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  FAILED=0
+                  while IFS=$'\t' read -r ASSET_ID OBJECT_KEY; do
+                    [[ -z "${OBJECT_KEY}" ]] && continue
+
+                    if ! az storage blob delete \
+                      --account-name "${MEDIA_STORAGE_ACCOUNT}" \
+                      --account-key "${STORAGE_KEY}" \
+                      --container-name "${MEDIA_STORAGE_CONTAINER}" \
+                      --name "${OBJECT_KEY}" \
+                      --only-show-errors >/dev/null; then
+                      echo "failed to delete blob key=${OBJECT_KEY} (asset=${ASSET_ID})"
+                      FAILED=$((FAILED + 1))
+                    fi
+                  done < "$RUNNER_TEMP/media-asset-keys.tsv"
+
+                  if [[ "${FAILED}" -gt 0 ]]; then
+                    echo "blob deletion failed for ${FAILED} object(s); aborting DB cleanup to keep rows intact"
+                    exit 1
+                  fi
+
+            - name: Delete media rows from DB
+              if: steps.candidates.outputs.candidate_count != '0' && env.DRY_RUN != 'true'
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  export PGPASSWORD="${DB_PASSWORD}"
+
+                  DELETED=$(psql \
+                    -h "${DB_HOST}" \
+                    -U "${DB_USER}" \
+                    -d "${DB_NAME}" \
+                    -t -A \
+                    -v ON_ERROR_STOP=1 \
+                    -v cutoff_days="${CUTOFF_DAYS}" <<SQL
+                  CREATE TEMP TABLE cleanup_asset_ids (id uuid PRIMARY KEY);
+                  \\copy cleanup_asset_ids FROM '${RUNNER_TEMP}/media-asset-ids.txt';
+
+                  WITH deleted AS (
+                    DELETE FROM media_assets m
+                    USING cleanup_asset_ids c
+                    WHERE m.id = c.id
+                      AND m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+                      AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
+                      AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id)
+                    RETURNING m.id
+                  )
+                  SELECT COUNT(*) FROM deleted;
+                  SQL
+                  )
+
+                  DELETED=$(echo "${DELETED}" | xargs)
+                  echo "Deleted media_assets rows: ${DELETED}"
+
+            - name: Summary
+              shell: bash
+              run: |
+                  echo "Environment: ${ENVIRONMENT}"
+                  echo "Cutoff days: ${CUTOFF_DAYS}"
+                  echo "Dry run: ${DRY_RUN}"
+                  echo "Candidate assets: ${{ steps.candidates.outputs.candidate_count }}"

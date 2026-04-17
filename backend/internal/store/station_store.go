@@ -13,31 +13,32 @@ import (
 
 // Station holds a row from the stations table.
 type Station struct {
-	ID                string
-	ExternalID        string
-	Name              string
-	CustomName        *string
-	StreamURL         string
-	Homepage          string
-	Logo              string
-	Genre             string
-	Language          string
-	Country           string
-	CountryCode       string
-	Tags              []string
-	Bitrate           int
-	Codec             string
-	Votes             int
-	ClickCount        int
-	ReliabilityScore  float64
-	IsActive          bool
-	Featured          bool
-	Status            string // pending | approved | rejected
-	CustomWebsite     *string
-	CustomDescription *string
-	EditorNotes       *string
-	LastCheckedAt     *time.Time
-	LastSyncedAt      time.Time
+	ID               string
+	ExternalID       string
+	Name             string
+	CustomName       *string
+	StreamURL        string
+	Homepage         string
+	Logo             string
+	Genre            string
+	Language         string
+	Country          string
+	City             string
+	CountryCode      string
+	Tags             []string
+	Bitrate          int
+	Codec            string
+	Votes            int
+	ClickCount       int
+	ReliabilityScore float64
+	IsActive         bool
+	Featured         bool
+	Status           string // pending | approved | rejected
+	CustomWebsite    *string
+	Overview         *string
+	EditorNotes      *string
+	LastCheckedAt    *time.Time
+	LastSyncedAt     time.Time
 }
 
 // StationFilter holds optional query parameters for listing stations.
@@ -59,16 +60,18 @@ type EnrichmentUpdate struct {
 	Name             string
 	StreamURL        string
 	Homepage         string
-	Logo          string
+	Logo             string
 	Genre            string
 	Language         string
 	Country          string
+	City             string
 	CountryCode      string
 	Tags             []string
 	Bitrate          int
 	Codec            string
 	ReliabilityScore float64
 	Status           string
+	Overview         *string
 	EditorNotes      *string
 	Featured         bool
 }
@@ -78,10 +81,11 @@ type ManualStationInput struct {
 	Name             string
 	StreamURL        string
 	Homepage         string
-	Logo          string
+	Logo             string
 	Genre            string
 	Language         string
 	Country          string
+	City             string
 	CountryCode      string
 	Tags             []string
 	Bitrate          int
@@ -89,6 +93,7 @@ type ManualStationInput struct {
 	ReliabilityScore float64
 	Status           string
 	Featured         bool
+	Overview         *string
 }
 
 // StationStore executes queries against the stations table.
@@ -103,20 +108,20 @@ func NewStationStore(pool *pgxpool.Pool) *StationStore {
 
 const stationColumns = `
 	id, external_id, name, custom_name, stream_url, homepage, logo,
-	genre, language, country, country_code, tags,
+	genre, language, country, city, country_code, tags,
 	bitrate, codec, votes, click_count, reliability_score,
 	is_active, featured, status,
-	custom_website, custom_description, editor_notes,
+	custom_website, overview, editor_notes,
 	last_checked_at, last_synced_at`
 
 func scanStation(row pgx.Row) (*Station, error) {
 	var s Station
 	err := row.Scan(
 		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Logo,
-		&s.Genre, &s.Language, &s.Country, &s.CountryCode, &s.Tags,
+		&s.Genre, &s.Language, &s.Country, &s.City, &s.CountryCode, &s.Tags,
 		&s.Bitrate, &s.Codec, &s.Votes, &s.ClickCount, &s.ReliabilityScore,
 		&s.IsActive, &s.Featured, &s.Status,
-		&s.CustomWebsite, &s.CustomDescription, &s.EditorNotes,
+		&s.CustomWebsite, &s.Overview, &s.EditorNotes,
 		&s.LastCheckedAt, &s.LastSyncedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -210,15 +215,16 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 					genre ILIKE $%[2]d OR
 					language ILIKE $%[3]d OR
 					country ILIKE $%[4]d OR
-					country_code ILIKE $%[5]d OR
+					city ILIKE $%[5]d OR
+					country_code ILIKE $%[6]d OR
 					EXISTS (
 						SELECT 1
 						FROM unnest(tags) AS tag
-						WHERE tag ILIKE $%[6]d
+						WHERE tag ILIKE $%[7]d
 					)
-				)`, i, i+1, i+2, i+3, i+4, i+5))
-			args = append(args, pattern, pattern, pattern, pattern, pattern, pattern)
-			i += 6
+				)`, i, i+1, i+2, i+3, i+4, i+5, i+6))
+			args = append(args, pattern, pattern, pattern, pattern, pattern, pattern, pattern)
+			i += 7
 		}
 	}
 
@@ -292,11 +298,11 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, logo,
-			genre, language, country, country_code, tags,
+			genre, language, country, city, country_code, tags,
 			bitrate, codec, votes, click_count, reliability_score,
 			is_active, status, last_synced_at, updated_at
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending',NOW(),NOW()
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'pending',NOW(),NOW()
 		)
 		ON CONFLICT (external_id) DO UPDATE SET
 			votes             = EXCLUDED.votes,
@@ -309,7 +315,7 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 			-- country, country_code, tags, bitrate, codec, status,
 			-- editor_notes, featured are intentionally NOT updated`,
 		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Logo,
-		st.Genre, st.Language, st.Country, st.CountryCode, tags,
+		st.Genre, st.Language, st.Country, st.City, st.CountryCode, tags,
 		st.Bitrate, st.Codec, st.Votes, st.ClickCount, st.ReliabilityScore,
 		st.IsActive,
 	)
@@ -327,23 +333,23 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, logo,
-			genre, language, country, country_code, tags,
+			genre, language, country, city, country_code, tags,
 			bitrate, codec, votes, click_count, reliability_score,
-			is_active, featured, status,
+			is_active, featured, status, overview,
 			last_editor_action_at, last_synced_at, updated_at
 		) VALUES (
 			'manual:' || gen_random_uuid()::text,
 			$1, $2, $3, $4,
-			$5, $6, $7, $8, $9,
-			$10, $11, 0, 0, $12,
-			true, $13, $14,
+			$5, $6, $7, $8, $9, $10,
+			$11, $12, 0, 0, $13,
+			true, $14, $15, $16,
 			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
 		in.Name, in.StreamURL, in.Homepage, in.Logo,
-		in.Genre, in.Language, in.Country, in.CountryCode, tags,
+		in.Genre, in.Language, in.Country, in.City, in.CountryCode, tags,
 		in.Bitrate, in.Codec, in.ReliabilityScore,
-		in.Featured, in.Status,
+		in.Featured, in.Status, in.Overview,
 	).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("create manual station: %w", err)
@@ -369,21 +375,23 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			genre             = $5,
 			language          = $6,
 			country           = $7,
-			country_code      = $8,
-			tags              = $9,
-			bitrate               = $10,
-			codec                 = $11,
-			reliability_score     = $12,
-			status                = $13,
-			editor_notes          = $14,
-			featured              = $15,
+			city              = $8,
+			country_code      = $9,
+			tags              = $10,
+			bitrate               = $11,
+			codec                 = $12,
+			reliability_score     = $13,
+			status                = $14,
+			editor_notes          = $15,
+			overview              = $16,
+			featured              = $17,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $16`,
+		WHERE id = $18`,
 		u.Name, u.StreamURL, u.Homepage, u.Logo,
-		u.Genre, u.Language, u.Country, u.CountryCode, tags,
+		u.Genre, u.Language, u.Country, u.City, u.CountryCode, tags,
 		u.Bitrate, u.Codec, u.ReliabilityScore,
-		u.Status, u.EditorNotes, u.Featured, id,
+		u.Status, u.EditorNotes, u.Overview, u.Featured, id,
 	)
 	return err
 }
@@ -446,15 +454,16 @@ func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) 
 					genre ILIKE $%[2]d OR
 					language ILIKE $%[3]d OR
 					country ILIKE $%[4]d OR
-					country_code ILIKE $%[5]d OR
+					city ILIKE $%[5]d OR
+					country_code ILIKE $%[6]d OR
 					EXISTS (
 						SELECT 1
 						FROM unnest(tags) AS tag
-						WHERE tag ILIKE $%[6]d
+						WHERE tag ILIKE $%[7]d
 					)
-				)`, i, i+1, i+2, i+3, i+4, i+5))
-			args = append(args, pattern, pattern, pattern, pattern, pattern, pattern)
-			i += 6
+				)`, i, i+1, i+2, i+3, i+4, i+5, i+6))
+			args = append(args, pattern, pattern, pattern, pattern, pattern, pattern, pattern)
+			i += 7
 		}
 	}
 
