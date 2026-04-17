@@ -65,7 +65,6 @@ func AuthMiddleware(logger *slog.Logger, jwtSecret string) gin.HandlerFunc {
 		c.Set("user_email", claims.Email)
 		c.Set("claims", claims)
 
-		logger.Debug("auth middleware", "user_id", claims.Sub, "email", claims.Email)
 		c.Next()
 	}
 }

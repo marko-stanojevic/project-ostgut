@@ -61,10 +61,10 @@ type paddleWebhookEvent struct {
 }
 
 type paddleSubData struct {
-	ID             string  `json:"id"`
-	CustomerID     string  `json:"customer_id"`
-	Status         string  `json:"status"`
-	Items          []struct {
+	ID         string `json:"id"`
+	CustomerID string `json:"customer_id"`
+	Status     string `json:"status"`
+	Items      []struct {
 		Price struct {
 			ID          string `json:"id"`
 			ProductID   string `json:"product_id"`

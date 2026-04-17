@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
@@ -91,13 +92,29 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 // adminStationResponse extends the public response with editorial + status fields.
 type adminStationResponse struct {
 	stationResponse
-	Status string `json:"status"`
+	Status                string  `json:"status"`
+	MetadataEnabled       bool    `json:"metadata_enabled"`
+	MetadataType          string  `json:"metadata_type"`
+	MetadataError         *string `json:"metadata_error,omitempty"`
+	MetadataErrorCode     *string `json:"metadata_error_code,omitempty"`
+	MetadataLastFetchedAt *string `json:"metadata_last_fetched_at,omitempty"`
 }
 
 func toAdminStationResponse(s *store.Station) adminStationResponse {
+	var metadataLastFetchedAt *string
+	if s.MetadataLastFetchedAt != nil {
+		formatted := s.MetadataLastFetchedAt.UTC().Format(time.RFC3339)
+		metadataLastFetchedAt = &formatted
+	}
+
 	return adminStationResponse{
-		stationResponse: toStationResponse(s),
-		Status:          s.Status,
+		stationResponse:       toStationResponse(s),
+		Status:                s.Status,
+		MetadataEnabled:       s.MetadataEnabled,
+		MetadataType:          s.MetadataType,
+		MetadataError:         s.MetadataError,
+		MetadataErrorCode:     s.MetadataErrorCode,
+		MetadataLastFetchedAt: metadataLastFetchedAt,
 	}
 }
 
@@ -124,6 +141,8 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Status           string   `json:"status"`
 		Featured         bool     `json:"featured"`
 		Overview         *string  `json:"overview"`
+		MetadataEnabled  *bool    `json:"metadata_enabled"`
+		MetadataType     *string  `json:"metadata_type"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
@@ -168,6 +187,22 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
+	metadataEnabled := true
+	if req.MetadataEnabled != nil {
+		metadataEnabled = *req.MetadataEnabled
+	}
+
+	metadataType := "auto"
+	if req.MetadataType != nil {
+		metadataType = normalizeMetadataType(*req.MetadataType)
+	} else {
+		metadataType = normalizeMetadataType(metadataType)
+	}
+	if metadataType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "metadata_type must be one of auto, icy, icecast, shoutcast"})
+		return
+	}
+
 	manual := store.ManualStationInput{
 		Name:             name,
 		StreamURL:        streamURL,
@@ -188,6 +223,8 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Status:           status,
 		Featured:         req.Featured,
 		Overview:         normalizeOptionalText(req.Overview),
+		MetadataEnabled:  metadataEnabled,
+		MetadataType:     metadataType,
 	}
 
 	created, err := h.stationStore.CreateManual(c.Request.Context(), manual)
@@ -313,6 +350,8 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		Codec            *string   `json:"codec"`
 		ReliabilityScore *float64  `json:"reliability_score"`
 		Status           *string   `json:"status"`
+		MetadataEnabled  *bool     `json:"metadata_enabled"`
+		MetadataType     *string   `json:"metadata_type"`
 		Overview         *string   `json:"overview"`
 		EditorNotes      *string   `json:"editor_notes"`
 		Featured         *bool     `json:"featured"`
@@ -341,6 +380,8 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		Codec:            current.Codec,
 		ReliabilityScore: current.ReliabilityScore,
 		Status:           current.Status,
+		MetadataEnabled:  current.MetadataEnabled,
+		MetadataType:     current.MetadataType,
 		EditorNotes:      current.EditorNotes,
 		Featured:         current.Featured,
 	}
@@ -425,6 +466,17 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			return
 		}
 	}
+	if req.MetadataEnabled != nil {
+		u.MetadataEnabled = *req.MetadataEnabled
+	}
+	if req.MetadataType != nil {
+		normalized := normalizeMetadataType(*req.MetadataType)
+		if normalized == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "metadata_type must be one of auto, icy, icecast, shoutcast"})
+			return
+		}
+		u.MetadataType = normalized
+	}
 	if req.Overview != nil {
 		u.Overview = normalizeOptionalText(req.Overview)
 	}
@@ -454,6 +506,18 @@ func normalizeOptionalText(raw *string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+func normalizeMetadataType(raw string) string {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	switch v {
+	case "", "auto":
+		return "auto"
+	case "icy", "icecast", "shoutcast":
+		return v
+	default:
+		return ""
+	}
 }
 
 // AdminSetUserAdmin handles PUT /admin/users/:id/admin

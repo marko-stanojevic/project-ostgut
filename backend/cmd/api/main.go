@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -28,13 +29,18 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("failed to load config", "error", err)
+		// Logger isn't ready yet — write directly to stderr.
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
 		os.Exit(1)
 	}
+
+	logLevel := slog.LevelInfo
+	if cfg.LogLevel == "debug" {
+		logLevel = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	logMediaStorageMode(
 		logger,
 		cfg.MediaUploadBaseURL,
@@ -114,6 +120,7 @@ func main() {
 	router.GET("/stations", h.ListStations)
 	router.GET("/stations/filters", h.GetFilters)
 	router.GET("/stations/:id", h.GetStation)
+	router.GET("/stations/:id/now-playing", h.GetNowPlaying)
 	router.GET("/search", h.SearchStations)
 
 	// Paddle webhook (public — signature-verified internally)

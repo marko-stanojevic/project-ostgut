@@ -13,35 +13,40 @@ import (
 
 // Station holds a row from the stations table.
 type Station struct {
-	ID               string
-	ExternalID       string
-	Name             string
-	CustomName       *string
-	StreamURL        string
-	Homepage         string
-	Logo             string
-	Genre            string
-	Language         string
-	Country          string
-	City             string
-	CountryCode      string
-	Tags             []string
-	StyleTags        []string
-	FormatTags       []string
-	TextureTags      []string
-	Bitrate          int
-	Codec            string
-	Votes            int
-	ClickCount       int
-	ReliabilityScore float64
-	IsActive         bool
-	Featured         bool
-	Status           string // pending | approved | rejected
-	CustomWebsite    *string
-	Overview         *string
-	EditorNotes      *string
-	LastCheckedAt    *time.Time
-	LastSyncedAt     time.Time
+	ID                    string
+	ExternalID            string
+	Name                  string
+	CustomName            *string
+	StreamURL             string
+	Homepage              string
+	Logo                  string
+	Genre                 string
+	Language              string
+	Country               string
+	City                  string
+	CountryCode           string
+	Tags                  []string
+	StyleTags             []string
+	FormatTags            []string
+	TextureTags           []string
+	Bitrate               int
+	Codec                 string
+	Votes                 int
+	ClickCount            int
+	ReliabilityScore      float64
+	IsActive              bool
+	Featured              bool
+	Status                string // pending | approved | rejected
+	MetadataEnabled       bool
+	MetadataType          string // auto | icy | icecast | shoutcast
+	MetadataError         *string
+	MetadataErrorCode     *string
+	MetadataLastFetchedAt *time.Time
+	CustomWebsite         *string
+	Overview              *string
+	EditorNotes           *string
+	LastCheckedAt         *time.Time
+	LastSyncedAt          time.Time
 }
 
 // StationFilter holds optional query parameters for listing stations.
@@ -80,6 +85,8 @@ type EnrichmentUpdate struct {
 	Codec            string
 	ReliabilityScore float64
 	Status           string
+	MetadataEnabled  bool
+	MetadataType     string
 	Overview         *string
 	EditorNotes      *string
 	Featured         bool
@@ -106,6 +113,8 @@ type ManualStationInput struct {
 	Status           string
 	Featured         bool
 	Overview         *string
+	MetadataEnabled  bool
+	MetadataType     string
 }
 
 // StationStore executes queries against the stations table.
@@ -124,6 +133,7 @@ const stationColumns = `
 	style_tags, format_tags, texture_tags,
 	bitrate, codec, votes, click_count, reliability_score,
 	is_active, featured, status,
+	metadata_enabled, metadata_type, metadata_error, metadata_error_code, metadata_last_fetched_at,
 	custom_website, overview, editor_notes,
 	last_checked_at, last_synced_at`
 
@@ -135,6 +145,7 @@ func scanStation(row pgx.Row) (*Station, error) {
 		&s.StyleTags, &s.FormatTags, &s.TextureTags,
 		&s.Bitrate, &s.Codec, &s.Votes, &s.ClickCount, &s.ReliabilityScore,
 		&s.IsActive, &s.Featured, &s.Status,
+		&s.MetadataEnabled, &s.MetadataType, &s.MetadataError, &s.MetadataErrorCode, &s.MetadataLastFetchedAt,
 		&s.CustomWebsite, &s.Overview, &s.EditorNotes,
 		&s.LastCheckedAt, &s.LastSyncedAt,
 	)
@@ -356,6 +367,9 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 	if in.Status == "" {
 		in.Status = "approved"
 	}
+	if in.MetadataType == "" {
+		in.MetadataType = "auto"
+	}
 	tags := normalizeTags(in.Tags)
 	styleTags := normalizeTags(in.StyleTags)
 	formatTags := normalizeTags(in.FormatTags)
@@ -369,6 +383,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 			style_tags, format_tags, texture_tags,
 			bitrate, codec, votes, click_count, reliability_score,
 			is_active, featured, status, overview,
+			metadata_enabled, metadata_type,
 			last_editor_action_at, last_synced_at, updated_at
 		) VALUES (
 			'manual:' || gen_random_uuid()::text,
@@ -377,6 +392,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 			$11, $12, $13,
 			$14, $15, 0, 0, $16,
 			true, $17, $18, $19,
+			$20, $21,
 			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
@@ -385,6 +401,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 		styleTags, formatTags, textureTags,
 		in.Bitrate, in.Codec, in.ReliabilityScore,
 		in.Featured, in.Status, in.Overview,
+		in.MetadataEnabled, in.MetadataType,
 	).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("create manual station: %w", err)
@@ -423,17 +440,50 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			codec                 = $15,
 			reliability_score     = $16,
 			status                = $17,
-			editor_notes          = $18,
-			overview              = $19,
-			featured              = $20,
+			metadata_enabled      = $18,
+			metadata_type         = $19,
+			editor_notes          = $20,
+			overview              = $21,
+			featured              = $22,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $21`,
+		WHERE id = $23`,
 		u.Name, u.StreamURL, u.Homepage, u.Logo,
 		u.Genre, u.Language, u.Country, u.City, u.CountryCode, tags,
 		styleTags, formatTags, textureTags,
 		u.Bitrate, u.Codec, u.ReliabilityScore,
-		u.Status, u.EditorNotes, u.Overview, u.Featured, id,
+		u.Status, u.MetadataEnabled, u.MetadataType, u.EditorNotes, u.Overview, u.Featured, id,
+	)
+	return err
+}
+
+// UpdateMetadataHealth stores the latest metadata fetch outcome.
+// It updates only when values changed to avoid pointless writes for cached results.
+func (s *StationStore) UpdateMetadataHealth(
+	ctx context.Context,
+	id string,
+	metadataError *string,
+	metadataErrorCode *string,
+	metadataLastFetchedAt *time.Time,
+) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE stations
+		SET
+			metadata_error = $1,
+			metadata_error_code = $2,
+			metadata_last_fetched_at = $3,
+			last_checked_at = NOW(),
+			updated_at = NOW()
+		WHERE id = $4
+		  AND (
+			metadata_error IS DISTINCT FROM $1
+			OR metadata_error_code IS DISTINCT FROM $2
+			OR metadata_last_fetched_at IS DISTINCT FROM $3
+		  )`,
+		metadataError,
+		metadataErrorCode,
+		metadataLastFetchedAt,
+		id,
 	)
 	return err
 }
