@@ -47,6 +47,9 @@ interface AdminStation {
     city: string
     country_code: string
     tags: string[]
+    style_tags: string[]
+    format_tags: string[]
+    texture_tags: string[]
     bitrate: number
     codec: string
     reliability_score: number
@@ -66,7 +69,9 @@ interface StationForm {
     country: string
     city: string
     country_code: string
-    tags: string
+    style_tags: string
+    format_tags: string
+    texture_tags: string
     bitrate: string
     codec: string
     reliability_score: string
@@ -151,7 +156,9 @@ export default function StationEditorPage() {
         country: '',
         city: '',
         country_code: '',
-        tags: '',
+        style_tags: '',
+        format_tags: '',
+        texture_tags: '',
         bitrate: '',
         codec: '',
         reliability_score: '',
@@ -204,7 +211,9 @@ export default function StationEditorPage() {
                     country: s.country,
                     city: s.city ?? '',
                     country_code: s.country_code,
-                    tags: (s.tags ?? []).join(', '),
+                    style_tags: (s.style_tags ?? []).join(', '),
+                    format_tags: (s.format_tags ?? []).join(', '),
+                    texture_tags: (s.texture_tags ?? []).join(', '),
                     bitrate: String(s.bitrate ?? 0),
                     codec: s.codec ?? '',
                     reliability_score: String(s.reliability_score ?? 0),
@@ -330,7 +339,9 @@ export default function StationEditorPage() {
             country: form.country.trim(),
             city: form.city.trim(),
             country_code: form.country_code.trim().toUpperCase(),
-            tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+            style_tags: form.style_tags.split(',').map((t) => t.trim()).filter(Boolean),
+            format_tags: form.format_tags.split(',').map((t) => t.trim()).filter(Boolean),
+            texture_tags: form.texture_tags.split(',').map((t) => t.trim()).filter(Boolean),
             bitrate: bitrateNum,
             codec: form.codec.trim(),
             reliability_score: reliabilityNum,
@@ -357,7 +368,9 @@ export default function StationEditorPage() {
                 country: updated.country,
                 city: updated.city ?? '',
                 country_code: updated.country_code,
-                tags: (updated.tags ?? []).join(', '),
+                style_tags: (updated.style_tags ?? []).join(', '),
+                format_tags: (updated.format_tags ?? []).join(', '),
+                texture_tags: (updated.texture_tags ?? []).join(', '),
                 bitrate: String(updated.bitrate ?? 0),
                 codec: updated.codec ?? '',
                 reliability_score: String(updated.reliability_score ?? 0),
@@ -393,7 +406,10 @@ export default function StationEditorPage() {
 
     const cfg = statusConfig[form.status as keyof typeof statusConfig]
     const reliabilityPct = Math.round((Number(form.reliability_score || 0) || 0) * 100)
-    const currentTags = form.tags.split(',').map((t) => t.trim()).filter(Boolean)
+    const currentStyleTags = form.style_tags.split(',').map((t) => t.trim()).filter(Boolean)
+    const currentFormatTags = form.format_tags.split(',').map((t) => t.trim()).filter(Boolean)
+    const currentTextureTags = form.texture_tags.split(',').map((t) => t.trim()).filter(Boolean)
+    const allCurrentTags = [...currentStyleTags, ...currentFormatTags, ...currentTextureTags]
     const iconUrl = getPreferredMediaUrl(stationIcon) || logoURL
 
     return (
@@ -497,12 +513,18 @@ export default function StationEditorPage() {
                             {iconError && <p className="mt-2 text-xs text-destructive">{iconError}</p>}
                         </div>
 
-                        {currentTags.length > 0 && (
+                        {allCurrentTags.length > 0 && (
                             <div>
                                 <p className="mb-1.5 text-xs text-muted-foreground">Tags</p>
                                 <div className="flex flex-wrap gap-1">
-                                    {currentTags.map((t) => (
-                                        <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+                                    {currentStyleTags.map((t) => (
+                                        <Badge key={`style-${t}`} variant="secondary" className="text-xs">{t}</Badge>
+                                    ))}
+                                    {currentFormatTags.map((t) => (
+                                        <Badge key={`format-${t}`} variant="outline" className="text-xs">{t}</Badge>
+                                    ))}
+                                    {currentTextureTags.map((t) => (
+                                        <Badge key={`texture-${t}`} className="text-xs">{t}</Badge>
                                     ))}
                                 </div>
                             </div>
@@ -647,8 +669,16 @@ export default function StationEditorPage() {
                                     <Input id="codec" value={form.codec} onChange={(e) => setForm((prev) => ({ ...prev, codec: e.target.value }))} />
                                 </div>
                                 <div className="space-y-1.5 sm:col-span-2">
-                                    <Label htmlFor="tags">Tags (comma-separated)</Label>
-                                    <Input id="tags" value={form.tags} onChange={(e) => setForm((prev) => ({ ...prev, tags: e.target.value }))} />
+                                    <Label htmlFor="style-tags">Style tags (comma-separated)</Label>
+                                    <Input id="style-tags" placeholder="e.g. curated, underground, editorial" value={form.style_tags} onChange={(e) => setForm((prev) => ({ ...prev, style_tags: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1.5 sm:col-span-2">
+                                    <Label htmlFor="format-tags">Format tags (comma-separated)</Label>
+                                    <Input id="format-tags" placeholder="e.g. live, hosted, freeform" value={form.format_tags} onChange={(e) => setForm((prev) => ({ ...prev, format_tags: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1.5 sm:col-span-2">
+                                    <Label htmlFor="texture-tags">Texture tags (comma-separated)</Label>
+                                    <Input id="texture-tags" placeholder="e.g. smooth, raw, minimal" value={form.texture_tags} onChange={(e) => setForm((prev) => ({ ...prev, texture_tags: e.target.value }))} />
                                 </div>
                                 <div className="space-y-1.5 sm:col-span-2">
                                     <Label htmlFor="reliability">Reliability score (0-1)</Label>

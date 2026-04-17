@@ -28,24 +28,12 @@ interface ApiStation {
     featured: boolean
 }
 
-interface CountryOption {
-    code: string
-    name: string
-}
-
 interface FiltersResponse {
     genres?: string[]
-    countries?: CountryOption[]
-    languages?: string[]
+    styles?: string[]
+    formats?: string[]
+    textures?: string[]
 }
-
-const BITRATE_OPTIONS = [
-    { value: '', label: 'Any quality' },
-    { value: '64', label: '64+ kbps' },
-    { value: '96', label: '96+ kbps' },
-    { value: '128', label: '128+ kbps' },
-    { value: '192', label: '192+ kbps' },
-]
 
 function formatFilterLabel(value: string) {
     if (!value) return value
@@ -173,19 +161,20 @@ function ExploreContent() {
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [genres, setGenres] = useState<string[]>([])
-    const [countries, setCountries] = useState<CountryOption[]>([])
-    const [languages, setLanguages] = useState<string[]>([])
+    const [styles, setStyles] = useState<string[]>([])
+    const [formats, setFormats] = useState<string[]>([])
+    const [textures, setTextures] = useState<string[]>([])
 
     const query = searchParams.get('q')?.trim() ?? ''
     const genre = searchParams.get('genre') ?? ''
-    const country = searchParams.get('country') ?? ''
-    const language = searchParams.get('language') ?? ''
-    const minBitrate = searchParams.get('min_bitrate') ?? ''
+    const style = searchParams.get('style') ?? ''
+    const format = searchParams.get('format') ?? ''
+    const texture = searchParams.get('texture') ?? ''
     const sort = searchParams.get('sort') === 'popular' ? 'popular' : 'recommended'
 
     const activeFilters = useMemo(
-        () => [query, genre, country, language, minBitrate, sort === 'popular' ? 'popular' : ''].filter(Boolean).length,
-        [query, genre, country, language, minBitrate, sort]
+        () => [query, genre, style, format, texture, sort === 'popular' ? 'popular' : ''].filter(Boolean).length,
+        [query, genre, style, format, texture, sort]
     )
 
     useEffect(() => {
@@ -202,13 +191,15 @@ function ExploreContent() {
             .then((r) => r.json())
             .then((data: FiltersResponse) => {
                 setGenres(data.genres ?? [])
-                setCountries(data.countries ?? [])
-                setLanguages(data.languages ?? [])
+                setStyles(data.styles ?? [])
+                setFormats(data.formats ?? [])
+                setTextures(data.textures ?? [])
             })
             .catch(() => {
                 setGenres([])
-                setCountries([])
-                setLanguages([])
+                setStyles([])
+                setFormats([])
+                setTextures([])
             })
     }, [])
 
@@ -219,9 +210,9 @@ function ExploreContent() {
         params.set('offset', '0')
         if (query) params.set('q', query)
         if (genre) params.set('genre', genre)
-        if (country) params.set('country', country)
-        if (language) params.set('language', language)
-        if (minBitrate) params.set('min_bitrate', minBitrate)
+        if (style) params.set('style', style)
+        if (format) params.set('format', format)
+        if (texture) params.set('texture', texture)
         if (sort === 'popular') params.set('sort', 'popular')
 
         fetch(`${API}/stations?${params.toString()}`)
@@ -235,7 +226,7 @@ function ExploreContent() {
                 setTotal(0)
             })
             .finally(() => setLoading(false))
-    }, [query, genre, country, language, minBitrate, sort])
+    }, [query, genre, style, format, texture, sort])
 
     useEffect(() => {
         if (typeof window === 'undefined') return
@@ -276,9 +267,9 @@ function ExploreContent() {
             params.set('offset', String(stations.length))
             if (query) params.set('q', query)
             if (genre) params.set('genre', genre)
-            if (country) params.set('country', country)
-            if (language) params.set('language', language)
-            if (minBitrate) params.set('min_bitrate', minBitrate)
+            if (style) params.set('style', style)
+            if (format) params.set('format', format)
+            if (texture) params.set('texture', texture)
             if (sort === 'popular') params.set('sort', 'popular')
 
             const data = await fetch(`${API}/stations?${params.toString()}`).then((r) => r.json())
@@ -347,42 +338,43 @@ function ExploreContent() {
                     </label>
 
                     <label className="flex min-w-0 flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Country</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Style</span>
                         <select
-                            value={country}
-                            onChange={(e) => updateParams({ country: e.target.value || null })}
+                            value={style}
+                            onChange={(e) => updateParams({ style: e.target.value || null })}
                             className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
                         >
-                            <option value="">Any country</option>
-                            {countries.map((option) => (
-                                <option key={option.code} value={option.code}>{option.name}</option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="flex min-w-0 flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Language</span>
-                        <select
-                            value={language}
-                            onChange={(e) => updateParams({ language: e.target.value || null })}
-                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
-                        >
-                            <option value="">Any language</option>
-                            {languages.map((option) => (
+                            <option value="">Any style</option>
+                            {styles.map((option) => (
                                 <option key={option} value={option}>{formatFilterLabel(option)}</option>
                             ))}
                         </select>
                     </label>
 
                     <label className="flex min-w-0 flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Bitrate</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Format</span>
                         <select
-                            value={minBitrate}
-                            onChange={(e) => updateParams({ min_bitrate: e.target.value || null })}
+                            value={format}
+                            onChange={(e) => updateParams({ format: e.target.value || null })}
                             className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
                         >
-                            {BITRATE_OPTIONS.map((option) => (
-                                <option key={option.value || 'any'} value={option.value}>{option.label}</option>
+                            <option value="">Any format</option>
+                            {formats.map((option) => (
+                                <option key={option} value={option}>{formatFilterLabel(option)}</option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="flex min-w-0 flex-col gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Texture</span>
+                        <select
+                            value={texture}
+                            onChange={(e) => updateParams({ texture: e.target.value || null })}
+                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
+                        >
+                            <option value="">Any texture</option>
+                            {textures.map((option) => (
+                                <option key={option} value={option}>{formatFilterLabel(option)}</option>
                             ))}
                         </select>
                     </label>

@@ -115,6 +115,9 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		City             string   `json:"city"`
 		CountryCode      string   `json:"country_code"`
 		Tags             []string `json:"tags"`
+		StyleTags        []string `json:"style_tags"`
+		FormatTags       []string `json:"format_tags"`
+		TextureTags      []string `json:"texture_tags"`
 		Bitrate          int      `json:"bitrate"`
 		Codec            string   `json:"codec"`
 		ReliabilityScore float64  `json:"reliability_score"`
@@ -176,6 +179,9 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		City:             strings.TrimSpace(req.City),
 		CountryCode:      strings.ToUpper(strings.TrimSpace(req.CountryCode)),
 		Tags:             req.Tags,
+		StyleTags:        req.StyleTags,
+		FormatTags:       req.FormatTags,
+		TextureTags:      req.TextureTags,
 		Bitrate:          bitrate,
 		Codec:            strings.TrimSpace(req.Codec),
 		ReliabilityScore: reliability,
@@ -300,6 +306,9 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		City             *string   `json:"city"`
 		CountryCode      *string   `json:"country_code"`
 		Tags             *[]string `json:"tags"`
+		StyleTags        *[]string `json:"style_tags"`
+		FormatTags       *[]string `json:"format_tags"`
+		TextureTags      *[]string `json:"texture_tags"`
 		Bitrate          *int      `json:"bitrate"`
 		Codec            *string   `json:"codec"`
 		ReliabilityScore *float64  `json:"reliability_score"`
@@ -325,6 +334,9 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		City:             current.City,
 		CountryCode:      current.CountryCode,
 		Tags:             current.Tags,
+		StyleTags:        current.StyleTags,
+		FormatTags:       current.FormatTags,
+		TextureTags:      current.TextureTags,
 		Bitrate:          current.Bitrate,
 		Codec:            current.Codec,
 		ReliabilityScore: current.ReliabilityScore,
@@ -376,6 +388,15 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 	if req.Tags != nil {
 		u.Tags = *req.Tags
+	}
+	if req.StyleTags != nil {
+		u.StyleTags = *req.StyleTags
+	}
+	if req.FormatTags != nil {
+		u.FormatTags = *req.FormatTags
+	}
+	if req.TextureTags != nil {
+		u.TextureTags = *req.TextureTags
 	}
 	if req.Bitrate != nil {
 		if *req.Bitrate < 0 {
