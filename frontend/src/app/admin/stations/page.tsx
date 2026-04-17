@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/dialog'
 import {
   CheckCircleIcon,
-  XCircleIcon,
   ClockIcon,
   ArrowSquareOutIcon,
 } from '@phosphor-icons/react'
@@ -74,14 +73,17 @@ interface CreateStationForm {
   homepage: string
   tags: string
   overview: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved'
   featured: boolean
 }
 
 const statusConfig = {
   pending: { label: 'Pending', variant: 'secondary' as const, icon: ClockIcon },
   approved: { label: 'Approved', variant: 'default' as const, icon: CheckCircleIcon },
-  rejected: { label: 'Rejected', variant: 'destructive' as const, icon: XCircleIcon },
+}
+
+function normalizeModerationStatus(value: string | null | undefined): 'pending' | 'approved' {
+  return value === 'approved' ? 'approved' : 'pending'
 }
 
 function ReliabilityBar({ score }: { score: number }) {
@@ -112,7 +114,9 @@ export default function AdminStationsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [activeTab, setActiveTab] = useState(searchParams.get('status') || 'pending')
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved'>(
+    normalizeModerationStatus(searchParams.get('status')),
+  )
   const [stations, setStations] = useState<AdminStation[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -185,11 +189,12 @@ export default function AdminStationsPage() {
   useEffect(() => { fetchStations() }, [fetchStations])
 
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab)
+    const normalized = normalizeModerationStatus(tab)
+    setActiveTab(normalized)
     setPage(0)
     setSearch('')
     setSearchInput('')
-    router.replace(`/admin/stations?status=${tab}`)
+    router.replace(`/admin/stations?status=${normalized}`)
   }
 
   const handleSearch = (e: React.FormEvent) => {
@@ -324,7 +329,7 @@ export default function AdminStationsPage() {
         featured: false,
       })
 
-      const nextStatus = created.status || createForm.status
+      const nextStatus = normalizeModerationStatus(created.status || createForm.status)
       if (nextStatus !== activeTab) {
         setActiveTab(nextStatus)
         setPage(0)
@@ -384,16 +389,6 @@ export default function AdminStationsPage() {
             >
               <CheckCircleIcon className="h-3.5 w-3.5 mr-1.5" />
               Approve
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={bulkLoading}
-              onClick={() => bulkAction('rejected')}
-              className="text-destructive border-destructive/30 hover:bg-destructive/5"
-            >
-              <XCircleIcon className="h-3.5 w-3.5 mr-1.5" />
-              Reject
             </Button>
           </div>
         )}
@@ -638,7 +633,6 @@ export default function AdminStationsPage() {
                 >
                   <option value="approved">Approved</option>
                   <option value="pending">Pending</option>
-                  <option value="rejected">Rejected</option>
                 </select>
               </div>
               <div className="flex items-end gap-2 pb-1">

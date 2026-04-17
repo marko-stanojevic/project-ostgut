@@ -285,6 +285,45 @@
         "focus": false,
         "panel": "shared"
       }
+    },
+    {
+      "label": "Backend: Debug",
+      "type": "shell",
+      "command": "sh",
+      "args": ["-c", "set -a && source .env && set +a && LOG_LEVEL=debug go run ./cmd/api"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*server starting.*",
+          "endsPattern": "^.*(error|exited).*"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "All: Dev (Debug)",
+      "dependsOn": ["DB: Start", "Frontend: Dev Server", "Backend: Debug"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
     }
   ]
 }

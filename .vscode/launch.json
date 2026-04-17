@@ -1,0 +1,52 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Full Go debugger via Delve — supports breakpoints, variable inspection,
+      // and stepping. Loads env from backend/.env automatically.
+      "name": "Backend: Debugger",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/api",
+      "envFile": "${workspaceFolder}/backend/.env",
+      "env": {
+        "LOG_LEVEL": "debug"
+      },
+      "preLaunchTask": "DB: Start"
+    },
+    {
+      // Next.js dev server with Node inspector enabled.
+      // Open chrome://inspect after launch to attach Chrome DevTools,
+      // or use the built-in JS debugger in VS Code.
+      "name": "Frontend: Debugger",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && NODE_OPTIONS='--inspect' npm run dev"
+      ],
+      "cwd": "${workspaceFolder}/frontend",
+      "env": {
+        "NVM_DIR": "${userHome}/.nvm"
+      },
+      "serverReadyAction": {
+        "pattern": "Local:\\s+(https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      },
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ],
+  "compounds": [
+    {
+      // Starts DB (task), then launches both debuggers simultaneously.
+      // Set breakpoints in Go or TS/JS files before hitting Run.
+      "name": "All: Debug",
+      "configurations": ["Backend: Debugger", "Frontend: Debugger"],
+      "preLaunchTask": "DB: Start",
+      "stopAll": true
+    }
+  ]
+}

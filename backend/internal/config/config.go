@@ -26,6 +26,10 @@ type Config struct {
 	// Env is the deployment environment (local | staging | production).
 	Env string
 
+	// LogLevel controls the minimum log level ("debug" | "info").
+	// Defaults to "info".
+	LogLevel string
+
 	// Paddle billing configuration.
 	PaddleAPIKey        string
 	PaddleWebhookSecret string
@@ -73,18 +77,19 @@ func Load() (*Config, error) {
 	)
 
 	return &Config{
-		Port:                     port,
-		DatabaseURL:              databaseURL,
-		JWTSecret:                jwtSecret,
-		AllowedOrigins:           allowedOrigins,
-		Env:                      getEnv("ENV", "local"),
-		PaddleAPIKey:             os.Getenv("PADDLE_API_KEY"),
-		PaddleWebhookSecret:      os.Getenv("PADDLE_WEBHOOK_SECRET"),
-		PaddleClientToken:        os.Getenv("PADDLE_CLIENT_TOKEN"),
-		PaddlePriceID:            os.Getenv("PADDLE_PRICE_ID"),
-		MediaUploadBaseURL:       strings.TrimRight(os.Getenv("MEDIA_UPLOAD_BASE_URL"), "/"),
-		MediaUploadSigningSecret: getEnv("MEDIA_UPLOAD_SIGNING_SECRET", jwtSecret),
-		MediaStorageAccountName:  strings.TrimSpace(os.Getenv("MEDIA_STORAGE_ACCOUNT_NAME")),
+		Port:                      port,
+		DatabaseURL:               databaseURL,
+		JWTSecret:                 jwtSecret,
+		AllowedOrigins:            allowedOrigins,
+		Env:                       getEnv("ENV", "local"),
+		LogLevel:                  getEnv("LOG_LEVEL", "info"),
+		PaddleAPIKey:              os.Getenv("PADDLE_API_KEY"),
+		PaddleWebhookSecret:       os.Getenv("PADDLE_WEBHOOK_SECRET"),
+		PaddleClientToken:         os.Getenv("PADDLE_CLIENT_TOKEN"),
+		PaddlePriceID:             os.Getenv("PADDLE_PRICE_ID"),
+		MediaUploadBaseURL:        strings.TrimRight(os.Getenv("MEDIA_UPLOAD_BASE_URL"), "/"),
+		MediaUploadSigningSecret:  getEnv("MEDIA_UPLOAD_SIGNING_SECRET", jwtSecret),
+		MediaStorageAccountName:   strings.TrimSpace(os.Getenv("MEDIA_STORAGE_ACCOUNT_NAME")),
 		MediaStorageContainerName: strings.TrimSpace(os.Getenv("MEDIA_STORAGE_CONTAINER_NAME")),
 		MediaStorageAccountKey:    strings.TrimSpace(os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")),
 	}, nil

@@ -26,7 +26,6 @@ import {
     RadioIcon,
     ArrowSquareOutIcon,
     CheckCircleIcon,
-    XCircleIcon,
     ClockIcon,
     ArrowLeftIcon,
     FloppyDiskIcon,
@@ -55,6 +54,11 @@ interface AdminStation {
     reliability_score: number
     featured: boolean
     status: string
+    metadata_enabled: boolean
+    metadata_type: 'auto' | 'icy' | 'icecast' | 'shoutcast'
+    metadata_error?: string
+    metadata_error_code?: string
+    metadata_last_fetched_at?: string
     overview?: string
     editor_notes?: string
 }
@@ -76,7 +80,9 @@ interface StationForm {
     codec: string
     reliability_score: string
     overview: string
-    status: 'pending' | 'approved' | 'rejected'
+    status: 'pending' | 'approved'
+    metadata_enabled: boolean
+    metadata_type: 'auto' | 'icy' | 'icecast' | 'shoutcast'
     featured: boolean
     editor_notes: string
 }
@@ -100,7 +106,6 @@ type CompleteUploadResponse = {
 const statusConfig = {
     pending: { label: 'Pending', icon: ClockIcon, className: 'text-yellow-600 dark:text-yellow-400' },
     approved: { label: 'Approved', icon: CheckCircleIcon, className: 'text-green-600 dark:text-green-400' },
-    rejected: { label: 'Rejected', icon: XCircleIcon, className: 'text-destructive' },
 }
 
 function SourceField({ label, value }: { label: string; value?: string }) {
@@ -164,6 +169,8 @@ export default function StationEditorPage() {
         reliability_score: '',
         overview: '',
         status: 'pending',
+        metadata_enabled: true,
+        metadata_type: 'auto',
         featured: false,
         editor_notes: '',
     })
@@ -218,7 +225,9 @@ export default function StationEditorPage() {
                     codec: s.codec ?? '',
                     reliability_score: String(s.reliability_score ?? 0),
                     overview: s.overview ?? '',
-                    status: (s.status as StationForm['status']) || 'pending',
+                    status: s.status === 'approved' ? 'approved' : 'pending',
+                    metadata_enabled: s.metadata_enabled ?? true,
+                    metadata_type: (s.metadata_type as StationForm['metadata_type']) || 'auto',
                     featured: !!s.featured,
                     editor_notes: s.editor_notes ?? '',
                 })
@@ -347,6 +356,8 @@ export default function StationEditorPage() {
             reliability_score: reliabilityNum,
             overview: form.overview.trim() || null,
             status: form.status,
+            metadata_enabled: form.metadata_enabled,
+            metadata_type: form.metadata_type,
             featured: form.featured,
             editor_notes: form.editor_notes.trim() || null,
         }
@@ -375,7 +386,9 @@ export default function StationEditorPage() {
                 codec: updated.codec ?? '',
                 reliability_score: String(updated.reliability_score ?? 0),
                 overview: updated.overview ?? '',
-                status: (updated.status as StationForm['status']) || 'pending',
+                status: updated.status === 'approved' ? 'approved' : 'pending',
+                metadata_enabled: updated.metadata_enabled ?? true,
+                metadata_type: (updated.metadata_type as StationForm['metadata_type']) || 'auto',
                 featured: !!updated.featured,
                 editor_notes: updated.editor_notes ?? '',
             })
@@ -578,18 +591,17 @@ export default function StationEditorPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="space-y-1.5">
-                                <Label>Status</Label>
-                                <Select value={form.status} onValueChange={(v) => v && setForm((prev) => ({ ...prev, status: v as StationForm['status'] }))}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="pending">Pending</SelectItem>
-                                        <SelectItem value="approved">Approved</SelectItem>
-                                        <SelectItem value="rejected">Rejected</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            <div className="flex items-center justify-between rounded-lg border p-3">
+                                <div>
+                                    <p className="text-sm font-medium">Approved</p>
+                                    <p className="text-xs text-muted-foreground">Not approved stations stay pending and remain hidden from public lists</p>
+                                </div>
+                                <Switch
+                                    checked={form.status === 'approved'}
+                                    onCheckedChange={(checked) =>
+                                        setForm((prev) => ({ ...prev, status: checked ? 'approved' : 'pending' }))
+                                    }
+                                />
                             </div>
 
                             <div className="flex items-center justify-between rounded-lg border p-3">
@@ -598,6 +610,57 @@ export default function StationEditorPage() {
                                     <p className="text-xs text-muted-foreground">Appears in staff picks and discovery ranking</p>
                                 </div>
                                 <Switch checked={form.featured} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, featured: !!checked }))} />
+                            </div>
+
+                            <Separator />
+
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between rounded-lg border p-3">
+                                    <div>
+                                        <p className="text-sm font-medium">Metadata polling</p>
+                                        <p className="text-xs text-muted-foreground">Disable for streams that do not expose now-playing metadata</p>
+                                    </div>
+                                    <Switch
+                                        checked={form.metadata_enabled}
+                                        onCheckedChange={(checked) => setForm((prev) => ({ ...prev, metadata_enabled: !!checked }))}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label>Metadata type</Label>
+                                    <Select
+                                        value={form.metadata_type}
+                                        onValueChange={(v) => v && setForm((prev) => ({ ...prev, metadata_type: v as StationForm['metadata_type'] }))}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="auto">Auto-detect</SelectItem>
+                                            <SelectItem value="icy">ICY (in-stream)</SelectItem>
+                                            <SelectItem value="icecast">Icecast status-json</SelectItem>
+                                            <SelectItem value="shoutcast">Shoutcast endpoints</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">When set to a provider, only that strategy is used.</p>
+                                </div>
+
+                                <div className="rounded-lg border p-3">
+                                    <p className="text-xs text-muted-foreground">Latest metadata error</p>
+                                    {station.metadata_error_code && (
+                                        <Badge variant="outline" className="mt-2 text-[10px] uppercase tracking-wide">
+                                            {station.metadata_error_code}
+                                        </Badge>
+                                    )}
+                                    <p className="mt-1 text-sm">
+                                        {station.metadata_error ? station.metadata_error : 'No metadata errors recorded'}
+                                    </p>
+                                    {station.metadata_last_fetched_at && (
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Last checked: {new Date(station.metadata_last_fetched_at).toLocaleString()}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

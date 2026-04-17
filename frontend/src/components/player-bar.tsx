@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
+import { useNowPlaying } from '@/hooks/useNowPlaying'
 import {
   PlayIcon,
   PauseIcon,
@@ -34,11 +35,13 @@ function WaveformBars() {
 export function PlayerBar() {
   const { station, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
 
-  if (!station && state === 'idle') return null
-
   const isPlaying = state === 'playing'
   const isLoading = state === 'loading'
   const isError = state === 'error'
+
+  const nowPlaying = useNowPlaying(station?.id, isPlaying || isLoading)
+
+  if (!station && state === 'idle') return null
   const hasPrev = queueIndex > 0
   const hasNext = queueIndex < queue.length - 1
 
@@ -73,9 +76,13 @@ export function PlayerBar() {
             <p className="mt-0.5 truncate text-xs text-zinc-500 sm:mt-1 sm:text-sm">
               {isError
                 ? 'Stream unavailable'
-                : isLoading
+                : isLoading && !nowPlaying
                   ? 'Connecting…'
-                  : [station?.genre, [station?.city, station?.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
+                  : nowPlaying?.title
+                    ? nowPlaying.artist
+                      ? `${nowPlaying.artist} · ${nowPlaying.song}`
+                      : nowPlaying.title
+                    : [station?.genre, [station?.city, station?.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
             </p>
           </div>
         </div>
