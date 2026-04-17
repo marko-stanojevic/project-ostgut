@@ -95,12 +95,6 @@ function CuratedDetailsContent() {
             { label: 'Genre', value: station.genre || '—' },
             { label: 'Codec', value: station.codec || '—' },
             { label: 'Bitrate', value: station.bitrate ? `${station.bitrate} kbps` : '—' },
-            {
-                label: 'Reliability',
-                value: typeof station.reliability_score === 'number'
-                    ? `${Math.round(station.reliability_score * 100)}%`
-                    : '—',
-            },
         ]
     }, [station])
 
@@ -187,12 +181,33 @@ function CuratedDetailsContent() {
                                 </a>
                             )}
                         </div>
+
+                        <div className="hidden lg:grid grid-cols-2 gap-1.5">
+                            {stats.map((item) => (
+                                <div key={item.label} className="rounded-xl border border-border/50 bg-card/50 px-3 py-2.5">
+                                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">{item.label}</p>
+                                    <p className="mt-0.5 truncate text-xs font-medium">{item.value}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {station.tags?.length ? (
+                            <div className="mt-4 hidden lg:block">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {station.tags.slice(0, 24).map((tag) => (
+                                        <span key={tag} className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-0.5 text-xs text-muted-foreground">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
 
                     <div>
                         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{station.name}</h1>
                         <p className="mt-1.5 text-sm text-muted-foreground">
-                            {[station.genre, station.country].filter(Boolean).join(' · ') || 'Unknown station'}
+                            {[station.city, station.country].filter(Boolean).join(' · ') || 'Unknown station'}
                         </p>
 
                         <div className="mt-5 hidden items-center gap-2.5 lg:flex">
@@ -223,7 +238,7 @@ function CuratedDetailsContent() {
                             )}
                         </div>
 
-                        <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:hidden">
                             {stats.map((item) => (
                                 <div key={item.label} className="rounded-xl border border-border/50 bg-card/50 px-3.5 py-3">
                                     <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">{item.label}</p>
@@ -233,8 +248,7 @@ function CuratedDetailsContent() {
                         </div>
 
                         {station.tags?.length ? (
-                            <div className="mt-6">
-                                <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">Tags</p>
+                            <div className="mt-6 lg:hidden">
                                 <div className="flex flex-wrap gap-1.5">
                                     {station.tags.slice(0, 24).map((tag) => (
                                         <span key={tag} className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-0.5 text-xs text-muted-foreground">
@@ -245,17 +259,17 @@ function CuratedDetailsContent() {
                             </div>
                         ) : null}
 
-                        {(station.overview || station.description) && (
-                            <div className="mt-6 rounded-xl border border-border/50 bg-card/40 p-4">
-                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">About</p>
-                                <p className="text-sm leading-relaxed text-foreground/80">{station.overview || station.description}</p>
+                        {station.editor_notes && (
+                            <div className="mt-6 rounded-xl border border-brand/20 bg-brand/5 p-5">
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">Editor&apos;s Note</p>
+                                <p className="text-[15px] leading-relaxed text-foreground/90 font-medium">{station.editor_notes}</p>
                             </div>
                         )}
 
-                        {station.editor_notes && (
-                            <div className="mt-3 rounded-xl border border-brand/15 bg-brand/4 p-4">
-                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">Editor&apos;s Note</p>
-                                <p className="text-sm leading-relaxed text-foreground/80">{station.editor_notes}</p>
+                        {(station.overview || station.description) && (
+                            <div className="mt-3 rounded-xl border border-border/50 bg-card/40 p-4">
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">About</p>
+                                <p className="text-sm leading-relaxed text-foreground/80">{station.overview || station.description}</p>
                             </div>
                         )}
                     </div>
