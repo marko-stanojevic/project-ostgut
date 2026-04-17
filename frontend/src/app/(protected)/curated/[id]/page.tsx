@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeftIcon, GlobeIcon, PauseIcon, PlayIcon, RadioIcon } from '@phosphor-icons/react'
+import { ArrowLeftIcon, GlobeIcon, HeartIcon, LinkSimpleIcon, PauseIcon, PlayIcon, RadioIcon, ShareNetworkIcon } from '@phosphor-icons/react'
 import { usePlayer, type Station } from '@/context/PlayerContext'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -56,6 +56,28 @@ function CuratedDetailsContent() {
     const [station, setStation] = useState<ApiStationDetail | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [isFavourited, setIsFavourited] = useState(false)
+    const [copied, setCopied] = useState<'page' | 'stream' | null>(null)
+
+    const handleShare = () => {
+        const url = window.location.href
+        if (navigator.share) {
+            navigator.share({ title: station?.name, url }).catch(() => {})
+        } else {
+            navigator.clipboard.writeText(url).then(() => {
+                setCopied('page')
+                setTimeout(() => setCopied(null), 2000)
+            })
+        }
+    }
+
+    const handleCopyStream = () => {
+        if (!station) return
+        navigator.clipboard.writeText(station.stream_url).then(() => {
+            setCopied('stream')
+            setTimeout(() => setCopied(null), 2000)
+        })
+    }
 
     const handleBack = () => {
         const from = searchParams.get('from')
@@ -95,12 +117,6 @@ function CuratedDetailsContent() {
             { label: 'Genre', value: station.genre || '—' },
             { label: 'Codec', value: station.codec || '—' },
             { label: 'Bitrate', value: station.bitrate ? `${station.bitrate} kbps` : '—' },
-            {
-                label: 'Reliability',
-                value: typeof station.reliability_score === 'number'
-                    ? `${Math.round(station.reliability_score * 100)}%`
-                    : '—',
-            },
         ]
     }, [station])
 
@@ -170,8 +186,8 @@ function CuratedDetailsContent() {
                                     }`}
                             >
                                 {isPlaying
-                                    ? <PauseIcon weight="fill" className="h-4 w-4" />
-                                    : <PlayIcon weight="fill" className="h-4 w-4" />
+                                    ? <PauseIcon weight="fill" className="h-5 w-5" />
+                                    : <PlayIcon weight="fill" className="h-5 w-5" />
                                 }
                                 {isPlaying ? 'Pause' : 'Play'}
                             </button>
@@ -187,13 +203,64 @@ function CuratedDetailsContent() {
                                 </a>
                             )}
                         </div>
+
+                        <div className="hidden lg:grid grid-cols-2 gap-1.5">
+                            {stats.map((item) => (
+                                <div key={item.label} className="rounded-xl border border-border/50 bg-card/50 px-3 py-2.5">
+                                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">{item.label}</p>
+                                    <p className="mt-0.5 truncate text-xs font-medium">{item.value}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {station.tags?.length ? (
+                            <div className="mt-4 hidden lg:block">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {station.tags.slice(0, 24).map((tag) => (
+                                        <span key={tag} className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-0.5 text-xs text-muted-foreground">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
 
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{station.name}</h1>
-                        <p className="mt-1.5 text-sm text-muted-foreground">
-                            {[station.genre, station.country].filter(Boolean).join(' · ') || 'Unknown station'}
-                        </p>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{station.name}</h1>
+                                <p className="mt-1.5 text-sm text-muted-foreground">
+                                    {[station.city, station.country].filter(Boolean).join(' · ') || 'Unknown station'}
+                                </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1 pt-1">
+                                <button
+                                    type="button"
+                                    title={isFavourited ? 'Remove from favourites' : 'Add to favourites'}
+                                    onClick={() => setIsFavourited((v) => !v)}
+                                    className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${isFavourited ? 'border-rose-500/40 bg-rose-500/10 text-rose-500 hover:bg-rose-500/15' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
+                                >
+                                    <HeartIcon weight={isFavourited ? 'fill' : 'regular'} className="h-5 w-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    title={copied === 'page' ? 'Copied!' : 'Share station'}
+                                    onClick={handleShare}
+                                    className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${copied === 'page' ? 'border-brand/40 bg-brand/10 text-brand' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
+                                >
+                                    <ShareNetworkIcon className="h-5 w-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    title={copied === 'stream' ? 'Copied!' : 'Copy stream URL'}
+                                    onClick={handleCopyStream}
+                                    className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${copied === 'stream' ? 'border-brand/40 bg-brand/10 text-brand' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
+                                >
+                                    <LinkSimpleIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </div>
 
                         <div className="mt-5 hidden items-center gap-2.5 lg:flex">
                             <button
@@ -205,8 +272,8 @@ function CuratedDetailsContent() {
                                     }`}
                             >
                                 {isPlaying
-                                    ? <PauseIcon weight="fill" className="h-4 w-4" />
-                                    : <PlayIcon weight="fill" className="h-4 w-4" />
+                                    ? <PauseIcon weight="fill" className="h-5 w-5" />
+                                    : <PlayIcon weight="fill" className="h-5 w-5" />
                                 }
                                 {isPlaying ? 'Pause' : 'Play'}
                             </button>
@@ -223,7 +290,7 @@ function CuratedDetailsContent() {
                             )}
                         </div>
 
-                        <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:hidden">
                             {stats.map((item) => (
                                 <div key={item.label} className="rounded-xl border border-border/50 bg-card/50 px-3.5 py-3">
                                     <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">{item.label}</p>
@@ -233,8 +300,7 @@ function CuratedDetailsContent() {
                         </div>
 
                         {station.tags?.length ? (
-                            <div className="mt-6">
-                                <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">Tags</p>
+                            <div className="mt-6 lg:hidden">
                                 <div className="flex flex-wrap gap-1.5">
                                     {station.tags.slice(0, 24).map((tag) => (
                                         <span key={tag} className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-0.5 text-xs text-muted-foreground">
@@ -245,17 +311,17 @@ function CuratedDetailsContent() {
                             </div>
                         ) : null}
 
-                        {(station.overview || station.description) && (
-                            <div className="mt-6 rounded-xl border border-border/50 bg-card/40 p-4">
-                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">About</p>
-                                <p className="text-sm leading-relaxed text-foreground/80">{station.overview || station.description}</p>
+                        {station.editor_notes && (
+                            <div className="mt-6 rounded-xl border border-brand/20 bg-brand/5 p-5">
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">Editor&apos;s Note</p>
+                                <p className="text-[15px] leading-relaxed text-foreground/90 font-medium">{station.editor_notes}</p>
                             </div>
                         )}
 
-                        {station.editor_notes && (
-                            <div className="mt-3 rounded-xl border border-brand/15 bg-brand/4 p-4">
-                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">Editor&apos;s Note</p>
-                                <p className="text-sm leading-relaxed text-foreground/80">{station.editor_notes}</p>
+                        {(station.overview || station.description) && (
+                            <div className="mt-3 rounded-xl border border-border/50 bg-card/40 p-4">
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">About</p>
+                                <p className="text-sm leading-relaxed text-foreground/80">{station.overview || station.description}</p>
                             </div>
                         )}
                     </div>
