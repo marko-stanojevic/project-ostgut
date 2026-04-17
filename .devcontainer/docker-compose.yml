@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  devcontainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bouji-dev
+    hostname: bouji-dev
+    image: bouji-dev:latest
+    volumes:
+      - ..:/workspace:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/ostgut
+      - JWT_SECRET=dev-secret-key-change-in-production
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+      - LOG_LEVEL=info
+      - ENVIRONMENT=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - NEXTAUTH_SECRET=dev-secret-key-change-in-production
+      - NEXTAUTH_URL=http://localhost:3000
+    ports:
+      - "3000:3000"  # Frontend
+      - "8080:8080"  # Backend API
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bouji-network
+    command: sleep infinity
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: bouji-postgres
+    hostname: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ostgut
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ostgut"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - bouji-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  bouji-network:
+    driver: bridge
