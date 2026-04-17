@@ -1,0 +1,54 @@
+# Normalize text files and force LF in the repository.
+* text=auto eol=lf
+
+# Keep common script/source formats LF across platforms.
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.sql text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.html text eol=lf
+*.svg text eol=lf
+*.env text eol=lf
+
+# Windows scripts should keep CRLF for compatibility.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files must never be line-normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.mp3 binary
+*.aac binary
+*.m4a binary
+*.wav binary
+*.flac binary
+*.ogg binary
+*.mp4 binary
+*.mov binary
+*.avi binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.otf binary
