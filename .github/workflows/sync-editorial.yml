@@ -110,9 +110,6 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Upgrade Azure CLI
-        run: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-
       - name: Resolve source storage account
         id: storage
         run: |
@@ -134,9 +131,9 @@ jobs:
       - name: Open source DB firewall
         run: |
           az postgres flexible-server firewall-rule create \
-            --name "$FW_RULE" \
+            --name "psql-ostgut-${SOURCE_ENV}" \
+            --rule-name "$FW_RULE" \
             --resource-group "rg-ostgut-${SOURCE_ENV}" \
-            --server-name "psql-ostgut-${SOURCE_ENV}" \
             --start-ip-address "${{ steps.runner-ip.outputs.ip }}" \
             --end-ip-address   "${{ steps.runner-ip.outputs.ip }}" \
             --output none
@@ -154,9 +151,9 @@ jobs:
         if: always()
         run: |
           az postgres flexible-server firewall-rule delete \
-            --name "$FW_RULE" \
+            --name "psql-ostgut-${SOURCE_ENV}" \
+            --rule-name "$FW_RULE" \
             --resource-group "rg-ostgut-${SOURCE_ENV}" \
-            --server-name "psql-ostgut-${SOURCE_ENV}" \
             --yes --output none || true
 
       - name: Ensure editorial-syncs container exists
@@ -242,9 +239,6 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Upgrade Azure CLI
-        run: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-
       - name: Resolve source storage account
         id: storage
         run: |
@@ -313,9 +307,9 @@ jobs:
       - name: Open target DB firewall
         run: |
           az postgres flexible-server firewall-rule create \
-            --name "$FW_RULE" \
+            --name "psql-ostgut-${TARGET_ENV}" \
+            --rule-name "$FW_RULE" \
             --resource-group "rg-ostgut-${TARGET_ENV}" \
-            --server-name "psql-ostgut-${TARGET_ENV}" \
             --start-ip-address "${{ steps.runner-ip.outputs.ip }}" \
             --end-ip-address   "${{ steps.runner-ip.outputs.ip }}" \
             --output none
@@ -330,7 +324,7 @@ jobs:
         if: always()
         run: |
           az postgres flexible-server firewall-rule delete \
-            --name "$FW_RULE" \
+            --name "psql-ostgut-${TARGET_ENV}" \
+            --rule-name "$FW_RULE" \
             --resource-group "rg-ostgut-${TARGET_ENV}" \
-            --server-name "psql-ostgut-${TARGET_ENV}" \
             --yes --output none || true
