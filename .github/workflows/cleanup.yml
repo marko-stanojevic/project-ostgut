@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [staging, production]
+        environment: [ staging ] #production will be added later
       fail-fast: false
     environment: ${{ matrix.environment }}
     steps:
@@ -116,10 +116,9 @@ jobs:
             fi
 
             while IFS= read -r DIGEST; do
-              az acr manifest delete \
-                --registry "$ACR_NAME" \
-                --name "$REPO" \
-                --digest "$DIGEST" \
+              az acr repository delete \
+                --name "$ACR_NAME" \
+                --image "${REPO}@${DIGEST}" \
                 --yes && echo "Deleted ${REPO}@${DIGEST}" || \
                 echo "Failed to delete ${REPO}@${DIGEST} (may already be gone)"
             done <<< "$DIGESTS"
@@ -131,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [staging, production]
+        environment: [ staging, production ]
       fail-fast: false
     environment: ${{ matrix.environment }}
     steps:
@@ -190,7 +189,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [staging, production]
+        environment: [ staging, production ]
       fail-fast: false
     environment: ${{ matrix.environment }}
     env:
@@ -292,11 +291,10 @@ jobs:
             -U "${DB_USER}" \
             -d "${DB_NAME}" \
             -t -A \
-            -v cutoff_days="${CUTOFF_DAYS}" \
             -c "
               SELECT COUNT(*)
               FROM media_assets m
-              WHERE m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+              WHERE m.created_at < NOW() - interval '${CUTOFF_DAYS} days'
                 AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
                 AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id);
             ")
@@ -316,14 +314,13 @@ jobs:
             -U "${DB_USER}" \
             -d "${DB_NAME}" \
             -v ON_ERROR_STOP=1 \
-            -v cutoff_days="${CUTOFF_DAYS}" \
             -t -A \
             -F $'\t' \
             -c "
               WITH candidates AS (
                 SELECT m.id, m.storage_key_original, COALESCE(m.variants, '{}'::jsonb) AS variants
                 FROM media_assets m
-                WHERE m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+                WHERE m.created_at < NOW() - interval '${CUTOFF_DAYS} days'
                   AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
                   AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id)
               )
@@ -387,8 +384,7 @@ jobs:
             -U "${DB_USER}" \
             -d "${DB_NAME}" \
             -t -A \
-            -v ON_ERROR_STOP=1 \
-            -v cutoff_days="${CUTOFF_DAYS}" <<SQL
+            -v ON_ERROR_STOP=1 <<SQL
           CREATE TEMP TABLE cleanup_asset_ids (id uuid PRIMARY KEY);
           \copy cleanup_asset_ids FROM '${RUNNER_TEMP}/media-asset-ids.txt';
 
@@ -396,7 +392,7 @@ jobs:
             DELETE FROM media_assets m
             USING cleanup_asset_ids c
             WHERE m.id = c.id
-              AND m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+              AND m.created_at < NOW() - interval '${CUTOFF_DAYS} days'
               AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
               AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id)
             RETURNING m.id
