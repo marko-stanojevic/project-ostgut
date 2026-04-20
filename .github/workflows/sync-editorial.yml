@@ -4,18 +4,24 @@ name: Sync Editorial Stations
 # using Azure Blob Storage as a versioned intermediate artifact.
 #
 # Modes:
-#   sync   — export from source DB → blob, then import blob → target DB (default)
-#   export — export from source DB → blob only (snapshot / backup)
-#   import — download latest blob for source env → import into target DB
+#   sync         — export from source DB → blob, then import blob → target DB (default)
+#   export       — export from source DB → blob only (snapshot / backup)
+#   import       — download latest blob for source env → import into target DB
+#   local-import — import a blob you uploaded locally via sync-editorial.sh --upload
+#
+# Local dev workflow (local-import):
+#   1. Export:  ./scripts/sync-editorial.sh --export "postgres://localhost.../ostgut" ./export.sql
+#   2. Upload:  ./scripts/sync-editorial.sh --upload staging ./export.sql  ← prints blob path
+#   3. Trigger: mode=local-import, storage_env=staging, blob_path=<printed path>, target=staging|production
 #
 # The blob is stored in the source environment's media storage account under the
-# editorial-syncs container, named: YYYY-MM-DDTHHMMSSZ-<source>.sql
+# editorial-syncs container, named: <env>/YYYY-MM-DDTHHMMSSZ.sql
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "sync = export+import | export = snapshot only | import = apply latest snapshot"
+        description: "sync = export+import | export = snapshot only | import = apply latest snapshot | local-import = apply a blob you uploaded locally"
         required: true
         default: "sync"
         type: choice
@@ -23,8 +29,9 @@ on:
           - sync
           - export
           - import
+          - local-import
       source:
-        description: "Source environment (export from / locate blob)"
+        description: "Source environment (export from / locate blob — ignored for local-import)"
         required: true
         default: "staging"
         type: choice
@@ -34,6 +41,19 @@ on:
       target:
         description: "Target environment (import into — ignored for export mode)"
         required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      blob_path:
+        description: "Blob name for local-import (e.g. staging/2026-04-20T120000Z.sql — printed by sync-editorial.sh --upload)"
+        required: false
+        default: ""
+        type: string
+      storage_env:
+        description: "Which environment's storage account holds the blob (local-import only)"
+        required: false
         default: "staging"
         type: choice
         options:
@@ -60,6 +80,7 @@ jobs:
   export:
     name: Export (${{ inputs.source }}) → blob
     if: inputs.mode == 'sync' || inputs.mode == 'export'
+    # local-import skips this job entirely — the blob was already uploaded manually.
     runs-on: ubuntu-latest
     environment: staging
 
@@ -173,7 +194,7 @@ jobs:
     #   import mode: export is skipped, which is fine — we find the latest blob
     if: |
       always() &&
-      (inputs.mode == 'sync' || inputs.mode == 'import') &&
+      (inputs.mode == 'sync' || inputs.mode == 'import' || inputs.mode == 'local-import') &&
       (needs.export.result == 'success' || needs.export.result == 'skipped')
     runs-on: ubuntu-latest
     environment: staging
@@ -190,9 +211,19 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Validate source != target
+        if: inputs.mode != 'local-import'
         run: |
           if [[ "$SOURCE_ENV" == "$TARGET_ENV" ]]; then
             echo "Error: source and target must be different environments."
+            exit 1
+          fi
+
+      - name: Validate blob_path provided
+        if: inputs.mode == 'local-import'
+        run: |
+          if [[ -z "${{ inputs.blob_path }}" ]]; then
+            echo "Error: blob_path is required for local-import mode."
+            echo "Run: ./scripts/sync-editorial.sh --upload <env> <file> to get a blob path."
             exit 1
           fi
 
@@ -211,17 +242,23 @@ jobs:
       - name: Resolve source storage account
         id: storage
         run: |
+          # For local-import, look in the storage_env account; otherwise use source env.
+          if [[ "${{ inputs.mode }}" == "local-import" ]]; then
+            LOOKUP_ENV="${{ inputs.storage_env }}"
+          else
+            LOOKUP_ENV="${SOURCE_ENV}"
+          fi
           NAME=$(az storage account list \
-            --resource-group "rg-ostgut-${SOURCE_ENV}" \
+            --resource-group "rg-ostgut-${LOOKUP_ENV}" \
             --query "[?starts_with(name, 'stostgut')].name | [0]" \
             -o tsv)
           if [[ -z "$NAME" ]]; then
-            echo "Error: no media storage account found in rg-ostgut-${SOURCE_ENV}"
+            echo "Error: no media storage account found in rg-ostgut-${LOOKUP_ENV}"
             exit 1
           fi
           ACCOUNT_KEY=$(az storage account keys list \
             --account-name "$NAME" \
-            --resource-group "rg-ostgut-${SOURCE_ENV}" \
+            --resource-group "rg-ostgut-${LOOKUP_ENV}" \
             --query "[0].value" -o tsv)
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
           echo "key=${ACCOUNT_KEY}" >> "$GITHUB_OUTPUT"
@@ -229,9 +266,12 @@ jobs:
       - name: Resolve blob to download
         id: blob
         run: |
-          # sync mode: use the blob just uploaded by the export job.
-          # import mode: find the latest blob for this source env.
-          if [[ "${{ inputs.mode }}" == "sync" ]]; then
+          # local-import: use the exact blob path provided by the caller.
+          # sync: use the blob just uploaded by the export job.
+          # import: find the latest blob for this source env.
+          if [[ "${{ inputs.mode }}" == "local-import" ]]; then
+            BLOB_NAME="${{ inputs.blob_path }}"
+          elif [[ "${{ inputs.mode }}" == "sync" ]]; then
             BLOB_NAME="${{ needs.export.outputs.blob_name }}"
           else
             BLOB_NAME=$(az storage blob list \

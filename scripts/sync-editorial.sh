@@ -69,14 +69,14 @@ do_export() {
 SELECT format(
   $f$INSERT INTO stations (
   external_id, name, stream_url, homepage, logo,
-  genre, language, country, country_code, tags,
+  genres, language, country, country_code, tags,
   bitrate, codec, reliability_score,
   is_active, status, featured,
-  custom_name, custom_website, custom_description, editor_notes,
+  custom_name, custom_website, overview, editor_notes,
   last_editor_action_at, last_synced_at, updated_at
 ) VALUES (
   %L, %L, %L, %L, %L,
-  %L, %L, %L, %L, %L::text[],
+  %L::text[], %L, %L, %L, %L::text[],
   %L::int, %L, %L::float8,
   true, %L, %L::bool,
   %L, %L, %L, %L,
@@ -88,7 +88,7 @@ ON CONFLICT (external_id) DO UPDATE SET
   logo                  = EXCLUDED.logo,
   custom_name           = EXCLUDED.custom_name,
   custom_website        = EXCLUDED.custom_website,
-  custom_description    = EXCLUDED.custom_description,
+  overview              = EXCLUDED.overview,
   editor_notes          = EXCLUDED.editor_notes,
   last_editor_action_at = EXCLUDED.last_editor_action_at,
   updated_at            = NOW()
@@ -96,10 +96,10 @@ WHERE stations.last_editor_action_at IS NULL
    OR stations.last_editor_action_at < EXCLUDED.last_editor_action_at;
 $f$,
   external_id, name, stream_url, homepage, logo,
-  genre, language, country, country_code, tags,
+  genres, language, country, country_code, tags,
   bitrate, codec, reliability_score,
   status, featured,
-  custom_name, custom_website, custom_description, editor_notes,
+  custom_name, custom_website, overview, editor_notes,
   last_editor_action_at
 )
 FROM stations
@@ -109,7 +109,7 @@ ORDER BY last_editor_action_at;
 SQL
 
   local count
-  count=$(grep -c 'INSERT INTO' "$out_file" 2>/dev/null || echo 0)
+  count=$(grep -c 'INSERT INTO' "$out_file" 2>/dev/null) || count=0
   echo "Exported ${count} station(s) with editorial data."
 
   if [[ "$count" -eq 0 ]]; then
@@ -131,7 +131,7 @@ do_import() {
   fi
 
   local count
-  count=$(grep -c 'INSERT INTO' "$in_file" 2>/dev/null || echo 0)
+  count=$(grep -c 'INSERT INTO' "$in_file" 2>/dev/null) || count=0
   echo "Importing ${count} station(s) from ${in_file}..."
 
   if [[ "$DRY_RUN" == "true" ]]; then
