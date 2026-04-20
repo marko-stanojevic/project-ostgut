@@ -44,6 +44,20 @@ function isHLS(url: string): boolean {
   return path.endsWith('.m3u8')
 }
 
+// PLS and plain M3U are playlist containers, not audio streams. The audio
+// element cannot play them directly. These should be resolved server-side
+// before storage; this guard prevents a silent failure if one slips through.
+function isPlaylist(url: string): boolean {
+  const path = url.split('?')[0].toLowerCase()
+  return path.endsWith('.pls') || (path.endsWith('.m3u') && !path.endsWith('.m3u8'))
+}
+
+// Reconnect delays: 3 s → 6 s → 12 s → … capped at 30 s.
+const RECONNECT_BASE_MS = 3_000
+const RECONNECT_MAX_MS = 30_000
+// How long to wait in a stalled/buffering state before forcing a reconnect.
+const STALL_TIMEOUT_MS = 8_000
+
 const PlayerContext = createContext<PlayerContextValue | null>(null)
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
@@ -58,21 +72,76 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hlsRef = useRef<Hls | null>(null)
 
+  // Reconnect machinery — refs only so timers never trigger re-renders.
+  const stationRef = useRef<Station | null>(initialState?.station ?? null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectCountRef = useRef(0)
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Always points to the latest startStation so stale timer closures still
+  // invoke the current implementation.
+  const startStationRef = useRef<((s: Station) => void) | null>(null)
+
+  // Stable — only touches refs, safe to call from stale closures.
+  const clearReconnect = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
+    if (stallTimerRef.current) {
+      clearTimeout(stallTimerRef.current)
+      stallTimerRef.current = null
+    }
+  }, [])
+
+  // Schedules the next reconnect attempt with exponential backoff.
+  const scheduleReconnect = useCallback(() => {
+    clearReconnect()
+    const delay = Math.min(
+      RECONNECT_BASE_MS * 2 ** reconnectCountRef.current,
+      RECONNECT_MAX_MS,
+    )
+    reconnectTimerRef.current = setTimeout(() => {
+      const s = stationRef.current
+      if (s) startStationRef.current?.(s)
+    }, delay)
+    reconnectCountRef.current++
+  }, [clearReconnect])
+
   // Create the audio element once.
   useEffect(() => {
     const audio = new Audio()
     audio.preload = 'none'
     audio.volume = volume
 
-    audio.addEventListener('playing', () => setState('playing'))
+    audio.addEventListener('playing', () => {
+      // Successful (re)connect — reset backoff counters and timers.
+      clearReconnect()
+      reconnectCountRef.current = 0
+      setState('playing')
+    })
     audio.addEventListener('pause', () => setState('paused'))
-    audio.addEventListener('waiting', () => setState('loading'))
-    audio.addEventListener('error', () => setState('error'))
-    audio.addEventListener('stalled', () => setState('loading'))
+    audio.addEventListener('waiting', () => {
+      setState('loading')
+      // Start stall watchdog only if one isn't already running.
+      if (!stallTimerRef.current) {
+        stallTimerRef.current = setTimeout(scheduleReconnect, STALL_TIMEOUT_MS)
+      }
+    })
+    audio.addEventListener('stalled', () => {
+      setState('loading')
+      if (!stallTimerRef.current) {
+        stallTimerRef.current = setTimeout(scheduleReconnect, STALL_TIMEOUT_MS)
+      }
+    })
+    audio.addEventListener('error', () => {
+      setState('error')
+      scheduleReconnect()
+    })
 
     audioRef.current = audio
 
     return () => {
+      clearReconnect()
       hlsRef.current?.destroy()
       hlsRef.current = null
       audio.pause()
@@ -83,6 +152,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const applyPreferenceUpdate = useCallback(
     (update: { volume: number; station: Station | null; updatedAt: string }) => {
+      stationRef.current = update.station
       setVolumeState(update.volume)
       if (audioRef.current) audioRef.current.volume = update.volume
       setStation(update.station)
@@ -128,8 +198,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current
     if (!audio) return
 
+    // Unresolved playlist URLs cannot be played by the audio element.
+    if (isPlaylist(s.streamUrl)) {
+      setState('error')
+      return
+    }
+
     audio.pause()
     detachHls()
+    clearReconnect()
+    reconnectCountRef.current = 0
+    stationRef.current = s
     setState('loading')
     setStation(s)
     touchPreferences()
@@ -143,8 +222,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           audio.play().catch(() => setState('error'))
         })
+
+        let mediaRecoveryAttempted = false
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (data.fatal) setState('error')
+          if (!data.fatal) return
+          // For MEDIA_ERROR, HLS.js can often recover by reinitialising the
+          // codec. Try once before falling back to the reconnect path.
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !mediaRecoveryAttempted) {
+            mediaRecoveryAttempted = true
+            hls.recoverMediaError()
+            return
+          }
+          setState('error')
+          scheduleReconnect()
         })
       } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
         // Safari supports HLS natively.
@@ -161,11 +251,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Keep the ref pointing at the latest startStation so reconnect timers
+  // (which close over the ref) always call the current implementation.
+  useEffect(() => {
+    startStationRef.current = startStation
+  })
+
   const play = (s: Station) => {
     const audio = audioRef.current
     if (!audio) return
 
-    // Same station — just resume if paused.
+    // Same station — resume if paused, restart if source is gone.
     if (station?.id === s.id && state === 'paused') {
       if (!audio.src && !hlsRef.current) {
         startStation(s)
@@ -203,6 +299,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }
 
   const pause = () => {
+    clearReconnect()
     audioRef.current?.pause()
   }
 
@@ -210,8 +307,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current
     if (!audio) return
 
-    if (!audio.src && !hlsRef.current && station) {
-      startStation(station)
+    // Restart from scratch when in error state or when the source has been
+    // cleared (e.g. after stop() followed by opening the player again).
+    const s = stationRef.current ?? station
+    if (state === 'error' || (!audio.src && !hlsRef.current)) {
+      if (s) startStation(s)
       return
     }
 
@@ -221,6 +321,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const stop = () => {
     const audio = audioRef.current
     if (!audio) return
+    clearReconnect()
+    reconnectCountRef.current = 0
+    stationRef.current = null
     audio.pause()
     detachHls()
     audio.removeAttribute('src')

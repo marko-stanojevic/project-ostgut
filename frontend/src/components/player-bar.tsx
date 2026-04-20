@@ -165,6 +165,14 @@ export function PlayerBar() {
                 const rect = e.currentTarget.getBoundingClientRect()
                 setVolume(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)))
               }}
+              onTouchStart={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                setVolume(Math.min(1, Math.max(0, (e.touches[0].clientX - rect.left) / rect.width)))
+              }}
+              onTouchMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                setVolume(Math.min(1, Math.max(0, (e.touches[0].clientX - rect.left) / rect.width)))
+              }}
             >
               <div className="h-1.5 w-full rounded-full bg-zinc-800">
                 <div

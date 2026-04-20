@@ -86,18 +86,52 @@ type cachedEntry struct {
 type Fetcher struct {
 	// jsonClient is reused for lightweight JSON / text fallback requests.
 	jsonClient *http.Client
-	log        *slog.Logger
-	mu         sync.Mutex
-	cache      map[string]cachedEntry
-	group      singleflight.Group
+	// icyClient is reused for ICY in-stream fetches. It has no hard timeout
+	// (context deadlines control the budget) and forwards ICY headers on
+	// every redirect hop. A shared client allows TCP connection reuse.
+	icyClient *http.Client
+	log       *slog.Logger
+	mu        sync.Mutex
+	cache     map[string]cachedEntry
+	group     singleflight.Group
 }
 
-// NewFetcher creates a ready-to-use Fetcher.
+// NewFetcher creates a ready-to-use Fetcher and starts the cache eviction
+// goroutine. The goroutine exits when the process exits.
 func NewFetcher(log *slog.Logger) *Fetcher {
-	return &Fetcher{
+	f := &Fetcher{
 		jsonClient: &http.Client{Timeout: fallbackTimeout},
-		log:        log,
-		cache:      make(map[string]cachedEntry),
+		icyClient: &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				req.Header.Set("Icy-Metadata", "1")
+				req.Header.Set("User-Agent", userAgent)
+				if len(via) >= 5 {
+					return fmt.Errorf("too many redirects")
+				}
+				return nil
+			},
+		},
+		log:   log,
+		cache: make(map[string]cachedEntry),
+	}
+	go f.runEviction()
+	return f
+}
+
+// runEviction periodically removes expired entries from the cache. It runs
+// for the lifetime of the process.
+func (f *Fetcher) runEviction() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		f.mu.Lock()
+		for k, e := range f.cache {
+			if now.After(e.exp) {
+				delete(f.cache, k)
+			}
+		}
+		f.mu.Unlock()
 	}
 }
 
@@ -352,20 +386,7 @@ func (f *Fetcher) fetchICY(ctx context.Context, streamURL string) (*NowPlaying, 
 	req.Header.Set("Icy-Metadata", "1")
 	req.Header.Set("User-Agent", userAgent)
 
-	// No Timeout on the client — context controls the deadline.
-	// We re-set the Icy-Metadata header on every redirect hop.
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			req.Header.Set("Icy-Metadata", "1")
-			req.Header.Set("User-Agent", userAgent)
-			if len(via) >= 5 {
-				return fmt.Errorf("too many redirects")
-			}
-			return nil
-		},
-	}
-
-	resp, err := client.Do(req)
+	resp, err := f.icyClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
