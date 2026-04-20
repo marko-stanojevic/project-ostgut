@@ -69,14 +69,16 @@ do_export() {
 SELECT format(
   $f$INSERT INTO stations (
   external_id, name, stream_url, homepage, logo,
-  genres, language, country, country_code, tags,
+  genres, language, country, country_code, city, tags,
+  style_tags, format_tags, texture_tags,
   bitrate, codec, reliability_score,
   is_active, status, featured,
   custom_name, custom_website, overview, editor_notes,
   last_editor_action_at, last_synced_at, updated_at
 ) VALUES (
   %L, %L, %L, %L, %L,
-  %L::text[], %L, %L, %L, %L::text[],
+  %L::text[], %L, %L, %L, %L, %L::text[],
+  %L::text[], %L::text[], %L::text[],
   %L::int, %L, %L::float8,
   true, %L, %L::bool,
   %L, %L, %L, %L,
@@ -86,6 +88,11 @@ ON CONFLICT (external_id) DO UPDATE SET
   status                = EXCLUDED.status,
   featured              = EXCLUDED.featured,
   logo                  = EXCLUDED.logo,
+  city                  = EXCLUDED.city,
+  tags                  = EXCLUDED.tags,
+  style_tags            = EXCLUDED.style_tags,
+  format_tags           = EXCLUDED.format_tags,
+  texture_tags          = EXCLUDED.texture_tags,
   custom_name           = EXCLUDED.custom_name,
   custom_website        = EXCLUDED.custom_website,
   overview              = EXCLUDED.overview,
@@ -96,7 +103,8 @@ WHERE stations.last_editor_action_at IS NULL
    OR stations.last_editor_action_at < EXCLUDED.last_editor_action_at;
 $f$,
   external_id, name, stream_url, homepage, logo,
-  genres, language, country, country_code, tags,
+  genres, language, country, country_code, city, tags,
+  style_tags, format_tags, texture_tags,
   bitrate, codec, reliability_score,
   status, featured,
   custom_name, custom_website, overview, editor_notes,
