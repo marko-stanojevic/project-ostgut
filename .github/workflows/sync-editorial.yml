@@ -140,7 +140,8 @@ jobs:
 
       - name: Export editorial SQL
         env:
-          SOURCE_DATABASE_URL: postgres://${{ env.DB_USER }}:${{ secrets.DB_ADMIN_PASSWORD }}@psql-ostgut-${{ inputs.source }}.postgres.database.azure.com:5432/${{ env.DB_NAME }}?sslmode=require
+          PGPASSWORD: ${{ secrets.DB_ADMIN_PASSWORD }}
+          SOURCE_DATABASE_URL: postgres://${{ env.DB_USER }}@psql-ostgut-${{ inputs.source }}.postgres.database.azure.com:5432/${{ env.DB_NAME }}?sslmode=require
         run: |
           # Blob stored under <env>/ prefix so the import job can filter by env.
           BLOB_NAME="${SOURCE_ENV}/$(date -u +%Y-%m-%dT%H%M%SZ).sql"
@@ -316,7 +317,8 @@ jobs:
 
       - name: Apply editorial SQL to target
         env:
-          TARGET_DATABASE_URL: postgres://${{ env.DB_USER }}:${{ secrets.DB_ADMIN_PASSWORD }}@psql-ostgut-${{ inputs.target }}.postgres.database.azure.com:5432/${{ env.DB_NAME }}?sslmode=require
+          PGPASSWORD: ${{ secrets.DB_ADMIN_PASSWORD }}
+          TARGET_DATABASE_URL: postgres://${{ env.DB_USER }}@psql-ostgut-${{ inputs.target }}.postgres.database.azure.com:5432/${{ env.DB_NAME }}?sslmode=require
           DRY_RUN: ${{ inputs.dry_run }}
         run: bash scripts/sync-editorial.sh --import /tmp/editorial-import.sql "$TARGET_DATABASE_URL"
 
