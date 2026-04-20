@@ -3,10 +3,12 @@ import Google from 'next-auth/providers/google'
 import GitHub from 'next-auth/providers/github'
 import Credentials from 'next-auth/providers/credentials'
 import { SignJWT } from 'jose'
+import { authConfig } from './auth.config'
 
 const getSecret = () => new TextEncoder().encode(process.env.AUTH_SECRET!)
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     Google,
     GitHub,
@@ -78,9 +80,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return session
     },
-  },
-  pages: {
-    signIn: '/auth/login',
-    error: '/auth/login',
   },
 })

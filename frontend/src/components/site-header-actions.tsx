@@ -1,5 +1,4 @@
-import Link from 'next/link'
-
+import { Link } from '@/i18n/navigation'
 import { AccountMenu } from '@/components/account-menu'
 
 export function AuthenticatedHeaderActions() {
