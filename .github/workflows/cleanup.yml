@@ -1,32 +1,46 @@
-name: Cleanup old workflow runs
+name: Cleanup
 
 on:
   schedule:
     - cron: "0 3 * * *" # 03:00 UTC daily
-  workflow_dispatch: # allow manual trigger
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run — media cleanup lists candidates without deleting"
+        required: false
+        default: true
+        type: boolean
+      media_cutoff_days:
+        description: "Delete media assets older than this many days"
+        required: false
+        default: "7"
+        type: string
 
 permissions:
+  contents: read
+  id-token: write
   actions: write
 
+env:
+  DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+  CUTOFF_DAYS: ${{ github.event.inputs.media_cutoff_days || '7' }}
+
 jobs:
-  cleanup:
-    name: Delete old runs
+  # ── GitHub Actions workflow runs ──────────────────────────────────────────────
+  cleanup-workflow-runs:
+    name: Delete old workflow runs
     runs-on: ubuntu-latest
-
     env:
-      KEEP: 5 # number of recent runs to keep per workflow
-
+      KEEP: 5
     steps:
       - name: Delete old runs
         run: |
           set -euo pipefail
 
           REPO="${{ github.repository }}"
-          KEEP="${KEEP}"
 
           echo "Repository: ${REPO}, keeping last ${KEEP} runs per workflow"
 
-          # Fetch all workflow IDs
           WORKFLOW_IDS=$(gh api "repos/${REPO}/actions/workflows" \
             --paginate --jq '.workflows[].id')
 
@@ -35,7 +49,6 @@ jobs:
             echo ""
             echo "--- Workflow: ${WF_NAME} (${WF_ID}) ---"
 
-            # Get all run IDs for this workflow, sorted newest-first
             RUN_IDS=$(gh api "repos/${REPO}/actions/workflows/${WF_ID}/runs" \
               --paginate --jq '.workflow_runs[].id')
 
@@ -47,7 +60,6 @@ jobs:
               continue
             fi
 
-            # Skip the first $KEEP runs (most recent), delete the rest
             TO_DELETE=$(echo "$RUN_IDS" | tr ' ' '\n' | tail -n "+$((KEEP + 1))")
             COUNT=$(echo "$TO_DELETE" | wc -w | tr -d ' ')
             echo "Deleting ${COUNT} old runs..."
@@ -58,8 +70,348 @@ jobs:
                 echo "  Failed to delete run ${RUN_ID} (may already be gone)"
             done
           done
-
-          echo ""
-          echo "Cleanup complete."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Azure Container Registry — keep last 5 manifests per repo ────────────────
+  cleanup-acr:
+    name: Prune ACR images (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [staging, production]
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete old manifests (keep last 5)
+        run: |
+          set -euo pipefail
+          ACR_NAME=$(az acr list \
+            --resource-group "rg-ostgut-${{ matrix.environment }}" \
+            --query "[0].name" -o tsv)
+
+          if [ -z "$ACR_NAME" ]; then
+            echo "No ACR found for ${{ matrix.environment }}, skipping."
+            exit 0
+          fi
+
+          for REPO in backend frontend; do
+            echo "--- ${REPO} ---"
+            DIGESTS=$(az acr manifest list-metadata \
+              --registry "$ACR_NAME" \
+              --name "$REPO" \
+              --orderby time_desc \
+              --query "[5:].digest" -o tsv 2>/dev/null || true)
+
+            if [ -z "$DIGESTS" ]; then
+              echo "Nothing to delete."
+              continue
+            fi
+
+            while IFS= read -r DIGEST; do
+              az acr manifest delete \
+                --registry "$ACR_NAME" \
+                --name "$REPO" \
+                --digest "$DIGEST" \
+                --yes && echo "Deleted ${REPO}@${DIGEST}" || \
+                echo "Failed to delete ${REPO}@${DIGEST} (may already be gone)"
+            done <<< "$DIGESTS"
+          done
+
+  # ── Editorial sync blobs — keep last 5 per environment ───────────────────────
+  cleanup-editorial-blobs:
+    name: Prune editorial blobs (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [staging, production]
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete old blobs (keep last 5)
+        run: |
+          set -euo pipefail
+          ENV="${{ matrix.environment }}"
+
+          STORAGE_ACCOUNT=$(az storage account list \
+            --resource-group "rg-ostgut-${ENV}" \
+            --query "[?starts_with(name, 'stostgut')].name | [0]" \
+            -o tsv)
+
+          if [ -z "$STORAGE_ACCOUNT" ]; then
+            echo "No storage account found for ${ENV}, skipping."
+            exit 0
+          fi
+
+          ACCOUNT_KEY=$(az storage account keys list \
+            --account-name "$STORAGE_ACCOUNT" \
+            --resource-group "rg-ostgut-${ENV}" \
+            --query "[0].value" -o tsv)
+
+          TO_DELETE=$(az storage blob list \
+            --account-name "$STORAGE_ACCOUNT" \
+            --account-key "$ACCOUNT_KEY" \
+            --container-name "editorial-syncs" \
+            --prefix "${ENV}/" \
+            --query "sort_by([], &properties.lastModified)[:-5].name" \
+            -o tsv 2>/dev/null || true)
+
+          if [ -z "$TO_DELETE" ]; then
+            echo "Nothing to delete."
+            exit 0
+          fi
+
+          while IFS= read -r BLOB; do
+            az storage blob delete \
+              --account-name "$STORAGE_ACCOUNT" \
+              --account-key "$ACCOUNT_KEY" \
+              --container-name "editorial-syncs" \
+              --name "$BLOB" && echo "Deleted: $BLOB" || \
+              echo "Failed to delete: $BLOB"
+          done <<< "$TO_DELETE"
+
+  # ── Unreferenced media assets ─────────────────────────────────────────────────
+  cleanup-media:
+    name: Cleanup media (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [staging, production]
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+    env:
+      ENVIRONMENT: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client
+
+      - name: Resolve runtime config
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RG="rg-ostgut-${ENVIRONMENT}"
+          APP="ca-ostgut-${ENVIRONMENT}-backend"
+
+          DB_URL=$(az containerapp secret show \
+            --name "${APP}" \
+            --resource-group "${RG}" \
+            --secret-name database-url \
+            --query value -o tsv)
+
+          if [[ -z "${DB_URL}" ]]; then
+            echo "database-url secret is empty or missing"
+            exit 1
+          fi
+
+          MEDIA_STORAGE_ACCOUNT=$(az containerapp show \
+            --name "${APP}" \
+            --resource-group "${RG}" \
+            --query "properties.template.containers[0].env[?name=='MEDIA_STORAGE_ACCOUNT_NAME'].value | [0]" \
+            -o tsv)
+
+          MEDIA_STORAGE_CONTAINER=$(az containerapp show \
+            --name "${APP}" \
+            --resource-group "${RG}" \
+            --query "properties.template.containers[0].env[?name=='MEDIA_STORAGE_CONTAINER_NAME'].value | [0]" \
+            -o tsv)
+
+          if [[ -z "${MEDIA_STORAGE_ACCOUNT}" || -z "${MEDIA_STORAGE_CONTAINER}" ]]; then
+            echo "media storage env vars are missing on backend app"
+            exit 1
+          fi
+
+          STORAGE_KEY=$(az storage account keys list \
+            --account-name "${MEDIA_STORAGE_ACCOUNT}" \
+            --resource-group "${RG}" \
+            --query "[0].value" -o tsv)
+
+          if [[ -z "${STORAGE_KEY}" ]]; then
+            echo "failed to resolve storage account key"
+            exit 1
+          fi
+
+          echo "::add-mask::${DB_URL}"
+          echo "::add-mask::${STORAGE_KEY}"
+
+          DB_URL="${DB_URL}" python3 - <<'PY' >> "$GITHUB_ENV"
+          import os
+          from urllib.parse import urlparse, unquote
+
+          db_url = os.environ["DB_URL"]
+          u = urlparse(db_url)
+          if not u.hostname or not u.username:
+            raise SystemExit("invalid DATABASE_URL")
+
+          db_name = (u.path or "").lstrip("/") or "ostgut"
+          print(f"DB_HOST={u.hostname}")
+          print(f"DB_USER={u.username}")
+          print(f"DB_PASSWORD={unquote(u.password or '')}")
+          print(f"DB_NAME={db_name}")
+          PY
+
+          echo "MEDIA_STORAGE_ACCOUNT=${MEDIA_STORAGE_ACCOUNT}" >> "$GITHUB_ENV"
+          echo "MEDIA_STORAGE_CONTAINER=${MEDIA_STORAGE_CONTAINER}" >> "$GITHUB_ENV"
+          echo "STORAGE_KEY=${STORAGE_KEY}" >> "$GITHUB_ENV"
+
+      - name: Find candidate media keys
+        id: candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export PGPASSWORD="${DB_PASSWORD}"
+
+          CANDIDATE_COUNT=$(psql \
+            -h "${DB_HOST}" \
+            -U "${DB_USER}" \
+            -d "${DB_NAME}" \
+            -t -A \
+            -v cutoff_days="${CUTOFF_DAYS}" \
+            -c "
+              SELECT COUNT(*)
+              FROM media_assets m
+              WHERE m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+                AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
+                AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id);
+            ")
+
+          CANDIDATE_COUNT=$(echo "${CANDIDATE_COUNT}" | xargs)
+          echo "candidate_count=${CANDIDATE_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "Candidate assets: ${CANDIDATE_COUNT}"
+
+          if [[ "${CANDIDATE_COUNT}" == "0" ]]; then
+            : > "$RUNNER_TEMP/media-asset-keys.tsv"
+            : > "$RUNNER_TEMP/media-asset-ids.txt"
+            exit 0
+          fi
+
+          psql \
+            -h "${DB_HOST}" \
+            -U "${DB_USER}" \
+            -d "${DB_NAME}" \
+            -v ON_ERROR_STOP=1 \
+            -v cutoff_days="${CUTOFF_DAYS}" \
+            -t -A \
+            -F $'\t' \
+            -c "
+              WITH candidates AS (
+                SELECT m.id, m.storage_key_original, COALESCE(m.variants, '{}'::jsonb) AS variants
+                FROM media_assets m
+                WHERE m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+                  AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
+                  AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id)
+              )
+              SELECT id::text, storage_key_original AS object_key
+              FROM candidates
+              WHERE storage_key_original <> ''
+              UNION
+              SELECT c.id::text, v.value AS object_key
+              FROM candidates c
+              CROSS JOIN LATERAL jsonb_each_text(c.variants) v
+              WHERE v.value <> ''
+              ORDER BY 1, 2;
+            " > "$RUNNER_TEMP/media-asset-keys.tsv"
+
+          cut -f1 "$RUNNER_TEMP/media-asset-keys.tsv" | sort -u > "$RUNNER_TEMP/media-asset-ids.txt"
+
+          echo "Unique assets to process: $(wc -l < "$RUNNER_TEMP/media-asset-ids.txt" | xargs)"
+          echo "Blob objects to process: $(wc -l < "$RUNNER_TEMP/media-asset-keys.tsv" | xargs)"
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "Dry-run enabled. Showing up to 25 candidate objects:"
+            head -n 25 "$RUNNER_TEMP/media-asset-keys.tsv" || true
+          fi
+
+      - name: Delete blob objects
+        if: steps.candidates.outputs.candidate_count != '0' && env.DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FAILED=0
+          while IFS=$'\t' read -r ASSET_ID OBJECT_KEY; do
+            [[ -z "${OBJECT_KEY}" ]] && continue
+
+            if ! az storage blob delete \
+              --account-name "${MEDIA_STORAGE_ACCOUNT}" \
+              --account-key "${STORAGE_KEY}" \
+              --container-name "${MEDIA_STORAGE_CONTAINER}" \
+              --name "${OBJECT_KEY}" \
+              --only-show-errors >/dev/null; then
+              echo "failed to delete blob key=${OBJECT_KEY} (asset=${ASSET_ID})"
+              FAILED=$((FAILED + 1))
+            fi
+          done < "$RUNNER_TEMP/media-asset-keys.tsv"
+
+          if [[ "${FAILED}" -gt 0 ]]; then
+            echo "blob deletion failed for ${FAILED} object(s); aborting DB cleanup to keep rows intact"
+            exit 1
+          fi
+
+      - name: Delete media rows from DB
+        if: steps.candidates.outputs.candidate_count != '0' && env.DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export PGPASSWORD="${DB_PASSWORD}"
+
+          DELETED=$(psql \
+            -h "${DB_HOST}" \
+            -U "${DB_USER}" \
+            -d "${DB_NAME}" \
+            -t -A \
+            -v ON_ERROR_STOP=1 \
+            -v cutoff_days="${CUTOFF_DAYS}" <<SQL
+          CREATE TEMP TABLE cleanup_asset_ids (id uuid PRIMARY KEY);
+          \copy cleanup_asset_ids FROM '${RUNNER_TEMP}/media-asset-ids.txt';
+
+          WITH deleted AS (
+            DELETE FROM media_assets m
+            USING cleanup_asset_ids c
+            WHERE m.id = c.id
+              AND m.created_at < NOW() - (:'cutoff_days' || ' days')::interval
+              AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = m.id)
+              AND NOT EXISTS (SELECT 1 FROM stations s WHERE s.icon_asset_id = m.id)
+            RETURNING m.id
+          )
+          SELECT COUNT(*) FROM deleted;
+          SQL
+          )
+
+          DELETED=$(echo "${DELETED}" | xargs)
+          echo "Deleted media_assets rows: ${DELETED}"
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "Environment: ${ENVIRONMENT}"
+          echo "Cutoff days: ${CUTOFF_DAYS}"
+          echo "Dry run: ${DRY_RUN}"
+          echo "Candidate assets: ${{ steps.candidates.outputs.candidate_count }}"
