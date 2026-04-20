@@ -85,7 +85,11 @@
       "command": "go",
       "args": ["build", "-o", "./bin/api", "./cmd/api"],
       "options": {
-        "cwd": "${workspaceFolder}/backend"
+        "cwd": "${workspaceFolder}/backend",
+        "env": {
+          "GOARCH": "arm64",
+          "GOOS": "linux"
+        }
       },
       "problemMatcher": ["$go"],
       "group": {
@@ -103,7 +107,7 @@
       "label": "Backend: Test",
       "type": "shell",
       "command": "sh",
-      "args": ["-c", "set -a && source .env 2>/dev/null || true && set +a && go test -v -race ./..."],
+      "args": ["-c", "set -a && source .env.devcontainer 2>/dev/null || true && set +a && go test -v -race ./..."],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -120,9 +124,36 @@
       }
     },
     {
-      "label": "Backend: Run",
+      "label": "Backend: Run (Devcontainer)",
       "type": "shell",
-      "command": "sh",
+      "command": "bash",
+      "args": ["-c", "set -a && source .env.devcontainer && set +a && go run ./cmd/api"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*server starting.*",
+          "endsPattern": "^.*(error|exited).*"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Backend: Run (Local)",
+      "type": "shell",
+      "command": "bash",
       "args": ["-c", "set -a && source .env && set +a && go run ./cmd/api"],
       "options": {
         "cwd": "${workspaceFolder}/backend"
@@ -276,8 +307,20 @@
     },
     {
       "label": "All: Dev (Frontend + Backend)",
-      "dependsOn": ["DB: Start", "Frontend: Dev Server", "Backend: Run"],
+      "dependsOn": ["DB: Start", "Frontend: Dev Server", "Backend: Run (Local)"],
       "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "All: Dev (Devcontainer)",
+      "dependsOn": ["Frontend: Dev Server", "Backend: Run (Devcontainer)"],
+      "dependsOrder": "parallel",
       "problemMatcher": [],
       "presentation": {
         "echo": true,
@@ -290,7 +333,7 @@
       "label": "Backend: Debug",
       "type": "shell",
       "command": "sh",
-      "args": ["-c", "set -a && source .env && set +a && LOG_LEVEL=debug go run ./cmd/api"],
+      "args": ["-c", "set -a && source .env.devcontainer && set +a && LOG_LEVEL=debug go run ./cmd/api"],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -317,6 +360,18 @@
       "label": "All: Dev (Debug)",
       "dependsOn": ["DB: Start", "Frontend: Dev Server", "Backend: Debug"],
       "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "All: Dev (Debug, Devcontainer)",
+      "dependsOn": ["Frontend: Dev Server", "Backend: Debug"],
+      "dependsOrder": "parallel",
       "problemMatcher": [],
       "presentation": {
         "echo": true,

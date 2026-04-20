@@ -25,7 +25,8 @@ code project-ostgut
 ```
 
 **✅ What's automated:**
-- Go 1.25.9, Node.js 20, PostgreSQL 15
+
+- Go 1.25.9, Node.js 20, PostgreSQL 16
 - All npm and Go dependencies
 - Database migrations
 - Environment variables
@@ -230,13 +231,24 @@ brew install curl wget
 
 ### 8. Configure Environment Variables
 
-Create a `.env` file in the `backend/` directory with your local development configuration:
+Create the shared Docker/PostgreSQL env file used by both local and devcontainer workflows:
+
+```bash
+cp .devcontainer/.env.example .devcontainer/.env
+```
+
+Edit `.devcontainer/.env` and set at least:
+
+- `POSTGRES_PASSWORD`
+- `PGPASSWORD`
+
+Then create a `.env` file in the `backend/` directory with your local backend configuration:
 
 ```bash
 cd backend
 cat > .env << 'EOF'
 # Database
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/ostgut
+DATABASE_URL=postgres://postgres:<your-postgres-password>@localhost:5432/ostgut?sslmode=disable
 
 # Authentication
 JWT_SECRET=dev-secret-key-change-in-production
@@ -248,7 +260,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
 LOG_LEVEL=info
 
 # Environment
-ENVIRONMENT=development
+ENV=local
 EOF
 ```
 
@@ -277,7 +289,7 @@ docker compose up --wait postgres
 docker compose exec postgres psql -U postgres -d ostgut -c "SELECT 1"
 
 # Option B: Via local psql (if installed)
-psql -h localhost -U postgres -d ostgut -c "SELECT 1"
+PGPASSWORD=<your-postgres-password> psql -h localhost -U postgres -d ostgut -c "SELECT 1"
 ```
 
 ### 10. Run Database Migrations
@@ -391,7 +403,7 @@ Once all services are running:
 - **Frontend**: <http://localhost:3000>
 - **Backend API**: <http://localhost:8080>
 - **API Health**: <http://localhost:8080/health>
-- **Database**: localhost:5432 (postgres / postgres)
+- **Database**: localhost:5432 (postgres / your configured password)
 
 ---
 
@@ -450,7 +462,7 @@ These tools help AI agents (like GitHub Copilot) understand the codebase structu
   ```bash
   # Get repository structure
   find . -name "*.go" -o -name "*.tsx" | head -30
-  
+
   # List key files
   ls -la backend/internal/handler/
   ls -la frontend/src/context/
@@ -464,10 +476,10 @@ These tools help AI agents (like GitHub Copilot) understand the codebase structu
   ```bash
   # Find all store interfaces
   grep -r "interface.*Store" backend/internal/store/
-  
+
   # Find all API handlers
   grep -r "func (h \*Handler)" backend/internal/handler/
-  
+
   # Find context usage
   grep -r "useContext\|useAuth\|usePlayer" frontend/src/
   ```
@@ -493,10 +505,10 @@ These tools help AI agents (like GitHub Copilot) understand the codebase structu
   ```bash
   # Go module structure
   cat backend/go.mod | grep "require"
-  
+
   # Frontend dependencies
   cat frontend/package.json | jq '.dependencies'
-  
+
   # Find imports in a file
   grep "^import" backend/internal/handler/handler.go
   ```
@@ -520,7 +532,7 @@ These tools help AI agents (like GitHub Copilot) understand the codebase structu
   ```bash
   # Find error handling patterns
   grep -r "ErrNotFound\|errors.Is\|errors.New" backend/internal/
-  
+
   # Find middleware patterns
   grep -r "middleware\." backend/internal/handler/
   ```
@@ -533,7 +545,7 @@ These tools help AI agents (like GitHub Copilot) understand the codebase structu
   ```bash
   # List all migrations in order
   ls -1 backend/migrations/*.up.sql | sort
-  
+
   # Check specific table schema
   cat backend/migrations/001_init.up.sql | grep -A 20 "CREATE TABLE users"
   ```
@@ -546,7 +558,7 @@ These tools help AI agents (like GitHub Copilot) understand the codebase structu
   ```bash
   # Find all test files
   find . -name "*_test.go" -o -name "*.test.ts"
-  
+
   # Run specific tests
   cd backend && go test -run TestHandlerName -v
   cd frontend && npm test -- test-name.test.ts
@@ -597,7 +609,7 @@ Use context key 'user_id' from middleware.GetUserID()."
 #### Avoid (Inefficient)
 
 ```
-"Add a billing handler... it should probably look at other handlers... 
+"Add a billing handler... it should probably look at other handlers...
 use similar patterns... I think the store is in the user file or billing file..."
 ```
 
@@ -611,13 +623,13 @@ use similar patterns... I think the store is in the user file or billing file...
 
 ### Common Agent Tasks & Recommended Approach
 
-| Task | First Read | Then Check | Commands |
-|------|-----------|-----------|----------|
-| Add API endpoint | handler.go, copilot-instructions | Similar handler | `grep -r "func (h \*Handler)" backend/` |
-| Add database column | Latest migration | Schema in psql | `docker compose exec postgres psql -U postgres -d ostgut -c "\d table_name"` |
-| Add React component | AuthContext, existing UI files | Similar components | `find frontend/src/components -name "*.tsx"` |
-| Add API client method | AuthContext.tsx, existing hooks | Similar hooks | `grep -r "fetch.*API_URL" frontend/src/` |
-| Modify error handling | store/user_store.go | Similar methods | `grep -r "errors.Is.*ErrNotFound" backend/` |
+| Task                  | First Read                       | Then Check         | Commands                                                                     |
+| --------------------- | -------------------------------- | ------------------ | ---------------------------------------------------------------------------- |
+| Add API endpoint      | handler.go, copilot-instructions | Similar handler    | `grep -r "func (h \*Handler)" backend/`                                      |
+| Add database column   | Latest migration                 | Schema in psql     | `docker compose exec postgres psql -U postgres -d ostgut -c "\d table_name"` |
+| Add React component   | AuthContext, existing UI files   | Similar components | `find frontend/src/components -name "*.tsx"`                                 |
+| Add API client method | AuthContext.tsx, existing hooks  | Similar hooks      | `grep -r "fetch.*API_URL" frontend/src/`                                     |
+| Modify error handling | store/user_store.go              | Similar methods    | `grep -r "errors.Is.*ErrNotFound" backend/`                                  |
 
 ---
 
@@ -784,7 +796,7 @@ docker compose ps                          # Database
 
 - [Go Documentation](https://golang.org/doc)
 - [Next.js 14 Documentation](https://nextjs.org/docs)
-- [PostgreSQL 15 Documentation](https://www.postgresql.org/docs/15/)
+- [PostgreSQL 16 Documentation](https://www.postgresql.org/docs/16/)
 - [Docker Documentation](https://docs.docker.com/)
 - [Tailwind CSS v4 Documentation](https://tailwindcss.com/docs)
 - [Project Architecture Guide](./CLAUDE.md)

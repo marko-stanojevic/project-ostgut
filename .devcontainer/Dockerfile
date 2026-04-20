@@ -27,8 +27,13 @@ RUN apt-get update && apt-get install -y \
     less \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Go 1.25.9
-RUN curl -fsSL https://go.dev/dl/go1.25.9.linux-amd64.tar.gz | tar -C /usr/local -xz
+# Install Go 1.25.9 (ARM64)
+RUN arch=$(dpkg --print-architecture) && \
+    if [ "$arch" = "arm64" ]; then \
+    curl -fsSL https://go.dev/dl/go1.25.9.linux-arm64.tar.gz | tar -C /usr/local -xz; \
+    else \
+    curl -fsSL https://go.dev/dl/go1.25.9.linux-amd64.tar.gz | tar -C /usr/local -xz; \
+    fi
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install Node.js via nvm
@@ -69,6 +74,15 @@ RUN mkdir -p /home/vscode/.nvm && \
     cp -r /root/.nvm/. /home/vscode/.nvm/ && \
     chown -R vscode:vscode /home/vscode/.nvm
 
+# Point global node/npm/npx shims to the vscode-owned NVM directory
+# so the vscode user can execute them during postCreate/postStart.
+RUN export NVM_DIR="/home/vscode/.nvm" && \
+    . "$NVM_DIR/nvm.sh" && \
+    node_version="$(nvm version default)" && \
+    ln -sf "$NVM_DIR/versions/node/$node_version/bin/node" /usr/local/bin/node && \
+    ln -sf "$NVM_DIR/versions/node/$node_version/bin/npm" /usr/local/bin/npm && \
+    ln -sf "$NVM_DIR/versions/node/$node_version/bin/npx" /usr/local/bin/npx
+
 # Install git configuration defaults
 RUN git config --global core.autocrlf input && \
     git config --global core.safecrlf warn
@@ -83,6 +97,9 @@ RUN echo 'export NVM_DIR="$HOME/.nvm"' >> /home/vscode/.bashrc && \
     echo '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"' >> /home/vscode/.bashrc && \
     echo 'export PATH="/usr/local/go/bin:$PATH"' >> /home/vscode/.bashrc
 
+# Install gopls for Go language features
+RUN /usr/local/go/bin/go install -v golang.org/x/tools/gopls@latest
+
 # Verify installations
 RUN go version && \
     . "$NVM_DIR/nvm.sh" && \
@@ -90,6 +107,7 @@ RUN go version && \
     npm --version && \
     git --version && \
     migrate --version && \
-    psql --version
+    psql --version && \
+    /home/vscode/go/bin/gopls version || true
 
 CMD ["/bin/bash"]

@@ -175,6 +175,12 @@ func (f *Fetcher) resolve(ctx context.Context, streamURL string, enabled bool, m
 		}
 	}
 
+	// PLS/M3U playlists are redirect indirection — resolve to the real stream URL
+	// before attempting any ICY/Icecast/Shoutcast strategy.
+	if resolved, ok := f.resolvePlaylist(ctx, streamURL); ok {
+		streamURL = resolved
+	}
+
 	if metadataType != TypeAuto {
 		return f.resolveConfigured(ctx, streamURL, metadataType)
 	}
@@ -183,33 +189,42 @@ func (f *Fetcher) resolve(ctx context.Context, streamURL string, enabled bool, m
 }
 
 func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string) *NowPlaying {
-	// Strategy 1: ICY in-stream via http.Client.
-	icyCtx, icyCancel := context.WithTimeout(ctx, icyTimeout)
-	np, err := f.fetchICY(icyCtx, streamURL)
-	icyCancel()
-	if err == nil && np.Title != "" {
-		np.Supported = true
-		np.Status = "ok"
-		return np
-	}
-	lastErr := err
-	f.log.Debug("metadata: icy http failed", "url", streamURL, "error", err)
+	var lastErr error
 
-	// Legacy Shoutcast 1 servers reply with "ICY 200 OK" instead of a valid
-	// HTTP status line, which Go's net/http rejects. Retry via raw TCP.
-	if isICYProtocolError(err) {
-		rawCtx, rawCancel := context.WithTimeout(ctx, icyTimeout)
-		np2, err2 := f.fetchICYRaw(rawCtx, streamURL)
-		rawCancel()
-		if err2 == nil && np2.Title != "" {
-			np2.Supported = true
-			np2.Status = "ok"
-			return np2
+	var np *NowPlaying
+	var err error
+
+	// HLS streams can't carry ICY in-stream metadata — skip straight to the
+	// server-side JSON/text endpoints which may still be available.
+	if !isHLSURL(streamURL) {
+		// Strategy 1: ICY in-stream via http.Client.
+		icyCtx, icyCancel := context.WithTimeout(ctx, icyTimeout)
+		np, err = f.fetchICY(icyCtx, streamURL)
+		icyCancel()
+		if err == nil && np.Title != "" {
+			np.Supported = true
+			np.Status = "ok"
+			return np
 		}
-		if err2 != nil {
-			lastErr = err2
+		lastErr = err
+		f.log.Debug("metadata: icy http failed", "url", streamURL, "error", err)
+
+		// Legacy Shoutcast 1 servers reply with "ICY 200 OK" instead of a valid
+		// HTTP status line, which Go's net/http rejects. Retry via raw TCP.
+		if isICYProtocolError(err) {
+			rawCtx, rawCancel := context.WithTimeout(ctx, icyTimeout)
+			np2, err2 := f.fetchICYRaw(rawCtx, streamURL)
+			rawCancel()
+			if err2 == nil && np2.Title != "" {
+				np2.Supported = true
+				np2.Status = "ok"
+				return np2
+			}
+			if err2 != nil {
+				lastErr = err2
+			}
+			f.log.Debug("metadata: icy raw failed", "url", streamURL, "error", err2)
 		}
-		f.log.Debug("metadata: icy raw failed", "url", streamURL, "error", err2)
 	}
 
 	// Strategy 2: Icecast JSON status endpoint.
@@ -240,14 +255,8 @@ func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string) *NowPlaying
 	}
 	f.log.Debug("metadata: shoutcast failed", "url", streamURL, "error", err)
 
-	f.log.Debug("metadata: no metadata found", "url", streamURL)
-	errMsg := "metadata unavailable"
-	errCode := ErrorCodeNoMeta
-	if lastErr != nil {
-		errMsg = lastErr.Error()
-		errCode = errorCodeFromErr(lastErr)
-	}
-	return &NowPlaying{Source: "", Supported: false, Status: "unsupported", ErrorCode: errCode, Error: errMsg, FetchedAt: time.Now()}
+	f.log.Debug("metadata: no metadata found", "url", streamURL, "last_error", lastErr)
+	return &NowPlaying{Source: "", Supported: false, Status: "unsupported", ErrorCode: ErrorCodeNoMeta, FetchedAt: time.Now()}
 }
 
 func (f *Fetcher) resolveConfigured(ctx context.Context, streamURL, metadataType string) *NowPlaying {
@@ -743,6 +752,95 @@ func stripHTML(s string) string {
 		"&#039;", "'",
 	).Replace(b.String())
 	return strings.TrimSpace(result)
+}
+
+// isHLSURL reports whether a URL points to an HLS stream (.m3u8).
+func isHLSURL(u string) bool {
+	lower := strings.ToLower(u)
+	// Strip query string before checking extension.
+	if idx := strings.IndexByte(lower, '?'); idx != -1 {
+		lower = lower[:idx]
+	}
+	return strings.HasSuffix(lower, ".m3u8")
+}
+
+// resolvePlaylist detects PLS and M3U playlist URLs and returns the first
+// stream URL found inside. Returns ("", false) when the URL is not a playlist
+// or resolution fails — the caller should proceed with the original URL.
+func (f *Fetcher) resolvePlaylist(ctx context.Context, rawURL string) (string, bool) {
+	lower := strings.ToLower(rawURL)
+	// Strip query string before checking extension.
+	lowerPath := lower
+	if idx := strings.IndexByte(lowerPath, '?'); idx != -1 {
+		lowerPath = lowerPath[:idx]
+	}
+	isPLS := strings.HasSuffix(lowerPath, ".pls")
+	isM3U := strings.HasSuffix(lowerPath, ".m3u")
+	if !isPLS && !isM3U {
+		return "", false
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, fallbackTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", false
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := f.jsonClient.Do(req)
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", false
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 32*1024))
+	if err != nil {
+		return "", false
+	}
+	text := string(body)
+
+	if isPLS {
+		return parsePLS(text)
+	}
+	return parseM3U(text)
+}
+
+// parsePLS extracts the first File entry from a PLS playlist.
+func parsePLS(text string) (string, bool) {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		// Match File1=, File2=, … (case-insensitive)
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "file") {
+			if idx := strings.IndexByte(line, '='); idx != -1 {
+				u := strings.TrimSpace(line[idx+1:])
+				if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+					return u, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// parseM3U extracts the first non-comment URL from an M3U/M3U8 playlist.
+func parseM3U(text string) (string, bool) {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "http://") || strings.HasPrefix(line, "https://") {
+			return line, true
+		}
+	}
+	return "", false
 }
 
 // isICYProtocolError reports whether err stems from a server that sent an

@@ -25,8 +25,9 @@ export function useAdminStatus() {
       cachedToken = null
       cachedIsAdmin = null
       cachedAt = 0
-      setIsAdmin(false)
-      setLoading(false)
+      // Stay in loading state until a real token arrives — avoids a race where
+      // isAdmin=false fires the admin layout redirect before the fetch runs.
+      setIsAdmin(null)
       return
     }
 

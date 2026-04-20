@@ -14,8 +14,31 @@ has_cmd() {
     command -v "$1" >/dev/null 2>&1
 }
 
+ensure_node() {
+    if has_cmd node && has_cmd npm; then
+        return 0
+    fi
+
+    print_info "Node.js not found in PATH, attempting to bootstrap via nvm..."
+
+    export NVM_DIR="$HOME/.nvm"
+    if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+        print_info "Installing nvm..."
+        curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    fi
+
+    # shellcheck disable=SC1090
+    . "$NVM_DIR/nvm.sh"
+
+    if has_cmd nvm; then
+        nvm install 20
+        nvm alias default 20
+        nvm use 20 >/dev/null
+    fi
+}
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Bouji.fm Development Container Setup"
+echo "  Bougie.fm Development Container Setup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -44,6 +67,7 @@ print_success "Go installed"
 
 # Verify Node.js installation
 print_section "Verifying Node.js Installation"
+ensure_node
 require_cmd node
 require_cmd npm
 node --version
@@ -52,7 +76,7 @@ print_success "Node.js installed"
 
 # Backend setup
 print_section "Setting up Backend"
-cd /workspace/backend
+cd /workspace/project-ostgut/backend
 
 print_info "Downloading Go modules..."
 go mod download
@@ -61,21 +85,27 @@ print_success "Go modules downloaded"
 
 print_info "Creating .env file (if not exists)..."
 if [ ! -f .env ]; then
-    cat > .env << 'EOF'
+    : "${DATABASE_URL:=postgres://postgres:postgres@postgres:5432/ostgut?sslmode=disable}"
+    : "${JWT_SECRET:=dev-secret-key-change-in-production}"
+    : "${ALLOWED_ORIGINS:=http://localhost:3000,http://localhost:8080}"
+    : "${LOG_LEVEL:=info}"
+    : "${ENV:=local}"
+
+    cat > .env << EOF
 # Database
-DATABASE_URL=postgres://postgres:postgres@postgres:5432/ostgut
+DATABASE_URL=${DATABASE_URL}
 
 # Authentication
-JWT_SECRET=dev-secret-key-change-in-production
+JWT_SECRET=${JWT_SECRET}
 
 # CORS
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
 
 # Logging
-LOG_LEVEL=info
+LOG_LEVEL=${LOG_LEVEL}
 
 # Environment
-ENVIRONMENT=development
+ENV=${ENV}
 EOF
     print_success ".env file created"
 else
@@ -102,28 +132,10 @@ else
     print_info "pg_isready is unavailable; skipping PostgreSQL readiness check"
 fi
 
-# Run migrations
-print_section "Running Database Migrations"
-source .env
-if has_cmd migrate && has_cmd pg_isready && pg_isready -h postgres -U postgres >/dev/null 2>&1; then
-    print_info "Applying migrations..."
-    migrate -path migrations -database "$DATABASE_URL" up || true
-    print_success "Migrations applied"
-else
-    print_info "Skipping migrations (migrate tool or database is unavailable)"
-fi
-
-# Verify database
-print_info "Verifying database..."
-if has_cmd psql && has_cmd pg_isready && pg_isready -h postgres -U postgres >/dev/null 2>&1; then
-    psql -h postgres -U postgres -d ostgut -c "SELECT 1" > /dev/null 2>&1 && print_success "Database connection verified" || echo "✗ Database verification failed"
-else
-    print_info "Skipping database verification (psql or database is unavailable)"
-fi
 
 # Frontend setup
 print_section "Setting up Frontend"
-cd /workspace/frontend
+cd /workspace/project-ostgut/frontend
 
 print_info "Ensuring correct Node.js version..."
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
@@ -144,10 +156,14 @@ print_success "Frontend dependencies installed"
 
 print_info "Creating .env.local file (if not exists)..."
 if [ ! -f .env.local ]; then
-    cat > .env.local << 'EOF'
-NEXT_PUBLIC_API_URL=http://localhost:8080
-NEXTAUTH_SECRET=dev-secret-key-change-in-production
-NEXTAUTH_URL=http://localhost:3000
+    : "${NEXT_PUBLIC_API_URL:=http://localhost:8080}"
+    : "${NEXTAUTH_SECRET:=dev-secret-key-change-in-production}"
+    : "${NEXTAUTH_URL:=http://localhost:3000}"
+
+    cat > .env.local << EOF
+NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+NEXTAUTH_URL=${NEXTAUTH_URL}
 EOF
     print_success ".env.local file created"
 else
@@ -172,7 +188,7 @@ echo ""
 echo "  Access:"
 echo "    Frontend:  http://localhost:3000"
 echo "    Backend:   http://localhost:8080"
-echo "    Database:  localhost:5432 (postgres:postgres)"
+echo "    Database:  localhost:5432 (shared postgres + PGPASSWORD)"
 echo ""
 echo "  Or use VS Code tasks:"
 echo "    - Open Command Palette (⌘ + Shift + P)"

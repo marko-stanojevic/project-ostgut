@@ -17,7 +17,7 @@ interface ApiStation {
     name: string
     stream_url: string
     logo?: string
-    genre: string
+    genres: string[]
     language: string
     country: string
     city: string
@@ -48,7 +48,7 @@ function toStation(s: ApiStation): Station {
         name: s.name,
         streamUrl: s.stream_url,
         logo: s.logo,
-        genre: s.genre,
+        genres: s.genres ?? [],
         country: s.country,
         city: s.city,
         countryCode: s.country_code,
@@ -128,7 +128,7 @@ function StationCard({
             <div className="mt-1.5 px-0.5">
                 <button onClick={onOpen} className="w-full cursor-pointer text-left" aria-label={`Open ${s.name} details`}>
                     <p className="ui-card-title">{s.name}</p>
-                    <p className="ui-card-meta">{[s.genre || 'Unknown genre', s.country].filter(Boolean).join(' · ')}</p>
+                    <p className="ui-card-meta">{[(s.genres ?? []).join(', ') || 'Unknown genre', s.country].filter(Boolean).join(' · ')}</p>
                 </button>
             </div>
             {isActive && isPlaying && (

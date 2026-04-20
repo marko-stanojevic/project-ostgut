@@ -3,7 +3,7 @@ export interface Station {
     name: string
     streamUrl: string
     logo?: string
-    genre: string
+    genres: string[]
     country: string
     city?: string
     countryCode: string

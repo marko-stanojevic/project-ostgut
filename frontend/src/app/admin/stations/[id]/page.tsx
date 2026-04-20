@@ -40,7 +40,7 @@ interface AdminStation {
     stream_url: string
     logo?: string
     website?: string
-    genre: string
+    genres: string[]
     language: string
     country: string
     city: string
@@ -213,7 +213,7 @@ export default function StationEditorPage() {
                     stream_url: s.stream_url,
                     logo: s.logo ?? '',
                     website: s.website ?? '',
-                    genre: s.genre,
+                    genre: (s.genres ?? []).join(', '),
                     language: s.language,
                     country: s.country,
                     city: s.city ?? '',
@@ -343,7 +343,7 @@ export default function StationEditorPage() {
             stream_url: streamURL,
             logo: logoURL,
             website: websiteURL,
-            genre: form.genre.trim(),
+            genres: form.genre.split(',').map((g) => g.trim()).filter(Boolean),
             language: form.language.trim(),
             country: form.country.trim(),
             city: form.city.trim(),
@@ -374,7 +374,7 @@ export default function StationEditorPage() {
                 stream_url: updated.stream_url,
                 logo: updated.logo ?? '',
                 website: updated.website ?? '',
-                genre: updated.genre,
+                genre: (updated.genres ?? []).join(', '),
                 language: updated.language,
                 country: updated.country,
                 city: updated.city ?? '',
@@ -422,7 +422,8 @@ export default function StationEditorPage() {
     const currentStyleTags = form.style_tags.split(',').map((t) => t.trim()).filter(Boolean)
     const currentFormatTags = form.format_tags.split(',').map((t) => t.trim()).filter(Boolean)
     const currentTextureTags = form.texture_tags.split(',').map((t) => t.trim()).filter(Boolean)
-    const allCurrentTags = [...currentStyleTags, ...currentFormatTags, ...currentTextureTags]
+    const currentGenreTags = form.genre.split(',').map((g) => g.trim().toLowerCase()).filter(Boolean)
+    const allCurrentTags = [...new Set([...currentGenreTags, ...currentStyleTags, ...currentFormatTags, ...currentTextureTags])]
     const iconUrl = getPreferredMediaUrl(stationIcon) || logoURL
 
     return (
@@ -444,7 +445,7 @@ export default function StationEditorPage() {
                                     {cfg.label}
                                 </span>
                             )}
-                            {form.featured && <Badge variant="outline" className="text-xs">Staff Pick</Badge>}
+                            {form.featured && <Badge variant="default" className="text-xs">Staff Pick</Badge>}
                         </div>
                     </div>
                 </div>
@@ -513,7 +514,7 @@ export default function StationEditorPage() {
                                 <Button
                                     type="button"
                                     size="sm"
-                                    variant="outline"
+                                    variant="default"
                                     className="gap-2"
                                     onClick={() => iconInputRef.current?.click()}
                                     disabled={uploadingIcon}
@@ -530,11 +531,14 @@ export default function StationEditorPage() {
                             <div>
                                 <p className="mb-1.5 text-xs text-muted-foreground">Tags</p>
                                 <div className="flex flex-wrap gap-1">
+                                    {currentGenreTags.map((t) => (
+                                        <Badge key={`genre-${t}`} variant="default" className="text-xs">{t}</Badge>
+                                    ))}
                                     {currentStyleTags.map((t) => (
-                                        <Badge key={`style-${t}`} variant="secondary" className="text-xs">{t}</Badge>
+                                        <Badge key={`style-${t}`} variant="default" className="text-xs">{t}</Badge>
                                     ))}
                                     {currentFormatTags.map((t) => (
-                                        <Badge key={`format-${t}`} variant="outline" className="text-xs">{t}</Badge>
+                                        <Badge key={`format-${t}`} variant="default" className="text-xs">{t}</Badge>
                                     ))}
                                     {currentTextureTags.map((t) => (
                                         <Badge key={`texture-${t}`} className="text-xs">{t}</Badge>
@@ -648,7 +652,7 @@ export default function StationEditorPage() {
                                 <div className="rounded-lg border p-3">
                                     <p className="text-xs text-muted-foreground">Latest metadata error</p>
                                     {station.metadata_error_code && (
-                                        <Badge variant="outline" className="mt-2 text-[10px] uppercase tracking-wide">
+                                        <Badge variant="default" className="mt-2 text-[10px] uppercase tracking-wide">
                                             {station.metadata_error_code}
                                         </Badge>
                                     )}

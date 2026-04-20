@@ -184,8 +184,8 @@ func curate(raw []radioBrowserStation) []*store.Station {
 		// Parse tags
 		tags := parseTags(r.Tags)
 
-		// Derive primary genre from tags or language
-		genre := primaryGenre(tags, r.Language)
+		// Derive genres from tags; Upsert merges them into tags on write
+		genres := matchGenres(tags)
 
 		// Reliability score: normalised votes weighted 70%, clicks 30%
 		// Both capped at 10 000 to avoid outlier domination.
@@ -199,7 +199,7 @@ func curate(raw []radioBrowserStation) []*store.Station {
 			StreamURL:        r.URL,
 			Homepage:         r.Homepage,
 			Logo:             r.Favicon,
-			Genre:            genre,
+			Genres:           genres,
 			Language:         primaryLanguage(r.Language, r.LanguageCodes),
 			Country:          r.Country,
 			City:             strings.TrimSpace(r.State),
@@ -264,14 +264,18 @@ var genreKeywords = []struct {
 	{"indie", "Indie"},
 }
 
-func primaryGenre(tags []string, language string) string {
+func matchGenres(tags []string) []string {
 	combined := strings.ToLower(strings.Join(tags, " "))
+	var genres []string
 	for _, g := range genreKeywords {
 		if strings.Contains(combined, g.keyword) {
-			return g.genre
+			genres = append(genres, g.genre)
 		}
 	}
-	return "World"
+	if len(genres) == 0 {
+		return []string{"World"}
+	}
+	return genres
 }
 
 func primaryLanguage(language, codes string) string {

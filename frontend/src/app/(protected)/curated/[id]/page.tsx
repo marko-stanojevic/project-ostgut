@@ -18,7 +18,7 @@ interface ApiStationDetail {
     overview?: string
     description?: string
     editor_notes?: string
-    genre: string
+    genres: string[]
     language: string
     country: string
     city: string
@@ -36,7 +36,7 @@ function toStation(s: ApiStationDetail): Station {
         name: s.name,
         streamUrl: s.stream_url,
         logo: s.logo,
-        genre: s.genre,
+        genres: s.genres ?? [],
         country: s.country,
         city: s.city,
         countryCode: s.country_code,
@@ -114,7 +114,7 @@ function CuratedDetailsContent() {
             { label: 'Country', value: station.country || 'Unknown' },
             { label: 'City', value: station.city || '—' },
             { label: 'Language', value: station.language || '—' },
-            { label: 'Genre', value: station.genre || '—' },
+            { label: 'Genre', value: (station.genres ?? []).join(', ') || '—' },
             { label: 'Codec', value: station.codec || '—' },
             { label: 'Bitrate', value: station.bitrate ? `${station.bitrate} kbps` : '—' },
         ]
