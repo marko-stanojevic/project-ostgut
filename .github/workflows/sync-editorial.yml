@@ -111,7 +111,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Upgrade Azure CLI
-        run: az upgrade --yes --all
+        run: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
       - name: Resolve source storage account
         id: storage
@@ -243,7 +243,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Upgrade Azure CLI
-        run: az upgrade --yes --all
+        run: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
       - name: Resolve source storage account
         id: storage
