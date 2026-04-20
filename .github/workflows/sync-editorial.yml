@@ -110,6 +110,9 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Upgrade Azure CLI
+        run: az upgrade --yes --all
+
       - name: Resolve source storage account
         id: storage
         run: |
@@ -238,6 +241,9 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upgrade Azure CLI
+        run: az upgrade --yes --all
 
       - name: Resolve source storage account
         id: storage
