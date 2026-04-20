@@ -1,8 +1,10 @@
-import { auth } from '@/lib/auth'
+import NextAuth from 'next-auth'
 import createIntlMiddleware from 'next-intl/middleware'
-import { routing } from './i18n/routing'
 import { NextResponse } from 'next/server'
+import { authConfig } from '@/lib/auth.config'
+import { routing } from './i18n/routing'
 
+const { auth } = NextAuth(authConfig)
 const handleI18n = createIntlMiddleware(routing)
 
 const protectedPrefixes = [

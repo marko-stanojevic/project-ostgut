@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Link, useRouter } from '@/i18n/navigation'
+import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { AdminSearchForm } from '@/components/admin/admin-search-form'
@@ -77,9 +78,9 @@ interface CreateStationForm {
   featured: boolean
 }
 
-const statusConfig = {
-  pending: { label: 'Pending', variant: 'secondary' as const, icon: ClockIcon },
-  approved: { label: 'Approved', variant: 'default' as const, icon: CheckCircleIcon },
+const statusVariants = {
+  pending: { variant: 'secondary' as const, icon: ClockIcon },
+  approved: { variant: 'default' as const, icon: CheckCircleIcon },
 }
 
 function normalizeModerationStatus(value: string | null | undefined): 'pending' | 'approved' {
@@ -110,9 +111,15 @@ function isValidAbsoluteURL(value: string) {
 }
 
 export default function AdminStationsPage() {
+  const t = useTranslations('admin')
   const { session } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  const statusConfig = {
+    pending: { label: t('status_pending'), ...statusVariants.pending },
+    approved: { label: t('status_approved'), ...statusVariants.approved },
+  }
 
   const [activeTab, setActiveTab] = useState<'pending' | 'approved'>(
     normalizeModerationStatus(searchParams.get('status')),
@@ -274,7 +281,7 @@ export default function AdminStationsPage() {
     if (!session?.accessToken) return
 
     if (!canCreateStation) {
-      setCreateError('Please fix URL fields before creating the station.')
+      setCreateError(t('fix_urls_error'))
       return
     }
 
@@ -352,10 +359,10 @@ export default function AdminStationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Stations</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage the curated station catalog</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('stations_title')}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t('stations_description')}</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>Add station</Button>
+        <Button onClick={() => setCreateOpen(true)}>{t('add_station')}</Button>
       </div>
 
       {/* Tabs */}
@@ -370,7 +377,7 @@ export default function AdminStationsPage() {
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         <AdminSearchForm
-          placeholder="Search stations…"
+          placeholder={t('search_stations')}
           value={searchInput}
           onValueChange={setSearchInput}
           onSubmit={handleSearch}
@@ -379,7 +386,7 @@ export default function AdminStationsPage() {
 
         {selected.size > 0 && (
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+            <span className="text-sm text-muted-foreground">{t('selected', { count: selected.size })}</span>
             <Button
               size="sm"
               variant="outline"
@@ -388,7 +395,7 @@ export default function AdminStationsPage() {
               className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
             >
               <CheckCircleIcon className="h-3.5 w-3.5 mr-1.5" />
-              Approve
+              {t('bulk_approve')}
             </Button>
           </div>
         )}
@@ -408,13 +415,13 @@ export default function AdminStationsPage() {
                   aria-label="Select all"
                 />
               </th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Station</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Genre</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">Country</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">Quality</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden xl:table-cell">Reliability</th>
-              <th className="px-4 py-3 text-center font-medium text-muted-foreground hidden xl:table-cell">Staff Pick</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('col_station')}</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">{t('col_genre')}</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">{t('col_country')}</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">{t('col_quality')}</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden xl:table-cell">{t('col_reliability')}</th>
+              <th className="px-4 py-3 text-center font-medium text-muted-foreground hidden xl:table-cell">{t('col_staff_pick')}</th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t('col_actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -423,7 +430,7 @@ export default function AdminStationsPage() {
             ) : stations.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-16 text-center text-muted-foreground text-sm">
-                  No stations found
+                  {t('no_stations')}
                 </td>
               </tr>
             ) : (
@@ -487,7 +494,7 @@ export default function AdminStationsPage() {
                     <td className="px-4 py-3 text-right">
                       <Link href={`/admin/stations/${s.id}`}>
                         <Button variant="ghost" size="sm" className="h-7 gap-1.5">
-                          Edit
+                          {t('edit')}
                           <ArrowSquareOutIcon className="h-3 w-3" />
                         </Button>
                       </Link>
@@ -505,7 +512,7 @@ export default function AdminStationsPage() {
         total={total}
         page={page}
         totalPages={totalPages}
-        itemLabel="stations"
+        itemLabel={t('stations_label')}
         onPrev={() => setPage((p) => p - 1)}
         onNext={() => setPage((p) => p + 1)}
         onGoTo={(p) => setPage(p)}
@@ -514,16 +521,16 @@ export default function AdminStationsPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Add Station Manually</DialogTitle>
+            <DialogTitle>{t('create_title')}</DialogTitle>
             <DialogDescription>
-              Add a station directly to the catalog. Name and stream URL are required.
+              {t('create_description')}
             </DialogDescription>
           </DialogHeader>
 
           <form id="create-station-form" onSubmit={handleCreateStation} className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Name *</label>
+                <label className="text-xs text-muted-foreground">{t('field_name')}</label>
                 <Input
                   required
                   value={createForm.name}
@@ -531,7 +538,7 @@ export default function AdminStationsPage() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Stream URL *</label>
+                <label className="text-xs text-muted-foreground">{t('field_stream_url')}</label>
                 <Input
                   required
                   type="url"
@@ -541,98 +548,98 @@ export default function AdminStationsPage() {
                 {streamURL && (
                   <div className="flex items-center gap-2 text-xs">
                     <span className={isStreamURLValid ? 'text-muted-foreground' : 'text-destructive'}>
-                      {isStreamURLValid ? 'Valid URL' : 'Enter a valid absolute URL'}
+                      {isStreamURLValid ? t('valid_url') : t('invalid_url')}
                     </span>
                     {isStreamURLValid && (
                       <a href={streamURL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-                        Open link
+                        {t('open_link')}
                       </a>
                     )}
                   </div>
                 )}
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Genre</label>
+                <label className="text-xs text-muted-foreground">{t('field_genre')}</label>
                 <Input value={createForm.genre} onChange={(e) => setCreateForm((p) => ({ ...p, genre: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Language</label>
+                <label className="text-xs text-muted-foreground">{t('field_language')}</label>
                 <Input value={createForm.language} onChange={(e) => setCreateForm((p) => ({ ...p, language: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Country</label>
+                <label className="text-xs text-muted-foreground">{t('field_country')}</label>
                 <Input value={createForm.country} onChange={(e) => setCreateForm((p) => ({ ...p, country: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">City</label>
+                <label className="text-xs text-muted-foreground">{t('field_city')}</label>
                 <Input value={createForm.city} onChange={(e) => setCreateForm((p) => ({ ...p, city: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Country code</label>
+                <label className="text-xs text-muted-foreground">{t('field_country_code')}</label>
                 <Input value={createForm.country_code} onChange={(e) => setCreateForm((p) => ({ ...p, country_code: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Bitrate (kbps)</label>
+                <label className="text-xs text-muted-foreground">{t('field_bitrate')}</label>
                 <Input type="number" min={0} value={createForm.bitrate} onChange={(e) => setCreateForm((p) => ({ ...p, bitrate: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Codec</label>
+                <label className="text-xs text-muted-foreground">{t('field_codec')}</label>
                 <Input value={createForm.codec} onChange={(e) => setCreateForm((p) => ({ ...p, codec: e.target.value }))} />
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs text-muted-foreground">Logo URL</label>
+                <label className="text-xs text-muted-foreground">{t('field_logo')}</label>
                 <Input type="url" value={createForm.logo} onChange={(e) => setCreateForm((p) => ({ ...p, logo: e.target.value }))} />
                 {logoURL && (
                   <div className="flex items-center gap-2 text-xs">
                     <span className={isLogoURLValid ? 'text-muted-foreground' : 'text-destructive'}>
-                      {isLogoURLValid ? 'Valid URL' : 'Enter a valid absolute URL'}
+                      {isLogoURLValid ? t('valid_url') : t('invalid_url')}
                     </span>
                     {isLogoURLValid && (
                       <a href={logoURL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-                        Open link
+                        {t('open_link')}
                       </a>
                     )}
                   </div>
                 )}
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs text-muted-foreground">Homepage URL</label>
+                <label className="text-xs text-muted-foreground">{t('field_homepage')}</label>
                 <Input type="url" value={createForm.homepage} onChange={(e) => setCreateForm((p) => ({ ...p, homepage: e.target.value }))} />
                 {homepageURL && (
                   <div className="flex items-center gap-2 text-xs">
                     <span className={isHomepageURLValid ? 'text-muted-foreground' : 'text-destructive'}>
-                      {isHomepageURLValid ? 'Valid URL' : 'Enter a valid absolute URL'}
+                      {isHomepageURLValid ? t('valid_url') : t('invalid_url')}
                     </span>
                     {isHomepageURLValid && (
                       <a href={homepageURL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-                        Open link
+                        {t('open_link')}
                       </a>
                     )}
                   </div>
                 )}
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs text-muted-foreground">Tags (comma-separated)</label>
+                <label className="text-xs text-muted-foreground">{t('field_tags')}</label>
                 <Input value={createForm.tags} onChange={(e) => setCreateForm((p) => ({ ...p, tags: e.target.value }))} />
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs text-muted-foreground">Overview</label>
+                <label className="text-xs text-muted-foreground">{t('field_overview')}</label>
                 <Textarea
                   rows={3}
                   value={createForm.overview}
                   onChange={(e) => setCreateForm((p) => ({ ...p, overview: e.target.value }))}
-                  placeholder="Short station summary shown on detail page"
+                  placeholder={t('field_overview_placeholder')}
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Status</label>
+                <label className="text-xs text-muted-foreground">{t('field_status')}</label>
                 <select
                   value={createForm.status}
                   onChange={(e) => setCreateForm((p) => ({ ...p, status: e.target.value as CreateStationForm['status'] }))}
                   className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring"
                 >
-                  <option value="approved">Approved</option>
-                  <option value="pending">Pending</option>
+                  <option value="approved">{t('status_approved')}</option>
+                  <option value="pending">{t('status_pending')}</option>
                 </select>
               </div>
               <div className="flex items-end gap-2 pb-1">
@@ -641,7 +648,7 @@ export default function AdminStationsPage() {
                   onCheckedChange={(checked) => setCreateForm((p) => ({ ...p, featured: !!checked }))}
                   aria-label="Set as staff pick"
                 />
-                <span className="text-xs text-muted-foreground">Staff Pick</span>
+                <span className="text-xs text-muted-foreground">{t('staff_pick_label')}</span>
               </div>
             </div>
 
@@ -649,9 +656,9 @@ export default function AdminStationsPage() {
           </form>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createLoading}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createLoading}>{t('cancel')}</Button>
             <Button type="submit" form="create-station-form" disabled={createLoading || !canCreateStation}>
-              {createLoading ? 'Creating…' : 'Create station'}
+              {createLoading ? t('creating') : t('create_station')}
             </Button>
           </DialogFooter>
         </DialogContent>

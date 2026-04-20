@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { AdminSearchForm } from '@/components/admin/admin-search-form'
@@ -35,6 +36,7 @@ interface AdminUser {
 }
 
 export default function AdminUsersPage() {
+  const t = useTranslations('admin')
   const { session, user: currentUser } = useAuth()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [total, setTotal] = useState(0)
@@ -119,15 +121,15 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('users_title')}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Manage user accounts and admin privileges
+          {t('users_description')}
         </p>
       </div>
 
       {/* Search */}
       <AdminSearchForm
-        placeholder="Filter by email or name…"
+        placeholder={t('search_users')}
         value={searchInput}
         onValueChange={setSearchInput}
         onSubmit={handleSearch}
@@ -140,9 +142,9 @@ export default function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/40">
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">User</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Name</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Admin</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('col_user')}</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">{t('col_name')}</th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t('col_admin')}</th>
             </tr>
           </thead>
           <tbody>
@@ -151,7 +153,7 @@ export default function AdminUsersPage() {
             ) : users.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-4 py-16 text-center text-muted-foreground text-sm">
-                  No users found
+                  {t('no_users')}
                 </td>
               </tr>
             ) : (
@@ -167,7 +169,7 @@ export default function AdminUsersPage() {
                         <div>
                           <p className="font-medium leading-tight">{u.email}</p>
                           {isSelf && (
-                            <p className="text-xs text-muted-foreground">You</p>
+                            <p className="text-xs text-muted-foreground">{t('you')}</p>
                           )}
                         </div>
                       </div>
@@ -196,7 +198,7 @@ export default function AdminUsersPage() {
         total={total}
         page={page}
         totalPages={totalPages}
-        itemLabel="users"
+        itemLabel={t('users_label')}
         onPrev={() => setPage((p) => p - 1)}
         onNext={() => setPage((p) => p + 1)}
       />
@@ -206,24 +208,24 @@ export default function AdminUsersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {pendingToggle?.is_admin ? 'Remove admin access' : 'Grant admin access'}
+              {pendingToggle?.is_admin ? t('remove_admin_title') : t('grant_admin_title')}
             </DialogTitle>
             <DialogDescription>
               {pendingToggle?.is_admin
-                ? `${pendingToggle.email} will lose access to the admin panel immediately.`
-                : `${pendingToggle?.email} will be able to manage stations and users. Make sure you trust this person.`}
+                ? t('remove_admin_description', { email: pendingToggle.email })
+                : t('grant_admin_description', { email: pendingToggle?.email ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingToggle(null)}>
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               variant={pendingToggle?.is_admin ? 'destructive' : 'default'}
               onClick={executeToggle}
               disabled={toggling}
             >
-              {toggling ? 'Saving…' : pendingToggle?.is_admin ? 'Remove access' : 'Grant access'}
+              {toggling ? t('saving') : pendingToggle?.is_admin ? t('remove_access') : t('grant_access')}
             </Button>
           </DialogFooter>
         </DialogContent>

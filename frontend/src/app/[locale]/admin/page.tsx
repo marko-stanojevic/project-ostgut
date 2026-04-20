@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Link } from '@/i18n/navigation'
+import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -54,6 +55,7 @@ function StatCard({
 }
 
 export default function AdminOverviewPage() {
+  const t = useTranslations('admin')
   const { session } = useAuth()
   const [stats, setStats] = useState<Stats | null>(null)
 
@@ -68,15 +70,15 @@ export default function AdminOverviewPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
-        <p className="text-sm text-muted-foreground mt-1">Station catalog health at a glance</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('overview_title')}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{t('overview_description')}</p>
       </div>
 
       {/* Stat cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
-        <StatCard title="Total Stations" value={stats?.total ?? null} icon={RadioIcon} variant="default" href="/admin/stations" />
-        <StatCard title="Pending Review" value={stats?.pending ?? null} icon={ClockIcon} variant="pending" href="/admin/stations?status=pending" />
-        <StatCard title="Approved" value={stats?.approved ?? null} icon={CheckCircleIcon} variant="success" href="/admin/stations?status=approved" />
+        <StatCard title={t('total_stations')} value={stats?.total ?? null} icon={RadioIcon} variant="default" href="/admin/stations" />
+        <StatCard title={t('pending_review')} value={stats?.pending ?? null} icon={ClockIcon} variant="pending" href="/admin/stations?status=pending" />
+        <StatCard title={t('approved_count')} value={stats?.approved ?? null} icon={CheckCircleIcon} variant="success" href="/admin/stations?status=approved" />
       </div>
     </div>
   )

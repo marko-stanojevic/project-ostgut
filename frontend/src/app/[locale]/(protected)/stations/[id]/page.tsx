@@ -1,4 +1,5 @@
 import { redirect } from '@/i18n/navigation'
+import { getLocale } from 'next-intl/server'
 
 export default async function StationDetailsRedirectPage({
     params,
@@ -7,10 +8,13 @@ export default async function StationDetailsRedirectPage({
     params: Promise<{ id: string }>
     searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-    const { id } = await params
-    const resolvedSearchParams = await searchParams
-    const qs = new URLSearchParams()
+    const [{ id }, resolvedSearchParams, locale] = await Promise.all([
+        params,
+        searchParams,
+        getLocale(),
+    ])
 
+    const qs = new URLSearchParams()
     for (const [key, value] of Object.entries(resolvedSearchParams)) {
         if (typeof value === 'string') qs.set(key, value)
         if (Array.isArray(value)) {
@@ -18,5 +22,6 @@ export default async function StationDetailsRedirectPage({
         }
     }
 
-    redirect(qs.toString() ? `/curated/${id}?${qs.toString()}` : `/curated/${id}`)
+    const href = qs.toString() ? `/curated/${id}?${qs.toString()}` : `/curated/${id}`
+    redirect({ href, locale })
 }

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useParams, useSearchParams } from 'next/navigation'
 import { useRouter } from '@/i18n/navigation'
+import { useTranslations } from 'next-intl'
 import { ArrowLeftIcon, GlobeIcon, HeartIcon, LinkSimpleIcon, PauseIcon, PlayIcon, RadioIcon, ShareNetworkIcon } from '@phosphor-icons/react'
 import { usePlayer, type Station } from '@/context/PlayerContext'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -47,6 +48,7 @@ function toStation(s: ApiStationDetail): Station {
 }
 
 function CuratedDetailsContent() {
+    const t = useTranslations('station_detail')
     const router = useRouter()
     const params = useParams()
     const searchParams = useSearchParams()
@@ -112,14 +114,14 @@ function CuratedDetailsContent() {
     const stats = useMemo(() => {
         if (!station) return []
         return [
-            { label: 'Country', value: station.country || 'Unknown' },
-            { label: 'City', value: station.city || '—' },
-            { label: 'Language', value: station.language || '—' },
-            { label: 'Genre', value: (station.genres ?? []).join(', ') || '—' },
-            { label: 'Codec', value: station.codec || '—' },
-            { label: 'Bitrate', value: station.bitrate ? `${station.bitrate} kbps` : '—' },
+            { label: t('stat_country'), value: station.country || 'Unknown' },
+            { label: t('stat_city'), value: station.city || '—' },
+            { label: t('stat_language'), value: station.language || '—' },
+            { label: t('stat_genre'), value: (station.genres ?? []).join(', ') || '—' },
+            { label: t('stat_codec'), value: station.codec || '—' },
+            { label: t('stat_bitrate'), value: station.bitrate ? `${station.bitrate} kbps` : '—' },
         ]
-    }, [station])
+    }, [station, t])
 
     return (
         <div className="w-full max-w-5xl">
@@ -129,7 +131,7 @@ function CuratedDetailsContent() {
                 className="mb-6 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground"
             >
                 <ArrowLeftIcon className="h-3.5 w-3.5" />
-                Back
+                {t('back')}
             </button>
 
             {loading ? (
@@ -171,7 +173,7 @@ function CuratedDetailsContent() {
                                 <div className="absolute inset-0 flex items-start justify-end p-3">
                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-white backdrop-blur-sm">
                                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
-                                        Live
+                                        {t('live')}
                                     </span>
                                 </div>
                             )}
@@ -190,7 +192,7 @@ function CuratedDetailsContent() {
                                     ? <PauseIcon weight="fill" className="h-5 w-5" />
                                     : <PlayIcon weight="fill" className="h-5 w-5" />
                                 }
-                                {isPlaying ? 'Pause' : 'Play'}
+                                {isPlaying ? t('pause') : t('play')}
                             </button>
                             {station.website && (
                                 <a
@@ -200,7 +202,7 @@ function CuratedDetailsContent() {
                                     className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                                 >
                                     <GlobeIcon className="h-3.5 w-3.5" />
-                                    Website
+                                    {t('website')}
                                 </a>
                             )}
                         </div>
@@ -232,13 +234,13 @@ function CuratedDetailsContent() {
                             <div>
                                 <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{station.name}</h1>
                                 <p className="mt-1.5 text-sm text-muted-foreground">
-                                    {[station.city, station.country].filter(Boolean).join(' · ') || 'Unknown station'}
+                                    {[station.city, station.country].filter(Boolean).join(' · ') || t('unknown_station')}
                                 </p>
                             </div>
                             <div className="flex shrink-0 items-center gap-1 pt-1">
                                 <button
                                     type="button"
-                                    title={isFavourited ? 'Remove from favourites' : 'Add to favourites'}
+                                    title={isFavourited ? t('favourite_remove') : t('favourite_add')}
                                     onClick={() => setIsFavourited((v) => !v)}
                                     className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${isFavourited ? 'border-rose-500/40 bg-rose-500/10 text-rose-500 hover:bg-rose-500/15' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
                                 >
@@ -246,7 +248,7 @@ function CuratedDetailsContent() {
                                 </button>
                                 <button
                                     type="button"
-                                    title={copied === 'page' ? 'Copied!' : 'Share station'}
+                                    title={copied === 'page' ? t('copied') : t('share')}
                                     onClick={handleShare}
                                     className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${copied === 'page' ? 'border-brand/40 bg-brand/10 text-brand' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
                                 >
@@ -254,7 +256,7 @@ function CuratedDetailsContent() {
                                 </button>
                                 <button
                                     type="button"
-                                    title={copied === 'stream' ? 'Copied!' : 'Copy stream URL'}
+                                    title={copied === 'stream' ? t('copied') : t('copy_stream')}
                                     onClick={handleCopyStream}
                                     className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${copied === 'stream' ? 'border-brand/40 bg-brand/10 text-brand' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
                                 >
@@ -276,7 +278,7 @@ function CuratedDetailsContent() {
                                     ? <PauseIcon weight="fill" className="h-5 w-5" />
                                     : <PlayIcon weight="fill" className="h-5 w-5" />
                                 }
-                                {isPlaying ? 'Pause' : 'Play'}
+                                {isPlaying ? t('pause') : t('play')}
                             </button>
                             {station.website && (
                                 <a
@@ -286,7 +288,7 @@ function CuratedDetailsContent() {
                                     className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                                 >
                                     <GlobeIcon className="h-3.5 w-3.5" />
-                                    Website
+                                    {t('website')}
                                 </a>
                             )}
                         </div>
@@ -314,14 +316,14 @@ function CuratedDetailsContent() {
 
                         {station.editor_notes && (
                             <div className="mt-6 rounded-xl border border-brand/20 bg-brand/5 p-5">
-                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">Editor&apos;s Note</p>
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">{t('editors_note')}</p>
                                 <p className="text-[15px] leading-relaxed text-foreground/90 font-medium">{station.editor_notes}</p>
                             </div>
                         )}
 
                         {(station.overview || station.description) && (
                             <div className="mt-3 rounded-xl border border-border/50 bg-card/40 p-4">
-                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">About</p>
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">{t('about')}</p>
                                 <p className="text-sm leading-relaxed text-foreground/80">{station.overview || station.description}</p>
                             </div>
                         )}
