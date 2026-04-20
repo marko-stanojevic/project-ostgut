@@ -130,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [ staging, production ]
+        environment: [ staging ] #production will be added later
       fail-fast: false
     environment: ${{ matrix.environment }}
     steps:
@@ -189,7 +189,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [ staging, production ]
+        environment: [ staging ] #production will be added later
       fail-fast: false
     environment: ${{ matrix.environment }}
     env:
