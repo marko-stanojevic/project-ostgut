@@ -17,7 +17,7 @@ export NVM_DIR="$HOME/.nvm"
 has_cmd nvm && nvm use 20 > /dev/null 2>&1 || true
 
 # Ensure database migrations are up-to-date
-cd /workspace/backend
+cd /workspace/project-ostgut/backend
 source .env 2>/dev/null || true
 
 # Check if PostgreSQL is ready

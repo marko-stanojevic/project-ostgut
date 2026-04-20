@@ -1,345 +1,254 @@
 # Development Container Setup
 
-This directory contains the configuration for a complete development environment using VS Code Dev Containers.
+This directory contains the VS Code Dev Containers configuration for Bouji.fm.
+
+The setup uses a single PostgreSQL container for both host-side development and devcontainer development.
+
+- The shared database lives in ../docker-compose.yml
+- The devcontainer service lives in .devcontainer/docker-compose.yml
+- .devcontainer/devcontainer.json loads both Compose files together
 
 ## Quick Start
 
 ### Prerequisites
 
-- **VS Code** (1.86+)
-- **Docker Desktop** (with Docker Compose)
-- **Remote - Containers** extension (ID: `ms-vscode-remote.remote-containers`)
+- VS Code 1.86+
+- Docker Desktop or Docker Engine with Docker Compose
+- Remote - Containers extension (`ms-vscode-remote.remote-containers`)
 
 ### Installation
 
-1. **Install Docker Desktop**
-   ```bash
-   # macOS with Homebrew
-   brew install --cask docker
-   ```
-
-2. **Install VS Code Remote Extension**
-   - Open VS Code
-   - Go to Extensions (⌘ + Shift + X)
-   - Search for "Remote - Containers"
-   - Install `ms-vscode-remote.remote-containers`
-
-3. **Open Project in Dev Container**
-   - Open the project folder in VS Code
-   - Press `⌘ + Shift + P` (macOS) or `Ctrl + Shift + P` (Linux/Windows)
-   - Type "Dev Containers: Reopen in Container"
-   - Select and wait for container to build and start (~2-3 minutes on first run)
-
-### What Gets Set Up Automatically
-
-✅ **Go 1.25.9** — Backend runtime
-✅ **Node.js 20** — Frontend runtime (via nvm)
-✅ **PostgreSQL 15** — Database service
-✅ **golang-migrate** — Database migration tool
-✅ **golangci-lint** — Go linter
-✅ **Azure CLI** — Cloud tools
-✅ **All project dependencies** — npm packages and Go modules
-✅ **Environment files** — `.env` and `.env.local` (auto-created)
-✅ **Database migrations** — Applied automatically
-
-### After Container Starts
-
-The `postCreateCommand.sh` script automatically:
-1. Verifies all tool installations
-2. Downloads and verifies Go modules
-3. Creates `.env` file with development defaults
-4. Waits for PostgreSQL to become healthy
-5. Applies database migrations
-6. Installs npm dependencies
-7. Creates `.env.local` file for frontend
-
-### Development Workflow
-
-**Option A: Use VS Code Tasks** (Recommended)
-
-```
-1. Open Command Palette (⌘ + Shift + P)
-2. Search for "Tasks: Run Task"
-3. Select "All: Dev (Frontend + Backend)"
-```
-
-This starts:
-- PostgreSQL (if not running)
-- Backend on http://localhost:8080
-- Frontend on http://localhost:3000
-
-**Option B: Manual Terminal Commands**
+1. Install Docker.
 
 ```bash
-# Terminal 1: Backend
-cd backend
-go run ./cmd/api
+# macOS with Homebrew
+brew install --cask docker
+```
 
-# Terminal 2: Frontend
+2. Install the VS Code Remote - Containers extension.
+
+3. Reopen the project in the devcontainer.
+
+## Architecture
+
+- One PostgreSQL service, defined once in `docker-compose.yml`
+- One devcontainer overlay service, defined in `.devcontainer/docker-compose.yml`
+- One DB task set, shared by host and devcontainer workflows
+- One local secret file for devcontainer and database settings: `.devcontainer/.env`
+
+## What Gets Set Up Automatically
+
+- Go 1.25.9
+- Node.js 20
+- PostgreSQL 16
+- golang-migrate
+- golangci-lint
+- Azure CLI
+- Backend and frontend dependencies
+- Backend `.env` if missing
+- Frontend `.env.local` if missing
+
+## Development Workflow
+
+### VS Code Tasks
+
+Inside the devcontainer:
+
+1. Open Command Palette.
+2. Run `Tasks: Run Task`.
+3. Select `All: Dev (Devcontainer)`.
+
+Outside the devcontainer on the host:
+
+1. Open Command Palette.
+2. Run `Tasks: Run Task`.
+3. Select `All: Dev (Frontend + Backend)`.
+
+Shared DB tasks in either environment:
+
+- `DB: Start`
+- `DB: Stop`
+- `DB: Reset`
+- `DB: psql`
+
+### Manual Commands
+
+Start the shared database:
+
+```bash
+docker compose up -d --wait postgres
+```
+
+Open `psql`:
+
+```bash
+docker compose exec postgres psql -U postgres -d ostgut
+```
+
+Start the backend:
+
+```bash
+cd backend
+set -a && source .env && set +a
+go run ./cmd/api
+```
+
+Start the frontend:
+
+```bash
 cd frontend
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
 npm run dev
 ```
 
-### Accessing Services
+## Accessing Services
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8080
-- **API Health**: http://localhost:8080/health
-- **Database**: localhost:5432 (postgres:postgres)
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8080`
+- API Health: `http://localhost:8080/health`
+- Database: `localhost:5432`
 
-### VS Code Extensions Included
+Database credentials come from `.devcontainer/.env`.
 
-The container automatically installs these extensions:
+## Database Access
 
-- `golang.go` — Go language support
-- `ms-vscode.go` — Go tools and debugging
-- `esbenp.prettier-vscode` — Code formatter
-- `dbaeumer.vscode-eslint` — JavaScript/TypeScript linting
-- `bradlc.vscode-tailwindcss` — Tailwind CSS support
-- `GitHub.copilot` — AI-powered code completions
-- `GitHub.copilot-chat` — AI chat interface
-- `eamodio.gitlens` — Git integration
-- And more...
+Via VS Code PostgreSQL extension:
 
-### File Forwarding & Port Mapping
+1. Install the PostgreSQL extension.
+2. Connect with `postgres:<POSTGRES_PASSWORD>@localhost:5432/ostgut`.
 
-These ports are automatically forwarded from container to host:
+Via `psql` in the devcontainer shell:
 
-| Port | Service | Auto-forward |
-|------|---------|---|
-| 3000 | Frontend (Next.js) | Notify |
-| 8080 | Backend API (Gin) | Notify |
-| 5432 | PostgreSQL | Silent |
-
-### Stopping the Container
-
-**Option A: In VS Code**
-- Click the remote indicator (green icon, bottom-left)
-- Select "Close Remote Connection"
-
-**Option B: Via Terminal**
-```bash
-docker compose -f .devcontainer/docker-compose.yml down
-```
-
-### Restarting the Container
-
-**Option A: In VS Code**
-- Press `⌘ + Shift + P`
-- Search "Dev Containers: Rebuild Container"
-
-**Option B: Via Terminal**
-```bash
-docker compose -f .devcontainer/docker-compose.yml restart
-```
-
-### Rebuilding the Container
-
-Use this when Dockerfile or dependencies change:
-
-```bash
-# In VS Code:
-# ⌘ + Shift + P → "Dev Containers: Rebuild Container"
-
-# Or via terminal:
-docker compose -f .devcontainer/docker-compose.yml down -v
-docker compose -f .devcontainer/docker-compose.yml build --no-cache
-docker compose -f .devcontainer/docker-compose.yml up -d
-```
-
-### Database Access
-
-**Via VS Code** (with PostgreSQL extension):
-1. Install "PostgreSQL" extension by Chris Kolkman
-2. Add connection: `postgres:postgres@postgres:5432/ostgut`
-3. Browse tables and run queries directly
-
-**Via psql CLI** (in container terminal):
 ```bash
 psql -h postgres -U postgres -d ostgut
 ```
 
-**Via Docker CLI** (from host):
+Via Docker from the host:
+
 ```bash
-docker compose -f .devcontainer/docker-compose.yml exec postgres psql -U postgres -d ostgut
+docker compose exec postgres psql -U postgres -d ostgut
 ```
 
-### Environment Variables
+## Environment Files
 
-Created automatically in container:
+### Devcontainer Source Env
 
-**Backend** (`.env`):
-```
-DATABASE_URL=postgres://postgres:postgres@postgres:5432/ostgut
-JWT_SECRET=dev-secret-key-change-in-production
+Local only, not committed: `.devcontainer/.env`
+
+```dotenv
+POSTGRES_PASSWORD=<local-password>
+PGPASSWORD=<local-password>
+
+DATABASE_URL=postgres://postgres:<local-password>@postgres:5432/ostgut?sslmode=disable
+JWT_SECRET=<local-jwt-secret>
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
 LOG_LEVEL=info
-ENVIRONMENT=development
-```
+ENV=local
 
-**Frontend** (`.env.local`):
-```
 NEXT_PUBLIC_API_URL=http://localhost:8080
-NEXTAUTH_SECRET=dev-secret-key-change-in-production
+NEXTAUTH_SECRET=<local-nextauth-secret>
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-**Note**: These are development-only values. Change `*_SECRET` keys before deploying to production.
+### Backend Env
 
-### Troubleshooting
+If `backend/.env` does not exist, the post-create script generates it from the devcontainer environment.
 
-#### Container won't start
+Typical devcontainer values:
+
+```dotenv
+DATABASE_URL=postgres://postgres:<local-password>@postgres:5432/ostgut?sslmode=disable
+JWT_SECRET=<local-jwt-secret>
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+LOG_LEVEL=info
+ENV=local
+```
+
+Typical host-side values:
+
+```dotenv
+DATABASE_URL=postgres://postgres:<local-password>@localhost:5432/ostgut?sslmode=disable
+JWT_SECRET=<local-jwt-secret>
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+LOG_LEVEL=info
+ENV=local
+```
+
+## Lifecycle Commands
+
+Stop the devcontainer stack:
 
 ```bash
-# Check Docker status
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.yml down
+```
+
+Restart the devcontainer service:
+
+```bash
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.yml restart devcontainer
+```
+
+Rebuild the devcontainer image:
+
+```bash
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.yml build --no-cache devcontainer
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.yml up -d devcontainer
+```
+
+Inspect the shared database:
+
+```bash
+docker compose ps postgres
+docker compose logs postgres
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+```bash
 docker ps
-
-# Check logs
-docker compose -f .devcontainer/docker-compose.yml logs devcontainer
-
-# Rebuild container
-docker compose -f .devcontainer/docker-compose.yml build --no-cache
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.yml logs devcontainer
+docker compose -f docker-compose.yml -f .devcontainer/docker-compose.yml build --no-cache devcontainer
 ```
 
-#### PostgreSQL connection refused
+### PostgreSQL Connection Refused
 
 ```bash
-# Check if postgres service is running
-docker compose -f .devcontainer/docker-compose.yml ps postgres
-
-# Check postgres logs
-docker compose -f .devcontainer/docker-compose.yml logs postgres
-
-# Restart database
-docker compose -f .devcontainer/docker-compose.yml restart postgres
+docker compose ps postgres
+docker compose logs postgres
+docker compose restart postgres
 ```
 
-#### Port already in use
+### Port Already In Use
 
 ```bash
-# Find process using port (macOS/Linux)
-lsof -ti:3000    # Find process on port 3000
-kill -9 <PID>    # Kill the process
-
-# Or change port in docker-compose.yml
-# ports: ["3001:3000"]  # Use 3001 instead
+lsof -ti:3000
+lsof -ti:5432
 ```
 
-#### npm install fails
+### Reset Database
 
 ```bash
-# In container terminal:
-cd frontend
-rm -rf node_modules package-lock.json
-npm install
+docker compose down -v
+docker compose up -d --wait postgres
 ```
 
-#### Go build errors
+## File Structure
 
-```bash
-# In container terminal:
-cd backend
-go clean -cache
-go mod tidy
-go build ./cmd/api
-```
-
-### Development Best Practices
-
-1. **Always run migrations after pulling changes**
-   ```bash
-   cd backend
-   migrate -path migrations -database "$DATABASE_URL" up
-   ```
-
-2. **Use Go tests frequently**
-   ```bash
-   cd backend
-   go test -v ./...
-   ```
-
-3. **Check TypeScript/ESLint before committing**
-   ```bash
-   cd frontend
-   npm run lint
-   ```
-
-4. **Keep Docker Desktop running** — container needs Docker daemon
-
-5. **Restart migrations if database gets corrupted**
-   ```bash
-   migrate -path migrations -database "$DATABASE_URL" drop  # ⚠️ Deletes all data
-   migrate -path migrations -database "$DATABASE_URL" up
-   ```
-
-### File Structure
-
-```
+```text
 .devcontainer/
-├── devcontainer.json          # VS Code configuration
-├── Dockerfile                 # Container image definition
-├── docker-compose.yml         # Services (devcontainer + postgres)
-├── postCreateCommand.sh       # Runs once on first container creation
-├── postStartCommand.sh        # Runs every time container starts
+├── devcontainer.json          # Dev Containers configuration
+├── Dockerfile                 # Devcontainer image definition
+├── docker-compose.yml         # Devcontainer service overlay
+├── postCreateCommand.sh       # Runs once after container creation
+├── postStartCommand.sh        # Runs on every container start
 └── README.md                  # This file
 ```
 
-### Advanced Configuration
+## Documentation
 
-#### Customize Container Resources
-
-Edit `.devcontainer/docker-compose.yml`:
-
-```yaml
-services:
-  devcontainer:
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
-          cpus: '2'
-          memory: 4G
-```
-
-#### Add Additional Services
-
-Add to `docker-compose.yml` (e.g., Redis, Elasticsearch):
-
-```yaml
-services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    networks:
-      - bouji-network
-```
-
-#### Persist Database Between Sessions
-
-Database is already persisted via `postgres_data` volume.
-
-To clear database:
-```bash
-docker volume rm <devcontainer_postgres_data>
-```
-
-### Documentation
-
-- [VS Code Dev Containers Documentation](https://code.visualstudio.com/docs/devcontainers/containers)
-- [Docker Compose Documentation](https://docs.docker.com/compose/)
-- [Project Architecture Guide](../CLAUDE.md)
-- [Development Setup Guide](../DEVELOPMENT_SETUP.md)
-
-### Getting Help
-
-1. Check the [Troubleshooting](#troubleshooting) section above
-2. Review Docker logs: `docker compose -f .devcontainer/docker-compose.yml logs`
-3. Rebuild container: `docker compose -f .devcontainer/docker-compose.yml build --no-cache`
-4. Check [project README](../README.md) for additional context
-
----
-
-**Happy coding! 🚀**
+- VS Code Dev Containers Documentation: https://code.visualstudio.com/docs/devcontainers/containers
+- Docker Compose Documentation: https://docs.docker.com/compose/
+- Project Architecture Guide: ../CLAUDE.md
+- Development Setup Guide: ../DEVELOPMENT_SETUP.md

@@ -20,7 +20,7 @@ type stationResponse struct {
 	Overview         *string  `json:"overview,omitempty"`
 	Description      *string  `json:"description,omitempty"`
 	EditorNotes      *string  `json:"editor_notes,omitempty"`
-	Genre            string   `json:"genre"`
+	Genres           []string `json:"genres"`
 	Language         string   `json:"language"`
 	Country          string   `json:"country"`
 	City             string   `json:"city"`
@@ -36,24 +36,49 @@ type stationResponse struct {
 }
 
 func toStationResponse(s *store.Station) stationResponse {
-	styleTags := s.StyleTags
-	if styleTags == nil {
-		styleTags = []string{}
+	normSlice := func(in []string) []string {
+		if in == nil {
+			return []string{}
+		}
+		return in
 	}
-	formatTags := s.FormatTags
-	if formatTags == nil {
-		formatTags = []string{}
-	}
-	textureTags := s.TextureTags
-	if textureTags == nil {
-		textureTags = []string{}
+	styleTags := normSlice(s.StyleTags)
+	formatTags := normSlice(s.FormatTags)
+	textureTags := normSlice(s.TextureTags)
+
+	// genres: normalised lowercase, empty strings dropped
+	genres := make([]string, 0, len(s.Genres))
+	for _, g := range s.Genres {
+		if v := strings.ToLower(strings.TrimSpace(g)); v != "" {
+			genres = append(genres, v)
+		}
 	}
 
-	// tags = combined union of all three editorial tag categories
-	combined := make([]string, 0, len(styleTags)+len(formatTags)+len(textureTags))
-	combined = append(combined, styleTags...)
-	combined = append(combined, formatTags...)
-	combined = append(combined, textureTags...)
+	// tags = genres + editorial tag categories, deduped
+	seen := make(map[string]struct{}, len(genres)+len(styleTags)+len(formatTags)+len(textureTags))
+	combined := make([]string, 0, len(genres)+len(styleTags)+len(formatTags)+len(textureTags))
+	addTag := func(v string) {
+		v = strings.ToLower(strings.TrimSpace(v))
+		if v == "" {
+			return
+		}
+		if _, ok := seen[v]; !ok {
+			seen[v] = struct{}{}
+			combined = append(combined, v)
+		}
+	}
+	for _, g := range genres {
+		addTag(g)
+	}
+	for _, t := range styleTags {
+		addTag(t)
+	}
+	for _, t := range formatTags {
+		addTag(t)
+	}
+	for _, t := range textureTags {
+		addTag(t)
+	}
 
 	return stationResponse{
 		ID:               s.ID,
@@ -64,7 +89,7 @@ func toStationResponse(s *store.Station) stationResponse {
 		Overview:         s.Overview,
 		Description:      s.Overview,
 		EditorNotes:      s.EditorNotes,
-		Genre:            s.Genre,
+		Genres:           genres,
 		Language:         s.Language,
 		Country:          s.Country,
 		City:             s.City,

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
 import { useNowPlaying } from '@/hooks/useNowPlaying'
@@ -33,6 +34,9 @@ function WaveformBars() {
 }
 
 export function PlayerBar() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   const { station, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
 
   const isPlaying = state === 'playing'
@@ -41,6 +45,7 @@ export function PlayerBar() {
 
   const nowPlaying = useNowPlaying(station?.id, isPlaying || isLoading)
 
+  if (!mounted) return null
   if (!station && state === 'idle') return null
   const hasPrev = queueIndex > 0
   const hasNext = queueIndex < queue.length - 1
@@ -82,7 +87,7 @@ export function PlayerBar() {
                     ? nowPlaying.artist
                       ? `${nowPlaying.artist} · ${nowPlaying.song}`
                       : nowPlaying.title
-                    : [station?.genre, [station?.city, station?.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
+                    : [(station?.genres ?? []).join(', ') || undefined, [station?.city, station?.country].filter(Boolean).join(', ') || undefined].filter(Boolean).join(' · ')}
             </p>
           </div>
         </div>

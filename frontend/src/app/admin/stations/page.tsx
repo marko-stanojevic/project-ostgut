@@ -48,7 +48,7 @@ interface AdminStation {
   id: string
   name: string
   logo?: string
-  genre: string
+  genres: string[]
   country: string
   city: string
   bitrate: number
@@ -290,7 +290,7 @@ export default function AdminStationsPage() {
           body: JSON.stringify({
             name: createForm.name.trim(),
             stream_url: createForm.stream_url.trim(),
-            genre: createForm.genre.trim(),
+            genres: createForm.genre.split(',').map((g) => g.trim()).filter(Boolean),
             country: createForm.country.trim(),
             city: createForm.city.trim(),
             country_code: createForm.country_code.trim().toUpperCase(),
@@ -463,7 +463,7 @@ export default function AdminStationsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{s.genre || '—'}</td>
+                    <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{(s.genres ?? []).join(', ') || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.country || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       <div className="flex items-center gap-1.5">

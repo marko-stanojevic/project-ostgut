@@ -126,7 +126,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		StreamURL        string   `json:"stream_url" binding:"required"`
 		Homepage         string   `json:"homepage"`
 		Logo             string   `json:"logo"`
-		Genre            string   `json:"genre"`
+		Genres           []string `json:"genres"`
 		Language         string   `json:"language"`
 		Country          string   `json:"country"`
 		City             string   `json:"city"`
@@ -208,7 +208,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		StreamURL:        streamURL,
 		Homepage:         strings.TrimSpace(req.Homepage),
 		Logo:             strings.TrimSpace(req.Logo),
-		Genre:            strings.TrimSpace(req.Genre),
+		Genres:           req.Genres,
 		Language:         strings.TrimSpace(req.Language),
 		Country:          strings.TrimSpace(req.Country),
 		City:             strings.TrimSpace(req.City),
@@ -337,7 +337,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		StreamURL        *string   `json:"stream_url"`
 		Website          *string   `json:"website"`
 		Logo             *string   `json:"logo"`
-		Genre            *string   `json:"genre"`
+		Genres           *[]string `json:"genres"`
 		Language         *string   `json:"language"`
 		Country          *string   `json:"country"`
 		City             *string   `json:"city"`
@@ -367,7 +367,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		StreamURL:        current.StreamURL,
 		Homepage:         current.Homepage,
 		Logo:             current.Logo,
-		Genre:            current.Genre,
+		Genres:           current.Genres,
 		Language:         current.Language,
 		Country:          current.Country,
 		City:             current.City,
@@ -412,8 +412,8 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	if req.Logo != nil {
 		u.Logo = strings.TrimSpace(*req.Logo)
 	}
-	if req.Genre != nil {
-		u.Genre = strings.TrimSpace(*req.Genre)
+	if req.Genres != nil {
+		u.Genres = *req.Genres
 	}
 	if req.Language != nil {
 		u.Language = strings.TrimSpace(*req.Language)

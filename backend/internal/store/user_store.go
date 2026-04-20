@@ -40,7 +40,7 @@ type PlayerStation struct {
 	Name        string `json:"name"`
 	StreamURL   string `json:"streamUrl"`
 	Logo        string `json:"logo,omitempty"`
-	Genre       string `json:"genre"`
+	Genres      []string `json:"genres"`
 	Country     string `json:"country"`
 	City        string `json:"city,omitempty"`
 	CountryCode string `json:"countryCode"`

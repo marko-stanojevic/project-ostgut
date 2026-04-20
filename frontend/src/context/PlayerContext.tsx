@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import Hls from 'hls.js'
 import { useAuth } from '@/context/AuthContext'
 import {
   type Station,
@@ -38,6 +39,11 @@ interface PlayerContextValue {
   setVolume: (v: number) => void
 }
 
+function isHLS(url: string): boolean {
+  const path = url.split('?')[0].toLowerCase()
+  return path.endsWith('.m3u8')
+}
+
 const PlayerContext = createContext<PlayerContextValue | null>(null)
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
@@ -50,6 +56,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueueArr] = useState<Station[]>([])
   const [queueIndex, setQueueIdx] = useState(-1)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const hlsRef = useRef<Hls | null>(null)
 
   // Create the audio element once.
   useEffect(() => {
@@ -66,6 +73,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audioRef.current = audio
 
     return () => {
+      hlsRef.current?.destroy()
+      hlsRef.current = null
       audio.pause()
       audio.src = ''
     }
@@ -108,16 +117,48 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setPrefsUpdatedAt(new Date().toISOString())
   }
 
+  const detachHls = () => {
+    if (hlsRef.current) {
+      hlsRef.current.destroy()
+      hlsRef.current = null
+    }
+  }
+
   const startStation = (s: Station) => {
     const audio = audioRef.current
     if (!audio) return
+
     audio.pause()
-    audio.src = s.streamUrl
+    detachHls()
     setState('loading')
     setStation(s)
     touchPreferences()
-    audio.load()
-    audio.play().catch(() => setState('error'))
+
+    if (isHLS(s.streamUrl)) {
+      if (Hls.isSupported()) {
+        const hls = new Hls({ enableWorker: true, lowLatencyMode: true })
+        hlsRef.current = hls
+        hls.loadSource(s.streamUrl)
+        hls.attachMedia(audio)
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          audio.play().catch(() => setState('error'))
+        })
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) setState('error')
+        })
+      } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+        // Safari supports HLS natively.
+        audio.src = s.streamUrl
+        audio.load()
+        audio.play().catch(() => setState('error'))
+      } else {
+        setState('error')
+      }
+    } else {
+      audio.src = s.streamUrl
+      audio.load()
+      audio.play().catch(() => setState('error'))
+    }
   }
 
   const play = (s: Station) => {
@@ -126,9 +167,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     // Same station — just resume if paused.
     if (station?.id === s.id && state === 'paused') {
-      if (!audio.src) {
-        audio.src = s.streamUrl
-        audio.load()
+      if (!audio.src && !hlsRef.current) {
+        startStation(s)
+        return
       }
       audio.play().catch(() => setState('error'))
       return
@@ -169,9 +210,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current
     if (!audio) return
 
-    if (!audio.src && station) {
-      audio.src = station.streamUrl
-      audio.load()
+    if (!audio.src && !hlsRef.current && station) {
+      startStation(station)
+      return
     }
 
     audio.play().catch(() => setState('error'))
@@ -181,6 +222,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current
     if (!audio) return
     audio.pause()
+    detachHls()
     audio.removeAttribute('src')
     audio.load()
     setState('idle')

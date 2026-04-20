@@ -1,11 +1,12 @@
 services:
   postgres:
     image: postgres:16-alpine
+    hostname: postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ostgut
+      POSTGRES_PASSWORD: localpassword
     ports:
       - "5432:5432"
     volumes:

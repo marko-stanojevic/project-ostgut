@@ -1,10 +1,13 @@
 {
-  "name": "Bouji.fm Development",
-  "description": "Complete development environment for Bouji.fm (Go + Node.js + PostgreSQL)",
-  "dockerComposeFile": "docker-compose.yml",
+  "name": "Bougie.fm Development",
+  "dockerComposeFile": [
+    "../docker-compose.yml",
+    "docker-compose.yml"
+  ],
   "service": "devcontainer",
-  "workspaceFolder": "/workspace",
-  "forwardPorts": [3000, 8080, 5432],
+  "runServices": [ "postgres", "devcontainer" ],
+  "workspaceFolder": "/workspace/project-ostgut",
+  "forwardPorts": [ 3000, 8080, 5432 ],
   "portsAttributes": {
     "3000": {
       "label": "Frontend (Next.js)",
@@ -55,7 +58,7 @@
           "editor.defaultFormatter": "esbenp.prettier-vscode",
           "editor.formatOnSave": true
         },
-        "editor.rulers": [80, 120],
+        "editor.rulers": [ 80, 120 ],
         "editor.wordWrap": "on",
         "files.watcherExclude": {
           "**/node_modules/**": true,
@@ -66,13 +69,13 @@
     }
   },
   "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": { },
+    "ghcr.io/devcontainers/features/github-cli:1": { }
   },
   "postCreateCommand": "bash .devcontainer/postCreateCommand.sh",
   "postStartCommand": "bash .devcontainer/postStartCommand.sh",
   "remoteUser": "vscode",
   "remoteEnv": {
-    "PATH": "${containerEnv:PATH}:/usr/local/go/bin:${containerEnv:HOME}/.nvm/versions/node/v20.15.0/bin"
+    "PATH": "${containerEnv:PATH}:/usr/local/go/bin"
   }
 }
