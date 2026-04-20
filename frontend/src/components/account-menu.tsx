@@ -2,8 +2,9 @@
 
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
+import { useTranslations } from 'next-intl'
+import { useRouter } from '@/i18n/navigation'
 import {
     SignOutIcon,
     MoonIcon,
@@ -75,6 +76,7 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
     const { user, session, signOut } = useAuth()
     const { isAdmin } = useAdminStatus()
     const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.image ?? null)
+    const t = useTranslations('account_menu')
 
     const isDark = resolvedTheme === 'dark'
 
@@ -134,12 +136,12 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
                 <div className="py-1">
                     <DropdownMenuItem onClick={() => router.push('/settings?section=profile')} className="gap-2.5 px-3 py-2 text-sm">
                         <UserIcon className="h-4 w-4 text-muted-foreground" />
-                        Profile
+                        {t('profile')}
                     </DropdownMenuItem>
                     {isAdmin && (
                         <DropdownMenuItem onClick={() => router.push('/admin')} className="gap-2.5 px-3 py-2 text-sm">
                             <ShieldCheckIcon className="h-4 w-4 text-muted-foreground" />
-                            Admin
+                            {t('admin')}
                         </DropdownMenuItem>
                     )}
                 </div>
@@ -150,19 +152,19 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
                 <div className="py-1">
                     <DropdownMenuItem onClick={() => router.push('/settings')} className="gap-2.5 px-3 py-2 text-sm">
                         <GearIcon className="h-4 w-4 text-muted-foreground" />
-                        Settings
+                        {t('settings')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/settings?section=security')} className="gap-2.5 px-3 py-2 text-sm">
                         <LockIcon className="h-4 w-4 text-muted-foreground" />
-                        Security
+                        {t('security')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/settings?section=notifications')} className="gap-2.5 px-3 py-2 text-sm">
                         <BellIcon className="h-4 w-4 text-muted-foreground" />
-                        Notifications
+                        {t('notifications')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/settings?section=preferences')} className="gap-2.5 px-3 py-2 text-sm">
                         <PaletteIcon className="h-4 w-4 text-muted-foreground" />
-                        Preferences
+                        {t('preferences')}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                         onClick={() => setTheme(isDark ? 'light' : 'dark')}
@@ -172,7 +174,7 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
                             ? <SunIcon className="h-4 w-4 text-muted-foreground" />
                             : <MoonIcon className="h-4 w-4 text-muted-foreground" />
                         }
-                        Appearance
+                        {t('appearance')}
                     </DropdownMenuItem>
                 </div>
 
@@ -185,7 +187,7 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
                         className="gap-2.5 px-3 py-2 text-sm text-muted-foreground"
                     >
                         <SignOutIcon className="h-4 w-4" />
-                        Sign out
+                        {t('sign_out')}
                     </DropdownMenuItem>
                 </div>
 

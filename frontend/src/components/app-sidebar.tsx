@@ -1,26 +1,20 @@
 'use client'
 
-import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { useTranslations } from 'next-intl'
+import { Link } from '@/i18n/navigation'
 import { RadioIcon, CompassIcon, MicrophoneIcon, ChatIcon, UserIcon, CreditCardIcon, ShieldIcon, BellIcon, PaletteIcon } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 import { usePlayer } from '@/context/PlayerContext'
 
-const mainNavItems = [
-  { href: '/curated', icon: RadioIcon, label: 'Curated' },
-  { href: '/explore', icon: CompassIcon, label: 'Explore' },
-  { href: '/shows', icon: MicrophoneIcon, label: 'Shows' },
-  { href: '/talks', icon: ChatIcon, label: 'Talks' },
-]
-
 const settingsSections = [
-  { section: 'overview', label: 'Overview', icon: UserIcon },
-  { section: 'plan', label: 'Plan', icon: CreditCardIcon },
-  { section: 'profile', label: 'Profile', icon: UserIcon },
-  { section: 'security', label: 'Security', icon: ShieldIcon },
-  { section: 'notifications', label: 'Notifications', icon: BellIcon },
-  { section: 'preferences', label: 'Preferences', icon: PaletteIcon },
+  { section: 'overview', icon: UserIcon, tKey: 'overview' },
+  { section: 'plan', icon: CreditCardIcon, tKey: 'plan' },
+  { section: 'profile', icon: UserIcon, tKey: 'profile' },
+  { section: 'security', icon: ShieldIcon, tKey: 'security' },
+  { section: 'notifications', icon: BellIcon, tKey: 'notifications' },
+  { section: 'preferences', icon: PaletteIcon, tKey: 'preferences' },
 ]
 
 function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
@@ -34,12 +28,13 @@ function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
 function SettingsSubNav() {
   const searchParams = useSearchParams()
   const activeSection = searchParams.get('section') ?? 'overview'
+  const t = useTranslations('settings.sections')
 
   return (
     <div className="px-4 pt-8">
-      <SidebarSectionLabel>Settings</SidebarSectionLabel>
+      <SidebarSectionLabel>{useTranslations('nav')('settings_section')}</SidebarSectionLabel>
       <div className="mt-5">
-        {settingsSections.map(({ section, label, icon: Icon }) => {
+        {settingsSections.map(({ section, icon: Icon, tKey }) => {
           const active = activeSection === section
           return (
             <Link
@@ -53,7 +48,7 @@ function SettingsSubNav() {
               )}
             >
               <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-foreground' : 'text-muted-foreground/85')} />
-              <span>{label}</span>
+              <span>{t(tKey as Parameters<typeof t>[0])}</span>
             </Link>
           )
         })}
@@ -64,6 +59,7 @@ function SettingsSubNav() {
 
 function NowPlayingIndicator() {
   const { station, state } = usePlayer()
+  const t = useTranslations('player')
   if (!station || state === 'idle') return null
 
   return (
@@ -73,7 +69,7 @@ function NowPlayingIndicator() {
         state === 'playing' ? 'animate-pulse bg-brand' : 'bg-muted-foreground/40'
       )} />
       <span className={state === 'playing' ? 'text-brand' : ''}>
-        {state === 'playing' ? 'Live' : 'Paused'}
+        {state === 'playing' ? t('live') : t('paused')}
       </span>
     </span>
   )
@@ -82,6 +78,14 @@ function NowPlayingIndicator() {
 export function AppSidebarMobile() {
   const pathname = usePathname()
   const { station, state } = usePlayer()
+  const t = useTranslations('nav')
+
+  const mainNavItems = [
+    { href: '/curated', icon: RadioIcon, label: t('curated') },
+    { href: '/explore', icon: CompassIcon, label: t('explore') },
+    { href: '/shows', icon: MicrophoneIcon, label: t('shows') },
+    { href: '/talks', icon: ChatIcon, label: t('talks') },
+  ]
 
   return (
     <nav className="border-b border-border/50 bg-background md:hidden">
@@ -121,6 +125,14 @@ export function AppSidebarMobile() {
 export function AppSidebar() {
   const pathname = usePathname()
   const isSettings = pathname.startsWith('/settings')
+  const t = useTranslations('nav')
+
+  const mainNavItems = [
+    { href: '/curated', icon: RadioIcon, label: t('curated') },
+    { href: '/explore', icon: CompassIcon, label: t('explore') },
+    { href: '/shows', icon: MicrophoneIcon, label: t('shows') },
+    { href: '/talks', icon: ChatIcon, label: t('talks') },
+  ]
 
   return (
     <aside className="hidden w-[246px] shrink-0 flex-col border-r border-border/40 bg-[linear-gradient(180deg,rgba(248,247,245,0.98),rgba(245,243,239,0.92))] md:flex dark:bg-[linear-gradient(180deg,rgba(12,11,9,0.98),rgba(18,16,14,0.94))]">
@@ -130,7 +142,7 @@ export function AppSidebar() {
         </Suspense>
       ) : (
         <div className="px-4 pt-8">
-          <SidebarSectionLabel>Listen</SidebarSectionLabel>
+          <SidebarSectionLabel>{t('listen_section')}</SidebarSectionLabel>
           <div className="mt-5 border-t border-border/35 pt-4">
             <nav>
               {mainNavItems.map(({ href, icon: Icon, label }) => {
@@ -156,7 +168,7 @@ export function AppSidebar() {
             </nav>
             <div className="mt-8 px-5">
               <p className="text-[10px] font-light leading-relaxed tracking-[0.01em] text-muted-foreground/80">
-                Curated for trust. Explore for discovery.
+                {t('sidebar_tagline')}
               </p>
             </div>
           </div>

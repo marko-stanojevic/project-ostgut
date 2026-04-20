@@ -1,0 +1,258 @@
+{
+  "home": {
+    "badge": "Radio Premium Curada",
+    "heading_line1": "La Sala de",
+    "heading_line2": "Escucha",
+    "subheading": "La mejor radio en vivo del mundo, cuidadosamente curada. Sin ruido. Sin desorden. Solo música.",
+    "cta_primary": "Empezar a escuchar gratis",
+    "cta_secondary": "Ver planes",
+    "social_proof": "Miles de emisoras · En vivo · Siempre gratis para empezar",
+    "header_signup": "Registrarse gratis"
+  },
+  "auth": {
+    "login": {
+      "title": "Bienvenido de nuevo",
+      "subtitle": "Inicia sesión para continuar en bougie.fm",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "forgot_password": "¿Olvidaste tu contraseña?",
+      "submit": "Continuar",
+      "submitting": "Iniciando sesión…",
+      "or": "o",
+      "github": "Continuar con GitHub",
+      "google": "Continuar con Google",
+      "no_account": "¿No tienes cuenta?",
+      "sign_up": "Regístrate"
+    },
+    "signup": {
+      "title": "Únete a bougie.fm",
+      "subtitle": "Crea tu cuenta y entra en la Sala de Escucha.",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "password_hint": "Al menos 8 caracteres",
+      "confirm_password": "Confirmar contraseña",
+      "submit": "Crear cuenta",
+      "submitting": "Creando cuenta…",
+      "or": "o",
+      "github": "Continuar con GitHub",
+      "google": "Continuar con Google",
+      "has_account": "¿Ya tienes cuenta?",
+      "sign_in": "Inicia sesión",
+      "success_title": "¡Cuenta creada!",
+      "success_subtitle": "Redirigiendo al inicio de sesión…",
+      "error_mismatch": "Las contraseñas no coinciden",
+      "error_short": "La contraseña debe tener al menos 8 caracteres"
+    },
+    "forgot_password": {
+      "title": "Restablecer contraseña",
+      "description": "Ingresa tu correo y te enviaremos un enlace de restablecimiento",
+      "email": "Correo electrónico",
+      "submit": "Enviar enlace",
+      "submitting": "Enviando…",
+      "back_to_login": "Volver al inicio de sesión",
+      "success_title": "Revisa tu correo",
+      "success_description": "Hemos enviado un enlace de restablecimiento a {email}."
+    },
+    "reset_password": {
+      "title": "Nueva contraseña",
+      "description": "Elige una contraseña segura para tu cuenta",
+      "new_password": "Nueva contraseña",
+      "confirm_password": "Confirmar contraseña",
+      "password_hint": "Al menos 8 caracteres",
+      "submit": "Actualizar contraseña",
+      "submitting": "Actualizando…",
+      "error_mismatch": "Las contraseñas no coinciden",
+      "error_short": "La contraseña debe tener al menos 8 caracteres",
+      "invalid_title": "Enlace inválido",
+      "invalid_description": "Este enlace de restablecimiento es inválido o ha expirado. Solicita uno nuevo."
+    }
+  },
+  "nav": {
+    "curated": "Curado",
+    "explore": "Explorar",
+    "shows": "Programas",
+    "talks": "Charlas",
+    "listen_section": "Escuchar",
+    "settings_section": "Ajustes",
+    "sidebar_tagline": "Curado para la confianza. Explorar para el descubrimiento.",
+    "admin": "Admin",
+    "back_to_app": "Volver a la app"
+  },
+  "player": {
+    "live": "En vivo",
+    "paused": "Pausado"
+  },
+  "search": {
+    "placeholder": "Buscar emisoras, géneros, países…",
+    "clear_aria": "Limpiar búsqueda"
+  },
+  "account_menu": {
+    "profile": "Perfil",
+    "admin": "Admin",
+    "settings": "Ajustes",
+    "security": "Seguridad",
+    "notifications": "Notificaciones",
+    "preferences": "Preferencias",
+    "appearance": "Apariencia",
+    "sign_out": "Cerrar sesión"
+  },
+  "curated": {
+    "section_label": "Curado",
+    "heading": "Empieza con lo que merece tu atención.",
+    "description": "Escucha editorial para un descubrimiento más pausado: selecciones de confianza, picks del equipo y las emisoras a las que la gente vuelve cuando el gusto importa más que el volumen.",
+    "feed_for_you": "Para ti",
+    "feed_staff_picks": "Selección del equipo",
+    "feed_trending": "Tendencias",
+    "section_editors": "Selección editorial",
+    "section_staff_picks": "Selección del equipo",
+    "section_most_played": "Más escuchadas",
+    "section_trending_now": "Tendencia ahora",
+    "search_results_for": "Resultados para",
+    "search_clear": "Limpiar",
+    "no_stations": "No se encontraron emisoras",
+    "no_stations_hint": "Prueba Explorar para una búsqueda más amplia.",
+    "no_featured": "Aún no hay emisoras destacadas.",
+    "no_stations_yet": "Aún no hay emisoras.",
+    "load_more": "Cargar más · {count} restantes",
+    "loading": "Cargando…",
+    "back": "Atrás"
+  },
+  "explore": {
+    "section_label": "Explorar",
+    "heading": "Explora por estado de ánimo, geografía y gusto.",
+    "description": "Una forma más amplia de explorar el catálogo. Filtra por género, idioma, país y calidad de señal.",
+    "filters_label": "Filtros",
+    "active_filters": "{count} activos",
+    "filter_clear": "Limpiar",
+    "filter_genre": "Género",
+    "filter_style": "Estilo",
+    "filter_format": "Formato",
+    "filter_texture": "Textura",
+    "all_genres": "Todos los géneros",
+    "any_style": "Cualquier estilo",
+    "any_format": "Cualquier formato",
+    "any_texture": "Cualquier textura",
+    "sort_label": "Ordenar",
+    "sort_recommended": "Recomendado",
+    "sort_popular": "Popular",
+    "matches": "{count} resultados",
+    "no_results": "No hay emisoras para esta vista",
+    "no_results_hint": "Prueba una combinación de filtros diferente.",
+    "load_more": "Cargar más · {count} restantes",
+    "loading": "Cargando…"
+  },
+  "coming_soon": "Próximamente.",
+  "settings": {
+    "sections": {
+      "overview": "Resumen",
+      "plan": "Plan",
+      "profile": "Perfil",
+      "security": "Seguridad",
+      "notifications": "Notificaciones",
+      "preferences": "Preferencias"
+    },
+    "overview": {
+      "profile_description": "Nombre de pantalla",
+      "plan_description": "Suscripción y facturación",
+      "security_description": "Contraseña",
+      "notifications_description": "Preferencias de correo",
+      "preferences_description": "Idioma y apariencia"
+    },
+    "profile": {
+      "title": "Perfil",
+      "description": "Tu identidad pública en bougie.fm.",
+      "avatar_label": "Avatar",
+      "avatar_hint": "Las imágenes cuadradas funcionan mejor. JPG, PNG o WebP hasta 5 MB.",
+      "upload": "Subir avatar",
+      "uploading": "Subiendo…",
+      "email_label": "Correo electrónico",
+      "email_hint": "Tu correo electrónico no puede cambiarse.",
+      "name_label": "Nombre de pantalla",
+      "name_placeholder": "Tu nombre",
+      "save": "Guardar cambios",
+      "saving": "Guardando…",
+      "saved": "Guardado",
+      "sign_out_label": "Cerrar sesión",
+      "sign_out_description": "Cerrar sesión en este dispositivo.",
+      "sign_out_button": "Cerrar sesión",
+      "avatar_type_error": "Usa una imagen JPG, PNG o WebP."
+    },
+    "security": {
+      "title": "Seguridad",
+      "description": "Gestiona tu contraseña y acceso a la cuenta.",
+      "change_password": "Cambiar contraseña",
+      "current_password": "Contraseña actual",
+      "new_password": "Nueva contraseña",
+      "confirm_password": "Confirmar nueva contraseña",
+      "update": "Actualizar contraseña",
+      "updated": "Contraseña actualizada",
+      "error_mismatch": "Las nuevas contraseñas no coinciden",
+      "error_short": "La contraseña debe tener al menos 8 caracteres"
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "description": "Elige qué recibes de nosotros.",
+      "email_label": "Notificaciones por correo",
+      "email_description": "Recibe correos importantes sobre tu cuenta y actividad.",
+      "updates_label": "Actualizaciones del producto",
+      "updates_description": "Nuevas funciones, mejoras y anuncios."
+    },
+    "preferences": {
+      "title": "Preferencias",
+      "description": "Personaliza tu experiencia.",
+      "appearance_label": "Apariencia",
+      "appearance_description": "Cambia entre modo claro y oscuro.",
+      "light": "Claro",
+      "dark": "Oscuro",
+      "language_label": "Idioma",
+      "language_description": "Elige tu idioma preferido."
+    },
+    "plan": {
+      "title": "Plan",
+      "description": "Gestiona tu suscripción y facturación."
+    }
+  },
+  "pricing": {
+    "title": "Precios simples y transparentes",
+    "subtitle": "Empieza gratis, mejora para la experiencia completa.",
+    "free_name": "Gratis",
+    "free_price": "$0",
+    "per_month": "/ mes",
+    "free_cta": "Empezar gratis",
+    "pro_name": "Pro",
+    "pro_badge": "Popular",
+    "pro_price": "$3.99",
+    "pro_cta_guest": "Iniciar prueba de 14 días",
+    "pro_cta_auth": "Mejorar a Pro",
+    "footnote": "Todos los planes incluyen una prueba de 14 días. No se requiere tarjeta de crédito. Los pagos son procesados de forma segura por {paddle}.",
+    "free_feature_1": "Acceso a emisoras gratuitas curadas",
+    "free_feature_2": "Calidad de stream estándar",
+    "free_feature_3": "Búsqueda por género, país e idioma",
+    "free_feature_4": "Prueba de 14 días de Pro",
+    "pro_feature_1": "Catálogo completo de emisoras premium",
+    "pro_feature_2": "Selección del equipo y destacados editoriales",
+    "pro_feature_3": "Streams de mayor calidad y más fiables",
+    "pro_feature_4": "Actualizaciones de curación prioritarias",
+    "pro_feature_5": "Acceso anticipado a nuevas funciones",
+    "pro_feature_6": "Soporte más rápido"
+  },
+  "footer": {
+    "all_rights_reserved": "Todos los derechos reservados.",
+    "privacy": "Privacidad",
+    "terms": "Términos",
+    "privacy_policy": "Política de privacidad",
+    "terms_of_service": "Términos de servicio",
+    "refunds": "Reembolsos",
+    "upgrade": "Mejorar"
+  },
+  "admin": {
+    "panel_label": "Panel de administración",
+    "nav_overview": "Resumen",
+    "nav_stations": "Emisoras",
+    "nav_users": "Usuarios"
+  },
+  "station_detail": {
+    "back": "Atrás",
+    "unknown_genre": "Género desconocido"
+  }
+}

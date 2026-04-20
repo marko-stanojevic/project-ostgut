@@ -1,0 +1,258 @@
+{
+  "home": {
+    "badge": "Premium Kurateret Radio",
+    "heading_line1": "Lytterummet",
+    "heading_line2": "",
+    "subheading": "Verdens bedste live radio, omhyggeligt kurateret. Ingen rod. Ingen støj. Kun musik.",
+    "cta_primary": "Begynd at lytte gratis",
+    "cta_secondary": "Se planer",
+    "social_proof": "Tusindvis af stationer · Live · Altid gratis at starte",
+    "header_signup": "Tilmeld dig gratis"
+  },
+  "auth": {
+    "login": {
+      "title": "Velkommen tilbage",
+      "subtitle": "Log ind for at fortsætte til bougie.fm",
+      "email": "E-mail",
+      "password": "Adgangskode",
+      "forgot_password": "Glemt adgangskode?",
+      "submit": "Fortsæt",
+      "submitting": "Logger ind…",
+      "or": "eller",
+      "github": "Fortsæt med GitHub",
+      "google": "Fortsæt med Google",
+      "no_account": "Har du ikke en konto?",
+      "sign_up": "Tilmeld dig"
+    },
+    "signup": {
+      "title": "Bliv en del af bougie.fm",
+      "subtitle": "Opret din konto og træd ind i Lytterummet.",
+      "email": "E-mail",
+      "password": "Adgangskode",
+      "password_hint": "Mindst 8 tegn",
+      "confirm_password": "Bekræft adgangskode",
+      "submit": "Opret konto",
+      "submitting": "Opretter konto…",
+      "or": "eller",
+      "github": "Fortsæt med GitHub",
+      "google": "Fortsæt med Google",
+      "has_account": "Har du allerede en konto?",
+      "sign_in": "Log ind",
+      "success_title": "Konto oprettet!",
+      "success_subtitle": "Omdirigerer til login…",
+      "error_mismatch": "Adgangskoderne stemmer ikke overens",
+      "error_short": "Adgangskoden skal være mindst 8 tegn"
+    },
+    "forgot_password": {
+      "title": "Nulstil adgangskode",
+      "description": "Indtast din e-mail, og vi sender dig et nulstillingslink",
+      "email": "E-mail",
+      "submit": "Send nulstillingslink",
+      "submitting": "Sender…",
+      "back_to_login": "Tilbage til login",
+      "success_title": "Tjek din e-mail",
+      "success_description": "Vi har sendt et nulstillingslink til {email}."
+    },
+    "reset_password": {
+      "title": "Ny adgangskode",
+      "description": "Vælg en stærk adgangskode til din konto",
+      "new_password": "Ny adgangskode",
+      "confirm_password": "Bekræft adgangskode",
+      "password_hint": "Mindst 8 tegn",
+      "submit": "Opdater adgangskode",
+      "submitting": "Opdaterer…",
+      "error_mismatch": "Adgangskoderne stemmer ikke overens",
+      "error_short": "Adgangskoden skal være mindst 8 tegn",
+      "invalid_title": "Ugyldigt link",
+      "invalid_description": "Dette nulstillingslink er ugyldigt eller udløbet. Anmod om et nyt."
+    }
+  },
+  "nav": {
+    "curated": "Kurateret",
+    "explore": "Udforsk",
+    "shows": "Shows",
+    "talks": "Talks",
+    "listen_section": "Lyt",
+    "settings_section": "Indstillinger",
+    "sidebar_tagline": "Kurateret til tillid. Udforsk til opdagelse.",
+    "admin": "Admin",
+    "back_to_app": "Tilbage til appen"
+  },
+  "player": {
+    "live": "Live",
+    "paused": "Sat på pause"
+  },
+  "search": {
+    "placeholder": "Søg stationer, genrer, lande…",
+    "clear_aria": "Ryd søgning"
+  },
+  "account_menu": {
+    "profile": "Profil",
+    "admin": "Admin",
+    "settings": "Indstillinger",
+    "security": "Sikkerhed",
+    "notifications": "Notifikationer",
+    "preferences": "Præferencer",
+    "appearance": "Udseende",
+    "sign_out": "Log ud"
+  },
+  "curated": {
+    "section_label": "Kurateret",
+    "heading": "Start med det, der fortjener din opmærksomhed.",
+    "description": "Redaktionel lytning for langsommere opdagelse: betroede udvalg, teamanbefalinger og de stationer, folk vender tilbage til, når smag betyder mere end volumen.",
+    "feed_for_you": "Til dig",
+    "feed_staff_picks": "Teamvalg",
+    "feed_trending": "Trending",
+    "section_editors": "Redaktionelt udvalg",
+    "section_staff_picks": "Teamvalg",
+    "section_most_played": "Mest afspillet",
+    "section_trending_now": "Trending nu",
+    "search_results_for": "Resultater for",
+    "search_clear": "Ryd",
+    "no_stations": "Ingen stationer fundet",
+    "no_stations_hint": "Prøv Udforsk for bredere filtrering.",
+    "no_featured": "Ingen fremhævede stationer endnu.",
+    "no_stations_yet": "Ingen stationer endnu.",
+    "load_more": "Indlæs mere · {count} tilbage",
+    "loading": "Indlæser…",
+    "back": "Tilbage"
+  },
+  "explore": {
+    "section_label": "Udforsk",
+    "heading": "Udforsk efter stemning, geografi og smag.",
+    "description": "En bredere måde at gennemse kataloget på. Filtrer efter genre, sprog, land og signalkvalitet.",
+    "filters_label": "Filtre",
+    "active_filters": "{count} aktive",
+    "filter_clear": "Ryd",
+    "filter_genre": "Genre",
+    "filter_style": "Stil",
+    "filter_format": "Format",
+    "filter_texture": "Tekstur",
+    "all_genres": "Alle genrer",
+    "any_style": "Alle stilarter",
+    "any_format": "Alle formater",
+    "any_texture": "Alle teksturer",
+    "sort_label": "Sortér",
+    "sort_recommended": "Anbefalet",
+    "sort_popular": "Populær",
+    "matches": "{count} match",
+    "no_results": "Ingen stationer matchede denne visning",
+    "no_results_hint": "Prøv en anden filterkombination.",
+    "load_more": "Indlæs mere · {count} tilbage",
+    "loading": "Indlæser…"
+  },
+  "coming_soon": "Kommer snart.",
+  "settings": {
+    "sections": {
+      "overview": "Oversigt",
+      "plan": "Plan",
+      "profile": "Profil",
+      "security": "Sikkerhed",
+      "notifications": "Notifikationer",
+      "preferences": "Præferencer"
+    },
+    "overview": {
+      "profile_description": "Visningsnavn",
+      "plan_description": "Abonnement & fakturering",
+      "security_description": "Adgangskode",
+      "notifications_description": "E-mailpræferencer",
+      "preferences_description": "Sprog & udseende"
+    },
+    "profile": {
+      "title": "Profil",
+      "description": "Din offentlige identitet på bougie.fm.",
+      "avatar_label": "Avatar",
+      "avatar_hint": "Kvadratiske billeder fungerer bedst. JPG, PNG eller WebP op til 5 MB.",
+      "upload": "Upload avatar",
+      "uploading": "Uploader…",
+      "email_label": "E-mail",
+      "email_hint": "Din e-mailadresse kan ikke ændres.",
+      "name_label": "Visningsnavn",
+      "name_placeholder": "Dit navn",
+      "save": "Gem ændringer",
+      "saving": "Gemmer…",
+      "saved": "Gemt",
+      "sign_out_label": "Log ud",
+      "sign_out_description": "Log ud fra denne enhed.",
+      "sign_out_button": "Log ud",
+      "avatar_type_error": "Brug et JPG, PNG eller WebP-billede."
+    },
+    "security": {
+      "title": "Sikkerhed",
+      "description": "Administrer din adgangskode og kontoadgang.",
+      "change_password": "Skift adgangskode",
+      "current_password": "Nuværende adgangskode",
+      "new_password": "Ny adgangskode",
+      "confirm_password": "Bekræft ny adgangskode",
+      "update": "Opdater adgangskode",
+      "updated": "Adgangskode opdateret",
+      "error_mismatch": "Nye adgangskoder stemmer ikke overens",
+      "error_short": "Adgangskoden skal være mindst 8 tegn"
+    },
+    "notifications": {
+      "title": "Notifikationer",
+      "description": "Vælg, hvad du hører fra os.",
+      "email_label": "E-mailnotifikationer",
+      "email_description": "Modtag vigtige konto- og aktivitets-e-mails.",
+      "updates_label": "Produktopdateringer",
+      "updates_description": "Nye funktioner, forbedringer og meddelelser."
+    },
+    "preferences": {
+      "title": "Præferencer",
+      "description": "Tilpas din oplevelse.",
+      "appearance_label": "Udseende",
+      "appearance_description": "Skift mellem lys og mørk tilstand.",
+      "light": "Lys",
+      "dark": "Mørk",
+      "language_label": "Sprog",
+      "language_description": "Vælg dit foretrukne sprog."
+    },
+    "plan": {
+      "title": "Plan",
+      "description": "Administrer dit abonnement og fakturering."
+    }
+  },
+  "pricing": {
+    "title": "Enkel, gennemsigtig prissætning",
+    "subtitle": "Start gratis, opgrader for den fulde lytteoplevelse.",
+    "free_name": "Gratis",
+    "free_price": "$0",
+    "per_month": "/ måned",
+    "free_cta": "Kom gratis i gang",
+    "pro_name": "Pro",
+    "pro_badge": "Populær",
+    "pro_price": "$3.99",
+    "pro_cta_guest": "Start 14-dages gratis prøve",
+    "pro_cta_auth": "Opgrader til Pro",
+    "footnote": "Alle planer inkluderer en 14-dages gratis prøve. Intet kreditkort kræves. Betalinger behandles sikkert af {paddle}.",
+    "free_feature_1": "Adgang til kuraterede gratis stationer",
+    "free_feature_2": "Standard streamkvalitet",
+    "free_feature_3": "Søg efter genre, land og sprog",
+    "free_feature_4": "14-dages prøve af Pro",
+    "pro_feature_1": "Fuldt premium stationskatalog",
+    "pro_feature_2": "Teamvalg og redaktionelle highlights",
+    "pro_feature_3": "Højere kvalitet og mere pålidelige streams",
+    "pro_feature_4": "Prioriterede kureringsopdateringer",
+    "pro_feature_5": "Tidlig adgang til nye lyttefunktioner",
+    "pro_feature_6": "Hurtigere support"
+  },
+  "footer": {
+    "all_rights_reserved": "Alle rettigheder forbeholdes.",
+    "privacy": "Privatliv",
+    "terms": "Vilkår",
+    "privacy_policy": "Privatlivspolitik",
+    "terms_of_service": "Servicevilkår",
+    "refunds": "Refusioner",
+    "upgrade": "Opgrader"
+  },
+  "admin": {
+    "panel_label": "Adminpanel",
+    "nav_overview": "Oversigt",
+    "nav_stations": "Stationer",
+    "nav_users": "Brugere"
+  },
+  "station_detail": {
+    "back": "Tilbage",
+    "unknown_genre": "Ukendt genre"
+  }
+}

@@ -1,0 +1,258 @@
+{
+  "home": {
+    "badge": "Premium Curated Radio",
+    "heading_line1": "The Listening",
+    "heading_line2": "Room",
+    "subheading": "The world's finest live radio, carefully curated. No clutter. No noise. Just music.",
+    "cta_primary": "Start Listening Free",
+    "cta_secondary": "See Plans",
+    "social_proof": "Thousands of stations · Live · Always free to start",
+    "header_signup": "Sign Up Free"
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to continue to bougie.fm",
+      "email": "Email",
+      "password": "Password",
+      "forgot_password": "Forgot password?",
+      "submit": "Continue",
+      "submitting": "Signing in…",
+      "or": "or",
+      "github": "Continue with GitHub",
+      "google": "Continue with Google",
+      "no_account": "Don't have an account?",
+      "sign_up": "Sign up"
+    },
+    "signup": {
+      "title": "Join bougie.fm",
+      "subtitle": "Create your account and step into the Listening Room.",
+      "email": "Email",
+      "password": "Password",
+      "password_hint": "At least 8 characters",
+      "confirm_password": "Confirm Password",
+      "submit": "Create account",
+      "submitting": "Creating account…",
+      "or": "or",
+      "github": "Continue with GitHub",
+      "google": "Continue with Google",
+      "has_account": "Already have an account?",
+      "sign_in": "Sign in",
+      "success_title": "Account created!",
+      "success_subtitle": "Redirecting to login…",
+      "error_mismatch": "Passwords do not match",
+      "error_short": "Password must be at least 8 characters"
+    },
+    "forgot_password": {
+      "title": "Reset password",
+      "description": "Enter your email and we'll send you a reset link",
+      "email": "Email",
+      "submit": "Send Reset Link",
+      "submitting": "Sending…",
+      "back_to_login": "Back to login",
+      "success_title": "Check your email",
+      "success_description": "We've sent a reset link to {email}."
+    },
+    "reset_password": {
+      "title": "New password",
+      "description": "Choose a strong password for your account",
+      "new_password": "New Password",
+      "confirm_password": "Confirm Password",
+      "password_hint": "At least 8 characters",
+      "submit": "Update Password",
+      "submitting": "Updating…",
+      "error_mismatch": "Passwords do not match",
+      "error_short": "Password must be at least 8 characters",
+      "invalid_title": "Invalid link",
+      "invalid_description": "This reset link is invalid or has expired. Please request a new one."
+    }
+  },
+  "nav": {
+    "curated": "Curated",
+    "explore": "Explore",
+    "shows": "Shows",
+    "talks": "Talks",
+    "listen_section": "Listen",
+    "settings_section": "Settings",
+    "sidebar_tagline": "Curated for trust. Explore for discovery.",
+    "admin": "Admin",
+    "back_to_app": "Back to app"
+  },
+  "player": {
+    "live": "Live",
+    "paused": "Paused"
+  },
+  "search": {
+    "placeholder": "Search stations, genres, countries…",
+    "clear_aria": "Clear search"
+  },
+  "account_menu": {
+    "profile": "Profile",
+    "admin": "Admin",
+    "settings": "Settings",
+    "security": "Security",
+    "notifications": "Notifications",
+    "preferences": "Preferences",
+    "appearance": "Appearance",
+    "sign_out": "Sign out"
+  },
+  "curated": {
+    "section_label": "Curated",
+    "heading": "Start with what deserves your attention.",
+    "description": "Editorial listening for slower discovery: trusted selections, staff picks, and the stations people return to when taste matters more than volume.",
+    "feed_for_you": "For You",
+    "feed_staff_picks": "Staff Picks",
+    "feed_trending": "Trending",
+    "section_editors": "Editor's Selection",
+    "section_staff_picks": "Staff Picks",
+    "section_most_played": "Most Played",
+    "section_trending_now": "Trending Now",
+    "search_results_for": "Results for",
+    "search_clear": "Clear",
+    "no_stations": "No stations found",
+    "no_stations_hint": "Try Explore for wider filtering and discovery.",
+    "no_featured": "No featured stations yet.",
+    "no_stations_yet": "No stations yet.",
+    "load_more": "Load more · {count} remaining",
+    "loading": "Loading…",
+    "back": "Back"
+  },
+  "explore": {
+    "section_label": "Explore",
+    "heading": "Explore by mood, geography, and taste.",
+    "description": "A broader way to browse the catalog. Filter by genre, language, country, and signal quality, then move into deeper discovery.",
+    "filters_label": "Filters",
+    "active_filters": "{count} active",
+    "filter_clear": "Clear",
+    "filter_genre": "Genre",
+    "filter_style": "Style",
+    "filter_format": "Format",
+    "filter_texture": "Texture",
+    "all_genres": "All genres",
+    "any_style": "Any style",
+    "any_format": "Any format",
+    "any_texture": "Any texture",
+    "sort_label": "Sort",
+    "sort_recommended": "Recommended",
+    "sort_popular": "Popular",
+    "matches": "{count} matches",
+    "no_results": "No stations matched this view",
+    "no_results_hint": "Try a different filter combination or clear the search.",
+    "load_more": "Load more · {count} remaining",
+    "loading": "Loading…"
+  },
+  "coming_soon": "Coming soon.",
+  "settings": {
+    "sections": {
+      "overview": "Overview",
+      "plan": "Plan",
+      "profile": "Profile",
+      "security": "Security",
+      "notifications": "Notifications",
+      "preferences": "Preferences"
+    },
+    "overview": {
+      "profile_description": "Display name",
+      "plan_description": "Subscription & billing",
+      "security_description": "Password",
+      "notifications_description": "Email preferences",
+      "preferences_description": "Language & appearance"
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "Your public identity on bougie.fm.",
+      "avatar_label": "Avatar",
+      "avatar_hint": "Square images work best. JPG, PNG, or WebP up to 5 MB.",
+      "upload": "Upload avatar",
+      "uploading": "Uploading…",
+      "email_label": "Email",
+      "email_hint": "Your email cannot be changed.",
+      "name_label": "Display name",
+      "name_placeholder": "Your name",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "sign_out_label": "Sign out",
+      "sign_out_description": "Sign out from this device.",
+      "sign_out_button": "Sign out",
+      "avatar_type_error": "Use a JPG, PNG, or WebP image."
+    },
+    "security": {
+      "title": "Security",
+      "description": "Manage your password and account access.",
+      "change_password": "Change password",
+      "current_password": "Current password",
+      "new_password": "New password",
+      "confirm_password": "Confirm new password",
+      "update": "Update password",
+      "updated": "Password updated",
+      "error_mismatch": "New passwords do not match",
+      "error_short": "Password must be at least 8 characters"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "Choose what you hear from us.",
+      "email_label": "Email notifications",
+      "email_description": "Receive important account and activity emails.",
+      "updates_label": "Product updates",
+      "updates_description": "New features, improvements, and announcements."
+    },
+    "preferences": {
+      "title": "Preferences",
+      "description": "Personalise your experience.",
+      "appearance_label": "Appearance",
+      "appearance_description": "Switch between light and dark mode.",
+      "light": "Light",
+      "dark": "Dark",
+      "language_label": "Language",
+      "language_description": "Choose your preferred language."
+    },
+    "plan": {
+      "title": "Plan",
+      "description": "Manage your subscription and billing."
+    }
+  },
+  "pricing": {
+    "title": "Simple, transparent pricing",
+    "subtitle": "Start free, upgrade for the full Listening Room experience.",
+    "free_name": "Free",
+    "free_price": "$0",
+    "per_month": "/ month",
+    "free_cta": "Get started free",
+    "pro_name": "Pro",
+    "pro_badge": "Popular",
+    "pro_price": "$3.99",
+    "pro_cta_guest": "Start 14-day free trial",
+    "pro_cta_auth": "Upgrade to Pro",
+    "footnote": "All plans include a 14-day free trial. No credit card required to start. Payments are processed securely by {paddle}.",
+    "free_feature_1": "Access to curated free stations",
+    "free_feature_2": "Standard stream quality",
+    "free_feature_3": "Search by genre, country, and language",
+    "free_feature_4": "14-day free trial of Pro",
+    "pro_feature_1": "Full premium station catalog",
+    "pro_feature_2": "Staff Picks and editorial highlights",
+    "pro_feature_3": "Higher quality and more reliable streams",
+    "pro_feature_4": "Priority curation updates",
+    "pro_feature_5": "Early access to new listening features",
+    "pro_feature_6": "Faster support response"
+  },
+  "footer": {
+    "all_rights_reserved": "All rights reserved.",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "privacy_policy": "Privacy Policy",
+    "terms_of_service": "Terms of Service",
+    "refunds": "Refunds",
+    "upgrade": "Upgrade"
+  },
+  "admin": {
+    "panel_label": "Admin panel",
+    "nav_overview": "Overview",
+    "nav_stations": "Stations",
+    "nav_users": "Users"
+  },
+  "station_detail": {
+    "back": "Back",
+    "unknown_genre": "Unknown genre"
+  }
+}
