@@ -29,7 +29,7 @@ function ExploreSearchInner() {
       const params = new URLSearchParams()
       if (q.trim()) params.set('q', q.trim())
       const qs = params.toString()
-      const target = pathname === '/explore' ? pathname : '/explore'
+      const target = pathname === '/explore' || pathname === '/curated' ? pathname : '/explore'
       router.push(qs ? `${target}?${qs}` : target, { scroll: false })
     }, 200)
   }
@@ -86,9 +86,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const pathname = usePathname()
-  const showExploreSearch = pathname === '/explore' || pathname.startsWith('/explore/')
-
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <header className="shrink-0 border-b border-border/50 bg-background/95 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 sm:px-0">
@@ -102,7 +99,7 @@ export default function DashboardLayout({
             </div>
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-4 pb-1 sm:gap-5 sm:py-3.5 sm:pr-5">
-            {showExploreSearch ? <ExploreSearch /> : <div className="hidden w-full max-w-lg sm:block sm:max-w-2xl" aria-hidden="true" />}
+            <ExploreSearch />
             <div className="ml-auto hidden items-center gap-3 sm:flex">
               <AccountMenu avatarSize={42} />
             </div>
