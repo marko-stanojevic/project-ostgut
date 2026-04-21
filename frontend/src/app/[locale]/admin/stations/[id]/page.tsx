@@ -31,14 +31,39 @@ import {
     ArrowLeftIcon,
     FloppyDiskIcon,
     UploadSimpleIcon,
+    PlusIcon,
+    TrashIcon,
 } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+
+interface AdminStream {
+    id: string
+    url: string
+    resolved_url: string
+    kind: string
+    container: string
+    transport: string
+    mime_type: string
+    codec: string
+    lossless: boolean
+    bitrate: number
+    bit_depth: number
+    sample_rate_hz: number
+    sample_rate_confidence: string
+    channels: number
+    priority: number
+    is_active: boolean
+    health_score: number
+    last_checked_at?: string
+    last_error?: string
+}
 
 interface AdminStation {
     id: string
     name: string
     stream_url: string
+    streams?: AdminStream[]
     logo?: string
     website?: string
     genres: string[]
@@ -50,8 +75,6 @@ interface AdminStation {
     style_tags: string[]
     format_tags: string[]
     texture_tags: string[]
-    bitrate: number
-    codec: string
     reliability_score: number
     featured: boolean
     status: string
@@ -64,9 +87,15 @@ interface AdminStation {
     editor_notes?: string
 }
 
+interface StreamFormEntry {
+    url: string
+    priority: number
+    bitrate: string
+}
+
 interface StationForm {
     name: string
-    stream_url: string
+    streams: StreamFormEntry[]
     logo: string
     website: string
     genre: string
@@ -77,8 +106,6 @@ interface StationForm {
     style_tags: string
     format_tags: string
     texture_tags: string
-    bitrate: string
-    codec: string
     reliability_score: string
     overview: string
     status: 'pending' | 'approved'
@@ -137,6 +164,24 @@ function isValidAbsoluteURL(value: string) {
     }
 }
 
+function formatStreamAudioDetails(stream: AdminStream): string {
+    const bitDepth = stream.bit_depth > 0 ? `${stream.bit_depth}-bit` : '-bit'
+    const sampleRate = stream.sample_rate_hz > 0 ? `${stream.sample_rate_hz} Hz` : '- Hz'
+    const channels = stream.channels > 0 ? `${stream.channels}ch` : '-ch'
+    return `${bitDepth} / ${sampleRate} / ${channels}`
+}
+
+function formatSampleRateConfidenceLabel(stream: AdminStream): string {
+    switch ((stream.sample_rate_confidence || '').toLowerCase()) {
+        case 'parsed_streaminfo':
+            return 'Verified (STREAMINFO)'
+        case 'parsed_frame':
+            return 'Verified (Frame)'
+        default:
+            return 'Unknown confidence'
+    }
+}
+
 export default function StationEditorPage() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
@@ -154,7 +199,7 @@ export default function StationEditorPage() {
 
     const [form, setForm] = useState<StationForm>({
         name: '',
-        stream_url: '',
+        streams: [{ url: '', priority: 1, bitrate: '' }],
         logo: '',
         website: '',
         genre: '',
@@ -165,8 +210,6 @@ export default function StationEditorPage() {
         style_tags: '',
         format_tags: '',
         texture_tags: '',
-        bitrate: '',
-        codec: '',
         reliability_score: '',
         overview: '',
         status: 'pending',
@@ -179,19 +222,20 @@ export default function StationEditorPage() {
     const accessToken = session?.accessToken
 
     const trimmedName = form.name.trim()
-    const streamURL = form.stream_url.trim()
+    // Primary display URL — first non-empty stream entry.
+    const primaryStreamURL = form.streams.find(s => s.url.trim())?.url.trim() ?? ''
     const logoURL = form.logo.trim()
     const websiteURL = form.website.trim()
-    const bitrateNum = form.bitrate.trim() === '' ? 0 : Number(form.bitrate)
     const reliabilityNum = form.reliability_score.trim() === '' ? 0 : Number(form.reliability_score)
 
     const hasValidName = trimmedName.length > 0
-    const hasValidStreamURL = isValidAbsoluteURL(streamURL)
+    const hasValidStreams = form.streams.length > 0 &&
+        form.streams.every(s => s.url.trim() === '' || isValidAbsoluteURL(s.url.trim())) &&
+        form.streams.some(s => isValidAbsoluteURL(s.url.trim()))
     const hasValidLogoURL = logoURL === '' || isValidAbsoluteURL(logoURL)
     const hasValidWebsiteURL = websiteURL === '' || isValidAbsoluteURL(websiteURL)
-    const hasValidBitrate = Number.isFinite(bitrateNum) && bitrateNum >= 0
     const hasValidReliability = Number.isFinite(reliabilityNum) && reliabilityNum >= 0 && reliabilityNum <= 1
-    const canSave = hasValidName && hasValidStreamURL && hasValidLogoURL && hasValidWebsiteURL && hasValidBitrate && hasValidReliability
+    const canSave = hasValidName && hasValidStreams && hasValidLogoURL && hasValidWebsiteURL && hasValidReliability
 
     useEffect(() => {
         if (!accessToken) return
@@ -211,7 +255,9 @@ export default function StationEditorPage() {
                 setStation(s)
                 setForm({
                     name: s.name,
-                    stream_url: s.stream_url,
+                    streams: s.streams && s.streams.length > 0
+                        ? [...s.streams].sort((a, b) => a.priority - b.priority).map((st, i) => ({ url: st.url, priority: st.priority || i + 1, bitrate: st.bitrate > 0 ? String(st.bitrate) : '' }))
+                        : [{ url: s.stream_url, priority: 1, bitrate: '' }],
                     logo: s.logo ?? '',
                     website: s.website ?? '',
                     genre: (s.genres ?? []).join(', '),
@@ -222,8 +268,6 @@ export default function StationEditorPage() {
                     style_tags: (s.style_tags ?? []).join(', '),
                     format_tags: (s.format_tags ?? []).join(', '),
                     texture_tags: (s.texture_tags ?? []).join(', '),
-                    bitrate: String(s.bitrate ?? 0),
-                    codec: s.codec ?? '',
                     reliability_score: String(s.reliability_score ?? 0),
                     overview: s.overview ?? '',
                     status: s.status === 'approved' ? 'approved' : 'pending',
@@ -341,7 +385,16 @@ export default function StationEditorPage() {
 
         const body: Record<string, unknown> = {
             name: trimmedName,
-            stream_url: streamURL,
+            streams: form.streams
+                .filter(s => s.url.trim())
+                .map((s, i) => {
+                    const parsedBitrate = Number.parseInt(s.bitrate.trim(), 10)
+                    return {
+                        url: s.url.trim(),
+                        priority: s.priority || i + 1,
+                        bitrate: Number.isFinite(parsedBitrate) && parsedBitrate > 0 ? parsedBitrate : undefined,
+                    }
+                }),
             logo: logoURL,
             website: websiteURL,
             genres: form.genre.split(',').map((g) => g.trim()).filter(Boolean),
@@ -352,8 +405,6 @@ export default function StationEditorPage() {
             style_tags: form.style_tags.split(',').map((t) => t.trim()).filter(Boolean),
             format_tags: form.format_tags.split(',').map((t) => t.trim()).filter(Boolean),
             texture_tags: form.texture_tags.split(',').map((t) => t.trim()).filter(Boolean),
-            bitrate: bitrateNum,
-            codec: form.codec.trim(),
             reliability_score: reliabilityNum,
             overview: form.overview.trim() || null,
             status: form.status,
@@ -372,7 +423,9 @@ export default function StationEditorPage() {
             setStation(updated)
             setForm({
                 name: updated.name,
-                stream_url: updated.stream_url,
+                streams: updated.streams && updated.streams.length > 0
+                    ? [...updated.streams].sort((a, b) => a.priority - b.priority).map((st, i) => ({ url: st.url, priority: st.priority || i + 1, bitrate: st.bitrate > 0 ? String(st.bitrate) : '' }))
+                    : [{ url: updated.stream_url, priority: 1, bitrate: '' }],
                 logo: updated.logo ?? '',
                 website: updated.website ?? '',
                 genre: (updated.genres ?? []).join(', '),
@@ -383,8 +436,6 @@ export default function StationEditorPage() {
                 style_tags: (updated.style_tags ?? []).join(', '),
                 format_tags: (updated.format_tags ?? []).join(', '),
                 texture_tags: (updated.texture_tags ?? []).join(', '),
-                bitrate: String(updated.bitrate ?? 0),
-                codec: updated.codec ?? '',
                 reliability_score: String(updated.reliability_score ?? 0),
                 overview: updated.overview ?? '',
                 status: updated.status === 'approved' ? 'approved' : 'pending',
@@ -491,13 +542,11 @@ export default function StationEditorPage() {
                             <SourceField label="Country" value={form.country} />
                             <SourceField label="City" value={form.city} />
                             <SourceField label="Country Code" value={form.country_code.toUpperCase()} />
-                            <SourceField label="Bitrate" value={hasValidBitrate ? `${bitrateNum} kbps` : undefined} />
-                            <SourceField label="Codec" value={form.codec} />
                         </div>
 
                         <Separator />
 
-                        <SourceField label="Stream URL" value={streamURL} />
+                        <SourceField label="Stream URL" value={primaryStreamURL} />
                         <SourceField label="Website" value={websiteURL} />
 
                         <Separator />
@@ -563,9 +612,9 @@ export default function StationEditorPage() {
                             </div>
                         </div>
 
-                        {streamURL && (
+                        {primaryStreamURL && (
                             <a
-                                href={streamURL}
+                                href={primaryStreamURL}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
@@ -688,9 +737,73 @@ export default function StationEditorPage() {
                             </div>
 
                             <div className="space-y-1.5">
-                                <Label htmlFor="stream-url">Stream URL</Label>
-                                <Input id="stream-url" value={form.stream_url} onChange={(e) => setForm((prev) => ({ ...prev, stream_url: e.target.value }))} />
-                                {!hasValidStreamURL && <p className="text-xs text-destructive">Stream URL must be a valid absolute URL</p>}
+                                <Label>Stream URLs</Label>
+                                <div className="space-y-2">
+                                    {form.streams.map((stream, i) => (
+                                        <div key={i} className="flex items-center gap-2">
+                                            <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                                            <Input
+                                                value={stream.url}
+                                                placeholder="https://…"
+                                                className="flex-1"
+                                                onChange={(e) => setForm((prev) => ({
+                                                    ...prev,
+                                                    streams: prev.streams.map((s, idx) =>
+                                                        idx === i ? { ...s, url: e.target.value } : s
+                                                    ),
+                                                }))}
+                                            />
+                                            <Input
+                                                value={stream.bitrate}
+                                                type="number"
+                                                min={0}
+                                                placeholder="kbps"
+                                                className="w-24 shrink-0"
+                                                onChange={(e) => setForm((prev) => ({
+                                                    ...prev,
+                                                    streams: prev.streams.map((s, idx) =>
+                                                        idx === i ? { ...s, bitrate: e.target.value } : s
+                                                    ),
+                                                }))}
+                                            />
+                                            {form.streams.length > 1 && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                    onClick={() => setForm((prev) => ({
+                                                        ...prev,
+                                                        streams: prev.streams
+                                                            .filter((_, idx) => idx !== i)
+                                                            .map((s, idx) => ({ ...s, priority: idx + 1 })),
+                                                    }))}
+                                                >
+                                                    <TrashIcon className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="mt-1 gap-1.5"
+                                    onClick={() => setForm((prev) => ({
+                                        ...prev,
+                                        streams: [...prev.streams, { url: '', priority: prev.streams.length + 1, bitrate: '' }],
+                                    }))}
+                                >
+                                    <PlusIcon className="h-3.5 w-3.5" />
+                                    Add stream URL
+                                </Button>
+                                {!hasValidStreams && (
+                                    <p className="text-xs text-destructive">At least one valid absolute URL is required</p>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    URLs are probed on save. The first entry is primary and determines the station&apos;s canonical stream URL.
+                                </p>
                             </div>
 
                             <div className="grid gap-4 sm:grid-cols-2">
@@ -726,15 +839,6 @@ export default function StationEditorPage() {
                                 <div className="space-y-1.5">
                                     <Label htmlFor="country-code">Country Code</Label>
                                     <Input id="country-code" value={form.country_code} onChange={(e) => setForm((prev) => ({ ...prev, country_code: e.target.value.toUpperCase() }))} />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="bitrate">Bitrate (kbps)</Label>
-                                    <Input id="bitrate" type="number" min={0} value={form.bitrate} onChange={(e) => setForm((prev) => ({ ...prev, bitrate: e.target.value }))} />
-                                    {!hasValidBitrate && <p className="text-xs text-destructive">Bitrate must be zero or greater</p>}
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="codec">Codec</Label>
-                                    <Input id="codec" value={form.codec} onChange={(e) => setForm((prev) => ({ ...prev, codec: e.target.value }))} />
                                 </div>
                                 <div className="space-y-1.5 sm:col-span-2">
                                     <Label htmlFor="style-tags">Style tags (comma-separated)</Label>
@@ -778,6 +882,77 @@ export default function StationEditorPage() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {station.streams && station.streams.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                                    Stream Variants
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {station.streams
+                                    .slice()
+                                    .sort((a, b) => a.priority - b.priority)
+                                    .map((stream, i) => (
+                                        <div key={stream.id || i} className={`rounded-lg border p-3 ${!stream.is_active ? 'opacity-50' : ''}`}>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-mono text-muted-foreground">#{stream.priority}</span>
+                                                    <Badge variant={stream.is_active ? 'default' : 'outline'} className="text-[10px] uppercase tracking-wide">
+                                                        {stream.kind}
+                                                    </Badge>
+                                                    {stream.codec && (
+                                                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                                            {stream.codec}
+                                                        </Badge>
+                                                    )}
+                                                    {stream.lossless && (
+                                                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                                            Lossless
+                                                        </Badge>
+                                                    )}
+                                                    {(stream.lossless || stream.codec.toUpperCase().includes('FLAC') || stream.bit_depth > 0 || stream.sample_rate_hz > 0 || stream.channels > 0) && (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatStreamAudioDetails(stream)} · {formatSampleRateConfidenceLabel(stream)}
+                                                        </span>
+                                                    )}
+                                                    {stream.bitrate > 0 && (
+                                                        <span className="text-xs text-muted-foreground">{stream.bitrate} kbps</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {typeof stream.health_score === 'number' && (
+                                                        <span className={`text-xs font-medium tabular-nums ${stream.health_score >= 0.7 ? 'text-green-600 dark:text-green-400' : stream.health_score >= 0.4 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-500'}`}>
+                                                            {Math.round(stream.health_score * 100)}%
+                                                        </span>
+                                                    )}
+                                                    <a
+                                                        href={stream.resolved_url || stream.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-muted-foreground transition-colors hover:text-foreground"
+                                                    >
+                                                        <ArrowSquareOutIcon className="h-3.5 w-3.5" />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                            <p className="mt-1.5 break-all font-mono text-[11px] text-muted-foreground">
+                                                {stream.resolved_url || stream.url}
+                                            </p>
+                                            {stream.resolved_url && stream.resolved_url !== stream.url && (
+                                                <p className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground/50">
+                                                    via {stream.url}
+                                                </p>
+                                            )}
+                                            {stream.last_error && (
+                                                <p className="mt-1 text-xs text-destructive">{stream.last_error}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
         </div>

@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -46,7 +47,27 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 		return
 	}
 
-	np := h.metaFetcher.Fetch(c.Request.Context(), station.StreamURL, metadata.Config{
+	streamURL := station.StreamURL
+	streams, err := h.stationStreamStore.ListByStationID(c.Request.Context(), station.ID)
+	if err != nil {
+		h.log.Warn("list station streams for now-playing", "station_id", station.ID, "error", err)
+	} else {
+		for _, stream := range streams {
+			if !stream.IsActive {
+				continue
+			}
+			candidate := strings.TrimSpace(stream.ResolvedURL)
+			if candidate == "" {
+				candidate = strings.TrimSpace(stream.URL)
+			}
+			if candidate != "" {
+				streamURL = candidate
+				break
+			}
+		}
+	}
+
+	np := h.metaFetcher.Fetch(c.Request.Context(), streamURL, metadata.Config{
 		Enabled: station.MetadataEnabled,
 		Type:    station.MetadataType,
 	})

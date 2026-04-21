@@ -3,7 +3,9 @@ package handler
 
 import (
 	"log/slog"
+	"net/http"
 	"sync"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
@@ -15,8 +17,10 @@ type Handler struct {
 	store                  *store.UserStore
 	subStore               *store.SubscriptionStore
 	stationStore           *store.StationStore
+	stationStreamStore     *store.StationStreamStore
 	mediaAssetStore        *store.MediaAssetStore
 	metaFetcher            *metadata.Fetcher
+	streamProbeClient      *http.Client
 	log                    *slog.Logger
 	paddleWebhookSecret    string
 	paddleClientToken      string
@@ -35,6 +39,7 @@ func New(
 	s *store.UserStore,
 	sub *store.SubscriptionStore,
 	stations *store.StationStore,
+	stationStreams *store.StationStreamStore,
 	mediaAssets *store.MediaAssetStore,
 	log *slog.Logger,
 	paddleWebhookSecret, paddleClientToken, paddlePriceID, mediaUploadBaseURL, mediaUploadSecret,
@@ -44,8 +49,10 @@ func New(
 		store:                  s,
 		subStore:               sub,
 		stationStore:           stations,
+		stationStreamStore:     stationStreams,
 		mediaAssetStore:        mediaAssets,
 		metaFetcher:            metadata.NewFetcher(log),
+		streamProbeClient:      &http.Client{Timeout: 8 * time.Second},
 		log:                    log,
 		paddleWebhookSecret:    paddleWebhookSecret,
 		paddleClientToken:      paddleClientToken,
