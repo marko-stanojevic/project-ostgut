@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
 import { useNowPlaying } from '@/hooks/useNowPlaying'
+import { FullScreenPlayer } from '@/components/full-screen-player'
 import {
   PlayIcon,
   PauseIcon,
@@ -13,6 +14,7 @@ import {
   SpeakerXIcon,
   RadioIcon,
   CircleNotchIcon,
+  ArrowsOutIcon,
 } from '@phosphor-icons/react'
 
 function formatStreamDetails(stream?: {
@@ -59,6 +61,7 @@ function WaveformBars() {
 
 export function PlayerBar() {
   const [mounted, setMounted] = useState(false)
+  const [fullScreen, setFullScreen] = useState(false)
   useEffect(() => setMounted(true), [])
 
   const { station, currentStream, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
@@ -89,6 +92,8 @@ export function PlayerBar() {
   const hasNext = queueIndex < queue.length - 1
 
   return (
+    <>
+      {fullScreen && <FullScreenPlayer onClose={() => setFullScreen(false)} />}
     <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.07] bg-zinc-950/92 text-zinc-100 backdrop-blur-xl">
       <div
         className="mx-auto grid max-w-screen-2xl items-center px-4 py-3 sm:px-5 sm:py-4"
@@ -185,6 +190,14 @@ export function PlayerBar() {
             </span>
           ) : null}
 
+          <button
+            onClick={() => setFullScreen(true)}
+            title="Full screen"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+          >
+            <ArrowsOutIcon className="h-4.5 w-4.5" />
+          </button>
+
           <div className="hidden w-44 shrink-0 items-center gap-3 md:flex">
             <button
               onClick={() => setVolume(volume === 0 ? 0.8 : 0)}
@@ -233,5 +246,6 @@ export function PlayerBar() {
 
       </div>
     </div>
+    </>
   )
 }
