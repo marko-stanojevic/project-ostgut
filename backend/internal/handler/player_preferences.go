@@ -25,7 +25,7 @@ func (h *Handler) GetPlayerPreferences(c *gin.Context) {
 		return
 	}
 
-	prefs, err := h.store.GetPlayerPreferences(c.Request.Context(), userID)
+	prefs, err := h.player.users.GetPlayerPreferences(c.Request.Context(), userID)
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
@@ -73,7 +73,7 @@ func (h *Handler) UpdatePlayerPreferences(c *gin.Context) {
 		updatedAt = parsed.UTC()
 	}
 
-	result, err := h.store.UpdatePlayerPreferences(c.Request.Context(), userID, store.PlayerPreferences{
+	result, err := h.player.users.UpdatePlayerPreferences(c.Request.Context(), userID, store.PlayerPreferences{
 		Volume:    req.Volume,
 		Station:   req.Station,
 		UpdatedAt: updatedAt,

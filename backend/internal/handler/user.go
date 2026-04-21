@@ -18,7 +18,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		return
 	}
 
-	u, err := h.store.GetByID(c.Request.Context(), userID)
+	u, err := h.user.users.GetByID(c.Request.Context(), userID)
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
@@ -31,7 +31,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 
 	var avatar any
 	if u.AvatarAssetID != nil {
-		asset, assetErr := h.mediaAssetStore.GetByID(c.Request.Context(), *u.AvatarAssetID)
+		asset, assetErr := h.user.media.GetByID(c.Request.Context(), *u.AvatarAssetID)
 		if assetErr != nil && !errors.Is(assetErr, store.ErrNotFound) {
 			h.log.Error("get profile avatar", "user_id", userID, "error", assetErr)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -68,7 +68,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	if err := h.store.UpdateName(c.Request.Context(), userID, req.Name); err != nil {
+	if err := h.user.users.UpdateName(c.Request.Context(), userID, req.Name); err != nil {
 		h.log.Error("update profile", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return

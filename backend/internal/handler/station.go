@@ -217,7 +217,7 @@ func (h *Handler) attachStreamsToStations(ctx context.Context, stations []*store
 	for _, st := range stations {
 		ids = append(ids, st.ID)
 	}
-	rawMap, err := h.stationStreamStore.ListByStationIDs(ctx, ids)
+	rawMap, err := h.station.streams.ListByStationIDs(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -260,14 +260,14 @@ func (h *Handler) ListStations(c *gin.Context) {
 		f.Limit = 100
 	}
 
-	total, err := h.stationStore.Count(c.Request.Context(), f)
+	total, err := h.station.stations.Count(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("count stations", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	stations, err := h.stationStore.List(c.Request.Context(), f)
+	stations, err := h.station.stations.List(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("list stations", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -291,7 +291,7 @@ func (h *Handler) ListStations(c *gin.Context) {
 // GetStation handles GET /stations/:id
 func (h *Handler) GetStation(c *gin.Context) {
 	id := c.Param("id")
-	station, err := h.stationStore.GetByID(c.Request.Context(), id)
+	station, err := h.station.stations.GetByID(c.Request.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "station not found"})
 		return
@@ -326,14 +326,14 @@ func (h *Handler) SearchStations(c *gin.Context) {
 		Offset: queryInt(c, "offset", 0),
 	}
 
-	total, err := h.stationStore.Count(c.Request.Context(), f)
+	total, err := h.station.stations.Count(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("count search stations", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	stations, err := h.stationStore.List(c.Request.Context(), f)
+	stations, err := h.station.stations.List(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("search stations", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -358,28 +358,28 @@ func (h *Handler) SearchStations(c *gin.Context) {
 func (h *Handler) GetFilters(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	genres, err := h.stationStore.Genres(ctx)
+	genres, err := h.station.stations.Genres(ctx)
 	if err != nil {
 		h.log.Error("get genres", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	styles, err := h.stationStore.Styles(ctx)
+	styles, err := h.station.stations.Styles(ctx)
 	if err != nil {
 		h.log.Error("get styles", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	formats, err := h.stationStore.Formats(ctx)
+	formats, err := h.station.stations.Formats(ctx)
 	if err != nil {
 		h.log.Error("get formats", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	textures, err := h.stationStore.Textures(ctx)
+	textures, err := h.station.stations.Textures(ctx)
 	if err != nil {
 		h.log.Error("get textures", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

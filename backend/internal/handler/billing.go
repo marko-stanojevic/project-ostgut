@@ -17,7 +17,7 @@ import (
 
 // GetSubscription returns the current user's subscription details.
 func (h *Handler) GetSubscription(c *gin.Context) {
-	sub, err := h.subStore.GetByUserID(c.Request.Context(), middleware.GetUserID(c))
+	sub, err := h.billing.subscriptions.GetByUserID(c.Request.Context(), middleware.GetUserID(c))
 	if errors.Is(err, store.ErrNotFound) {
 		// User predates the subscriptions table — return a default free/trialing state.
 		c.JSON(http.StatusOK, gin.H{"plan": "free", "status": "trialing"})
@@ -49,8 +49,8 @@ func (h *Handler) GetSubscription(c *gin.Context) {
 // frontend can open an overlay checkout without exposing server-side secrets.
 func (h *Handler) GetCheckoutConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"client_token": h.paddleClientToken,
-		"price_id":     h.paddlePriceID,
+		"client_token": h.billing.clientToken,
+		"price_id":     h.billing.priceID,
 	})
 }
 
@@ -88,14 +88,14 @@ func (h *Handler) PaddleWebhook(c *gin.Context) {
 		return
 	}
 
-	if h.paddleWebhookSecret == "" {
+	if h.billing.webhookSecret == "" {
 		h.log.Error("paddle webhook rejected: signing secret is not configured")
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "billing webhook unavailable"})
 		return
 	}
 
 	sig := c.GetHeader("Paddle-Signature")
-	if !verifyPaddleSignature(body, sig, h.paddleWebhookSecret) {
+	if !verifyPaddleSignature(body, sig, h.billing.webhookSecret) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 		return
 	}
@@ -136,7 +136,7 @@ func (h *Handler) PaddleWebhook(c *gin.Context) {
 			}
 		}
 
-		if err := h.subStore.Upsert(
+		if err := h.billing.subscriptions.Upsert(
 			c.Request.Context(),
 			sub.CustomData.UserID,
 			plan,

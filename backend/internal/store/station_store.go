@@ -173,50 +173,63 @@ type stationQueryParts struct {
 	args         []any
 }
 
+type stationQueryBuilder struct {
+	args    []any
+	nextArg int
+}
+
 func buildStationQueryParts(f StationFilter) stationQueryParts {
 	statusFilter := f.Status
 	if statusFilter == "" {
 		statusFilter = "approved"
 	}
 
-	args := []any{statusFilter}
-	nextArg := 2
+	builder := &stationQueryBuilder{
+		args:    []any{statusFilter},
+		nextArg: 2,
+	}
+
+	where, searchClause := buildStationFilterClause(f, builder)
+	orderClause := buildStationOrderClause(f, builder)
+
+	return stationQueryParts{
+		where:        where,
+		searchClause: searchClause,
+		orderClause:  orderClause,
+		args:         builder.args,
+	}
+}
+
+func (b *stationQueryBuilder) addArg(value any) int {
+	placeholder := b.nextArg
+	b.args = append(b.args, value)
+	b.nextArg++
+	return placeholder
+}
+
+func buildStationFilterClause(f StationFilter, builder *stationQueryBuilder) (string, string) {
 	where := "is_active = true AND status = $1"
 
 	if len(f.Genres) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", nextArg)
-		args = append(args, f.Genres)
-		nextArg++
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", builder.addArg(f.Genres))
 	}
 	if f.CountryCode != "" {
-		where += fmt.Sprintf(" AND upper(country_code) = $%d", nextArg)
-		args = append(args, f.CountryCode)
-		nextArg++
+		where += fmt.Sprintf(" AND upper(country_code) = $%d", builder.addArg(f.CountryCode))
 	}
 	if f.Language != "" {
-		where += fmt.Sprintf(" AND lower(language) = $%d", nextArg)
-		args = append(args, f.Language)
-		nextArg++
+		where += fmt.Sprintf(" AND lower(language) = $%d", builder.addArg(f.Language))
 	}
 	if f.MinBitrate > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM station_streams WHERE station_id = stations.id AND bitrate >= $%d)", nextArg)
-		args = append(args, f.MinBitrate)
-		nextArg++
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM station_streams WHERE station_id = stations.id AND bitrate >= $%d)", builder.addArg(f.MinBitrate))
 	}
 	if len(f.Styles) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(style_tags) t WHERE lower(t) = ANY($%d))", nextArg)
-		args = append(args, f.Styles)
-		nextArg++
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(style_tags) t WHERE lower(t) = ANY($%d))", builder.addArg(f.Styles))
 	}
 	if len(f.Formats) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(format_tags) t WHERE lower(t) = ANY($%d))", nextArg)
-		args = append(args, f.Formats)
-		nextArg++
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(format_tags) t WHERE lower(t) = ANY($%d))", builder.addArg(f.Formats))
 	}
 	if len(f.Textures) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(texture_tags) t WHERE lower(t) = ANY($%d))", nextArg)
-		args = append(args, f.Textures)
-		nextArg++
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(texture_tags) t WHERE lower(t) = ANY($%d))", builder.addArg(f.Textures))
 	}
 	if f.FeaturedOnly {
 		where += " AND featured = true"
@@ -227,6 +240,14 @@ func buildStationQueryParts(f StationFilter) stationQueryParts {
 	if trimmedSearch != "" {
 		for _, term := range strings.Fields(trimmedSearch) {
 			pattern := "%" + term + "%"
+			namePlaceholder := builder.addArg(pattern)
+			genrePlaceholder := builder.addArg(pattern)
+			languagePlaceholder := builder.addArg(pattern)
+			countryPlaceholder := builder.addArg(pattern)
+			cityPlaceholder := builder.addArg(pattern)
+			countryCodePlaceholder := builder.addArg(pattern)
+			tagPlaceholder := builder.addArg(pattern)
+
 			searchClauses = append(searchClauses, fmt.Sprintf(`
 				(
 					name ILIKE $%[1]d OR
@@ -240,9 +261,7 @@ func buildStationQueryParts(f StationFilter) stationQueryParts {
 						FROM unnest(tags) AS tag
 						WHERE tag ILIKE $%[7]d
 					)
-				)`, nextArg, nextArg+1, nextArg+2, nextArg+3, nextArg+4, nextArg+5, nextArg+6))
-			args = append(args, pattern, pattern, pattern, pattern, pattern, pattern, pattern)
-			nextArg += 7
+				)`, namePlaceholder, genrePlaceholder, languagePlaceholder, countryPlaceholder, cityPlaceholder, countryCodePlaceholder, tagPlaceholder))
 		}
 	}
 
@@ -251,41 +270,49 @@ func buildStationQueryParts(f StationFilter) stationQueryParts {
 		searchClause = " AND " + strings.Join(searchClauses, " AND ")
 	}
 
+	return where, searchClause
+}
+
+func buildStationOrderClause(f StationFilter, builder *stationQueryBuilder) string {
 	orderClause := "featured DESC, reliability_score DESC"
 	if f.Sort == "popular" {
 		orderClause = "click_count DESC, reliability_score DESC"
 	}
-	if trimmedSearch != "" {
-		exactMatch := strings.ToLower(trimmedSearch)
-		prefixMatch := exactMatch + "%"
-		containsMatch := "%" + exactMatch + "%"
 
-		orderClause = fmt.Sprintf(`
-			CASE
-				WHEN lower(name) = $%d THEN 0
-				WHEN lower(name) LIKE $%d THEN 1
-				WHEN lower(name) LIKE $%d THEN 2
-				WHEN EXISTS (
-					SELECT 1
-					FROM unnest(tags) AS tag
-					WHERE lower(tag) = $%d
-				) THEN 3
-				WHEN EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) LIKE $%d) THEN 4
-				WHEN lower(country) LIKE $%d OR lower(language) LIKE $%d THEN 5
-				ELSE 6
-			END,
-			featured DESC,
-			reliability_score DESC,
-			name ASC`, nextArg, nextArg+1, nextArg+2, nextArg+3, nextArg+4, nextArg+5, nextArg+6)
-		args = append(args, exactMatch, prefixMatch, containsMatch, exactMatch, prefixMatch, prefixMatch, prefixMatch)
+	trimmedSearch := strings.TrimSpace(f.Search)
+	if trimmedSearch == "" {
+		return orderClause
 	}
 
-	return stationQueryParts{
-		where:        where,
-		searchClause: searchClause,
-		orderClause:  orderClause,
-		args:         args,
-	}
+	exactMatch := strings.ToLower(trimmedSearch)
+	prefixMatch := exactMatch + "%"
+	containsMatch := "%" + exactMatch + "%"
+
+	exactPlaceholder := builder.addArg(exactMatch)
+	prefixPlaceholder := builder.addArg(prefixMatch)
+	containsPlaceholder := builder.addArg(containsMatch)
+	tagExactPlaceholder := builder.addArg(exactMatch)
+	genrePrefixPlaceholder := builder.addArg(prefixMatch)
+	countryPrefixPlaceholder := builder.addArg(prefixMatch)
+	languagePrefixPlaceholder := builder.addArg(prefixMatch)
+
+	return fmt.Sprintf(`
+		CASE
+			WHEN lower(name) = $%d THEN 0
+			WHEN lower(name) LIKE $%d THEN 1
+			WHEN lower(name) LIKE $%d THEN 2
+			WHEN EXISTS (
+				SELECT 1
+				FROM unnest(tags) AS tag
+				WHERE lower(tag) = $%d
+			) THEN 3
+			WHEN EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) LIKE $%d) THEN 4
+			WHEN lower(country) LIKE $%d OR lower(language) LIKE $%d THEN 5
+			ELSE 6
+		END,
+		featured DESC,
+		reliability_score DESC,
+		name ASC`, exactPlaceholder, prefixPlaceholder, containsPlaceholder, tagExactPlaceholder, genrePrefixPlaceholder, countryPrefixPlaceholder, languagePrefixPlaceholder)
 }
 
 // GetByID returns a single approved station by its internal UUID.

@@ -19,17 +19,17 @@ import (
 
 // AdminStats handles GET /admin/stats
 func (h *Handler) AdminStats(c *gin.Context) {
-	pending, err := h.stationStore.CountByStatus(c.Request.Context(), "pending")
+	pending, err := h.admin.stations.CountByStatus(c.Request.Context(), "pending")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	approved, err := h.stationStore.CountByStatus(c.Request.Context(), "approved")
+	approved, err := h.admin.stations.CountByStatus(c.Request.Context(), "approved")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	rejected, err := h.stationStore.CountByStatus(c.Request.Context(), "rejected")
+	rejected, err := h.admin.stations.CountByStatus(c.Request.Context(), "rejected")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
@@ -61,7 +61,7 @@ func (h *Handler) AdminBulkAction(c *gin.Context) {
 		return
 	}
 
-	updated, err := h.stationStore.BulkUpdateStatus(c.Request.Context(), req.IDs, req.Status)
+	updated, err := h.admin.stations.BulkUpdateStatus(c.Request.Context(), req.IDs, req.Status)
 	if err != nil {
 		h.log.Error("admin bulk action", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -75,7 +75,7 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 	limit := queryInt(c, "limit", 50)
 	offset := queryInt(c, "offset", 0)
 
-	users, total, err := h.store.ListUsers(c.Request.Context(), limit, offset)
+	users, total, err := h.admin.users.ListUsers(c.Request.Context(), limit, offset)
 	if err != nil {
 		h.log.Error("admin list users", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -207,7 +207,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 	}
 
 	probeCtx, probeCancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	probe := radio.ProbeStream(probeCtx, h.streamProbeClient, streamURL)
+	probe := radio.ProbeStream(probeCtx, h.admin.streamProbeClient, streamURL)
 	probeCancel()
 	if err := validateProbedStream(probe); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
@@ -215,14 +215,14 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 	}
 	probe.Bitrate = resolveStreamBitrate(nil, streamURL, probe)
 
-	created, err := h.stationStore.CreateManual(c.Request.Context(), manual)
+	created, err := h.admin.stations.CreateManual(c.Request.Context(), manual)
 	if err != nil {
 		h.log.Error("admin create station", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	_ = h.stationStreamStore.UpsertPrimaryForStation(c.Request.Context(), created.ID, store.StationStreamInput{
+	_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), created.ID, store.StationStreamInput{
 		URL:                  streamURL,
 		ResolvedURL:          probe.ResolvedURL,
 		Kind:                 probe.Kind,
@@ -257,14 +257,14 @@ func (h *Handler) AdminListStations(c *gin.Context) {
 		Offset: queryInt(c, "offset", 0),
 	}
 
-	total, err := h.stationStore.Count(c.Request.Context(), f)
+	total, err := h.admin.stations.Count(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("admin count stations", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	stations, err := h.stationStore.List(c.Request.Context(), f)
+	stations, err := h.admin.stations.List(c.Request.Context(), f)
 	if err != nil {
 		h.log.Error("admin list stations", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -287,7 +287,7 @@ func (h *Handler) AdminListStations(c *gin.Context) {
 
 // AdminGetStation handles GET /admin/stations/:id
 func (h *Handler) AdminGetStation(c *gin.Context) {
-	s, err := h.stationStore.GetByIDAdmin(c.Request.Context(), c.Param("id"))
+	s, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), c.Param("id"))
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
@@ -304,7 +304,7 @@ func (h *Handler) AdminGetStation(c *gin.Context) {
 func (h *Handler) AdminGetStationIcon(c *gin.Context) {
 	stationID := c.Param("id")
 
-	if _, err := h.stationStore.GetByIDAdmin(c.Request.Context(), stationID); errors.Is(err, store.ErrNotFound) {
+	if _, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), stationID); errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	} else if err != nil {
@@ -313,7 +313,7 @@ func (h *Handler) AdminGetStationIcon(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.mediaAssetStore.GetLatestByOwnerAndKind(
+	asset, err := h.admin.media.GetLatestByOwnerAndKind(
 		c.Request.Context(),
 		store.MediaAssetOwnerStation,
 		stationID,
@@ -338,7 +338,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	id := c.Param("id")
 
 	// Load current values so omitted fields keep their existing value.
-	current, err := h.stationStore.GetByIDAdmin(c.Request.Context(), id)
+	current, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
@@ -349,7 +349,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		return
 	}
 
-	currentStreams, err := h.stationStreamStore.ListByStationID(c.Request.Context(), id)
+	currentStreams, err := h.admin.streams.ListByStationID(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error("admin update station fetch streams", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -500,7 +500,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		rebuiltStreams = inputs
 	} else if req.StreamURL != nil {
 		probeCtx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-		probe := radio.ProbeStream(probeCtx, h.streamProbeClient, u.StreamURL)
+		probe := radio.ProbeStream(probeCtx, h.admin.streamProbeClient, u.StreamURL)
 		cancel()
 		if err := validateProbedStream(probe); err != nil {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
@@ -511,13 +511,13 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 
 	if len(rebuiltStreams) > 0 {
-		if err := h.stationStore.UpdateEnrichmentAndStreams(c.Request.Context(), id, u, rebuiltStreams); err != nil {
+		if err := h.admin.stations.UpdateEnrichmentAndStreams(c.Request.Context(), id, u, rebuiltStreams); err != nil {
 			h.log.Error("admin update station+streams", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
 	} else {
-		if err := h.stationStore.UpdateEnrichment(c.Request.Context(), id, u); err != nil {
+		if err := h.admin.stations.UpdateEnrichment(c.Request.Context(), id, u); err != nil {
 			h.log.Error("admin update station", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
@@ -537,7 +537,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			}
 			break
 		}
-		_ = h.stationStreamStore.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
+		_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
 			URL:                  u.StreamURL,
 			ResolvedURL:          primaryProbe.ResolvedURL,
 			Kind:                 primaryProbe.Kind,
@@ -560,7 +560,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		})
 	}
 
-	updated, err := h.stationStore.GetByIDAdmin(c.Request.Context(), id)
+	updated, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error("admin update station reload", "station_id", id, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -669,7 +669,7 @@ func (h *Handler) buildStationStreams(
 		}
 
 		probeCtx, cancel := context.WithTimeout(ctx.Request.Context(), 12*time.Second)
-		probe := radio.ProbeStream(probeCtx, h.streamProbeClient, stream.URL)
+		probe := radio.ProbeStream(probeCtx, h.admin.streamProbeClient, stream.URL)
 		cancel()
 		if err := validateProbedStream(probe); err != nil {
 			return nil, fmt.Errorf("stream %d: %w", i+1, err)
@@ -813,7 +813,7 @@ func (h *Handler) AdminSetUserAdmin(c *gin.Context) {
 		return
 	}
 
-	if err := h.store.SetAdmin(c.Request.Context(), userID, req.IsAdmin); err != nil {
+	if err := h.admin.users.SetAdmin(c.Request.Context(), userID, req.IsAdmin); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return

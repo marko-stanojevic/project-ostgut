@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -35,48 +36,122 @@ type Options struct {
 	MediaStorageAccountKey string
 }
 
-// Handler holds shared dependencies for HTTP handlers.
+type playerPreferencesStore interface {
+	GetPlayerPreferences(ctx context.Context, id string) (*store.PlayerPreferences, error)
+	UpdatePlayerPreferences(ctx context.Context, id string, prefs store.PlayerPreferences) (*store.PlayerPreferencesWriteResult, error)
+}
+
+type authHandlers struct {
+	users     *store.UserStore
+	jwtSecret string
+}
+
+type userHandlers struct {
+	users *store.UserStore
+	media *store.MediaAssetStore
+}
+
+type playerHandlers struct {
+	users playerPreferencesStore
+}
+
+type billingHandlers struct {
+	subscriptions *store.SubscriptionStore
+	webhookSecret string
+	clientToken   string
+	priceID       string
+}
+
+type stationHandlers struct {
+	stations          *store.StationStore
+	streams           *store.StationStreamStore
+	metaFetcher       *metadata.Fetcher
+	streamProbeClient *http.Client
+}
+
+type mediaConfig struct {
+	uploadBaseURL     string
+	uploadSecret      string
+	storageAccount    string
+	storageContainer  string
+	storageAccountKey string
+}
+
+type mediaHandlers struct {
+	users    *store.UserStore
+	stations *store.StationStore
+	assets   *store.MediaAssetStore
+	config   mediaConfig
+}
+
+type adminHandlers struct {
+	users             *store.UserStore
+	stations          *store.StationStore
+	streams           *store.StationStreamStore
+	media             *store.MediaAssetStore
+	streamProbeClient *http.Client
+}
+
+// Handler holds grouped domain dependencies for HTTP handlers.
 type Handler struct {
-	store                  *store.UserStore
-	subStore               *store.SubscriptionStore
-	stationStore           *store.StationStore
-	stationStreamStore     *store.StationStreamStore
-	mediaAssetStore        *store.MediaAssetStore
-	metaFetcher            *metadata.Fetcher
-	streamProbeClient      *http.Client
-	log                    *slog.Logger
-	jwtSecret              string
-	paddleWebhookSecret    string
-	paddleClientToken      string
-	paddlePriceID          string
-	mediaUploadBaseURL     string
-	mediaUploadSecret      string
-	mediaStorageAccount    string
-	mediaStorageContainer  string
-	mediaStorageAccountKey string // local dev only; takes priority over managed identity / az login
-	mediaBlobClientMu      sync.Mutex
-	mediaBlobClient        *azblob.Client
+	auth              authHandlers
+	user              userHandlers
+	player            playerHandlers
+	billing           billingHandlers
+	station           stationHandlers
+	media             mediaHandlers
+	admin             adminHandlers
+	log               *slog.Logger
+	mediaBlobClientMu sync.Mutex
+	mediaBlobClient   *azblob.Client
 }
 
 // New creates a Handler with grouped dependencies and runtime options.
 func New(deps Dependencies, opts Options) *Handler {
+	streamProbeClient := &http.Client{Timeout: 8 * time.Second}
 	return &Handler{
-		store:                  deps.UserStore,
-		subStore:               deps.SubscriptionStore,
-		stationStore:           deps.StationStore,
-		stationStreamStore:     deps.StationStreamStore,
-		mediaAssetStore:        deps.MediaAssetStore,
-		metaFetcher:            metadata.NewFetcher(opts.Log),
-		streamProbeClient:      &http.Client{Timeout: 8 * time.Second},
-		log:                    opts.Log,
-		jwtSecret:              opts.JWTSecret,
-		paddleWebhookSecret:    opts.PaddleWebhookSecret,
-		paddleClientToken:      opts.PaddleClientToken,
-		paddlePriceID:          opts.PaddlePriceID,
-		mediaUploadBaseURL:     opts.MediaUploadBaseURL,
-		mediaUploadSecret:      opts.MediaUploadSecret,
-		mediaStorageAccount:    opts.MediaStorageAccount,
-		mediaStorageContainer:  opts.MediaStorageContainer,
-		mediaStorageAccountKey: opts.MediaStorageAccountKey,
+		auth: authHandlers{
+			users:     deps.UserStore,
+			jwtSecret: opts.JWTSecret,
+		},
+		user: userHandlers{
+			users: deps.UserStore,
+			media: deps.MediaAssetStore,
+		},
+		player: playerHandlers{
+			users: deps.UserStore,
+		},
+		billing: billingHandlers{
+			subscriptions: deps.SubscriptionStore,
+			webhookSecret: opts.PaddleWebhookSecret,
+			clientToken:   opts.PaddleClientToken,
+			priceID:       opts.PaddlePriceID,
+		},
+		station: stationHandlers{
+			stations:          deps.StationStore,
+			streams:           deps.StationStreamStore,
+			metaFetcher:       metadata.NewFetcher(opts.Log),
+			streamProbeClient: streamProbeClient,
+		},
+		media: mediaHandlers{
+			users:    deps.UserStore,
+			stations: deps.StationStore,
+			assets:   deps.MediaAssetStore,
+			config: mediaConfig{
+				uploadBaseURL:     opts.MediaUploadBaseURL,
+				uploadSecret:      opts.MediaUploadSecret,
+				storageAccount:    opts.MediaStorageAccount,
+				storageContainer:  opts.MediaStorageContainer,
+				storageAccountKey: opts.MediaStorageAccountKey,
+			},
+		},
+		admin: adminHandlers{
+			users:             deps.UserStore,
+			stations:          deps.StationStore,
+			streams:           deps.StationStreamStore,
+			media:             deps.MediaAssetStore,
+			streamProbeClient: streamProbeClient,
+		},
+		log: opts.Log,
 	}
 }

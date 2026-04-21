@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -22,23 +23,18 @@ type Claims struct {
 // with the shared JWT_SECRET (== frontend AUTH_SECRET).
 func AuthMiddleware(logger *slog.Logger, jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			logger.Warn("missing authorization header")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+		tokenString, err := BearerTokenFromHeader(c.GetHeader("Authorization"))
+		if err != nil {
+			if errors.Is(err, errMissingAuthorizationHeader) {
+				logger.Warn("missing authorization header")
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+			} else {
+				logger.Warn("invalid authorization header format")
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
+			}
 			c.Abort()
 			return
 		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			logger.Warn("invalid authorization header format")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
 
 		claims, err := ValidateJWTToken(tokenString, jwtSecret)
 		if err != nil {
@@ -61,6 +57,26 @@ func AuthMiddleware(logger *slog.Logger, jwtSecret string) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+var (
+	errMissingAuthorizationHeader = errors.New("missing authorization header")
+	errInvalidAuthorizationHeader = errors.New("invalid authorization header")
+)
+
+// BearerTokenFromHeader extracts a bearer token from an Authorization header.
+func BearerTokenFromHeader(header string) (string, error) {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return "", errMissingAuthorizationHeader
+	}
+
+	parts := strings.Split(header, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" || strings.TrimSpace(parts[1]) == "" {
+		return "", errInvalidAuthorizationHeader
+	}
+
+	return parts[1], nil
 }
 
 // ValidateJWTToken parses and validates an Auth.js HS256 token.
