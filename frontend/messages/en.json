@@ -60,6 +60,7 @@
       "confirm_password": "Confirm Password",
       "password_hint": "At least 8 characters",
       "submit": "Update Password",
+      "back_to_login": "Back to login",
       "submitting": "Updating…",
       "error_mismatch": "Passwords do not match",
       "error_short": "Password must be at least 8 characters",

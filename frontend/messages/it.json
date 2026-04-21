@@ -60,6 +60,7 @@
       "confirm_password": "Conferma password",
       "password_hint": "Almeno 8 caratteri",
       "submit": "Aggiorna password",
+      "back_to_login": "Torna al login",
       "submitting": "Aggiornamento…",
       "error_mismatch": "Le password non corrispondono",
       "error_short": "La password deve avere almeno 8 caratteri",

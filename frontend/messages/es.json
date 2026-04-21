@@ -60,6 +60,7 @@
       "confirm_password": "Confirmar contraseña",
       "password_hint": "Al menos 8 caracteres",
       "submit": "Actualizar contraseña",
+      "back_to_login": "Volver al inicio de sesión",
       "submitting": "Actualizando…",
       "error_mismatch": "Las contraseñas no coinciden",
       "error_short": "La contraseña debe tener al menos 8 caracteres",

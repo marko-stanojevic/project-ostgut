@@ -6,7 +6,9 @@ import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CheckIcon, ArrowLeftIcon } from '@phosphor-icons/react'
+import { API_URL } from '@/lib/api'
+import { AuthShell } from '@/components/auth/auth-shell'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -21,8 +23,7 @@ export default function ForgotPasswordPage() {
     setLoading(true)
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-      const res = await fetch(`${apiUrl}/auth/forgot-password`, {
+      const res = await fetch(`${API_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -41,53 +42,51 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
-        <Card className="w-full max-w-sm text-center">
-          <CardContent className="pt-6 space-y-2">
-            <p className="text-3xl">✓</p>
-            <CardTitle>{t('success_title')}</CardTitle>
-            <CardDescription>
-              {t('success_description', { email })}
-            </CardDescription>
-            <Link href="/auth/login" className="text-sm text-foreground font-medium hover:underline block pt-2">
-              {t('back_to_login')}
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthShell
+        title={t('success_title')}
+        description={t('success_description', { email })}
+        badge="Check Your Inbox"
+        mark={<CheckIcon className="h-6 w-6" weight="bold" />}
+        footer={
+          <Link href="/auth/login" className="font-semibold text-foreground hover:underline">
+            {t('back_to_login')}
+          </Link>
+        }
+      >
+        <div />
+      </AuthShell>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">{t('title')}</CardTitle>
-          <CardDescription>{t('description')}</CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          {error && (
-            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
-              {error}
-            </p>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="email">{t('email')}</Label>
-              <Input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" placeholder="you@example.com" />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? t('submitting') : t('submit')}
-            </Button>
-          </form>
-
-          <p className="text-center text-sm text-muted-foreground">
-            <Link href="/auth/login" className="text-foreground font-medium hover:underline">{t('back_to_login')}</Link>
+    <AuthShell
+      title={t('title')}
+      description={t('description')}
+      badge="Password Reset"
+      footer={
+        <Link href="/auth/login" className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:underline">
+          <ArrowLeftIcon className="h-3.5 w-3.5" />
+          {t('back_to_login')}
+        </Link>
+      }
+    >
+      <div className="mx-auto w-full max-w-[20rem] space-y-4">
+        {error && (
+          <p className="rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
           </p>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-sm text-foreground">{t('email')}</Label>
+            <Input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" placeholder="you@example.com" className="h-13 rounded-2xl border-foreground/20 bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground/80" />
+          </div>
+          <Button type="submit" className="h-14 w-full rounded-full text-base font-semibold" disabled={loading}>
+            {loading ? t('submitting') : t('submit')}
+          </Button>
+        </form>
+      </div>
+    </AuthShell>
   )
 }

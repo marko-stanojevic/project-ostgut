@@ -1,13 +1,15 @@
 'use client'
 
 import { Suspense, useState } from 'react'
-import { useRouter } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ArrowLeftIcon, WarningCircleIcon } from '@phosphor-icons/react'
+import { AuthShell } from '@/components/auth/auth-shell'
+import { API_URL } from '@/lib/api'
 
 function ResetPasswordForm() {
   const router = useRouter()
@@ -22,15 +24,18 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
-        <Card className="w-full max-w-sm text-center">
-          <CardContent className="pt-6 space-y-2">
-            <p className="text-3xl">✗</p>
-            <CardTitle>{t('invalid_title')}</CardTitle>
-            <CardDescription>{t('invalid_description')}</CardDescription>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthShell
+        title={t('invalid_title')}
+        description={t('invalid_description')}
+        badge="Reset Link"
+        mark={<WarningCircleIcon className="h-6 w-6" weight="fill" />}
+      >
+        <div className="text-center text-sm text-muted-foreground">
+          <Link href="/auth/forgot-password" className="font-semibold text-foreground hover:underline">
+            {t('title')}
+          </Link>
+        </div>
+      </AuthShell>
     )
   }
 
@@ -49,8 +54,7 @@ function ResetPasswordForm() {
 
     setLoading(true)
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-      const res = await fetch(`${apiUrl}/auth/reset-password`, {
+      const res = await fetch(`${API_URL}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),
@@ -68,37 +72,40 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">{t('title')}</CardTitle>
-          <CardDescription>{t('description')}</CardDescription>
-        </CardHeader>
+    <AuthShell
+      title={t('title')}
+      description={t('description')}
+      badge="Password Reset"
+      footer={
+        <Link href="/auth/login" className="inline-flex items-center gap-1.5 font-semibold text-foreground hover:underline">
+          <ArrowLeftIcon className="h-3.5 w-3.5" />
+          {t('back_to_login')}
+        </Link>
+      }
+    >
+      <div className="mx-auto w-full max-w-[20rem] space-y-4">
+        {error && (
+          <p className="rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </p>
+        )}
 
-        <CardContent className="space-y-4">
-          {error && (
-            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
-              {error}
-            </p>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="password">{t('new_password')}</Label>
-              <Input id="password" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" placeholder="••••••••" />
-              <p className="text-xs text-muted-foreground">{t('password_hint')}</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="confirm-password">{t('confirm_password')}</Label>
-              <Input id="confirm-password" name="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required autoComplete="new-password" placeholder="••••••••" />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? t('submitting') : t('submit')}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm text-foreground">{t('new_password')}</Label>
+            <Input id="password" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" placeholder="••••••••" className="h-13 rounded-2xl border-foreground/20 bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground/80" />
+            <p className="text-xs text-muted-foreground">{t('password_hint')}</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password" className="text-sm text-foreground">{t('confirm_password')}</Label>
+            <Input id="confirm-password" name="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required autoComplete="new-password" placeholder="••••••••" className="h-13 rounded-2xl border-foreground/20 bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground/80" />
+          </div>
+          <Button type="submit" className="h-14 w-full rounded-full text-base font-semibold" disabled={loading}>
+            {loading ? t('submitting') : t('submit')}
+          </Button>
+        </form>
+      </div>
+    </AuthShell>
   )
 }
 

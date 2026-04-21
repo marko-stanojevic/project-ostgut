@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, usePathname } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
@@ -117,21 +117,6 @@ function CuratedContent() {
         }
     }
 
-    const fetchSearch = useCallback(() => {
-        if (!search) { setSearchResults([]); setSearchTotal(0); setSearchError(false); return }
-        setLoadingSearch(true)
-        setSearchError(false)
-        setSearchResults([])
-        fetch(`${API}/search?q=${encodeURIComponent(search)}&limit=${PAGE_SIZE}&offset=0`)
-            .then((r) => r.json())
-            .then((data) => { setSearchResults(data.stations ?? []); setSearchTotal(data.total ?? data.count ?? 0) })
-            .catch(() => {
-                setSearchResults([])
-                setSearchError(true)
-            })
-            .finally(() => setLoadingSearch(false))
-    }, [search])
-
     const loadMoreSearch = async () => {
         if (!search || searchLoadingRef.current) return
         searchLoadingRef.current = true
@@ -146,7 +131,44 @@ function CuratedContent() {
         }
     }
 
-    useEffect(() => { fetchSearch() }, [fetchSearch])
+    useEffect(() => {
+        if (!search) {
+            setSearchResults([])
+            setSearchTotal(0)
+            setSearchError(false)
+            setLoadingSearch(false)
+            return
+        }
+
+        const controller = new AbortController()
+
+        setLoadingSearch(true)
+        setSearchError(false)
+        setSearchResults([])
+
+        fetch(`${API}/search?q=${encodeURIComponent(search)}&limit=${PAGE_SIZE}&offset=0`, {
+            signal: controller.signal,
+        })
+            .then((r) => r.json())
+            .then((data) => {
+                setSearchResults(data.stations ?? [])
+                setSearchTotal(data.total ?? data.count ?? 0)
+            })
+            .catch((error: unknown) => {
+                if (error instanceof DOMException && error.name === 'AbortError') return
+                setSearchResults([])
+                setSearchError(true)
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setLoadingSearch(false)
+                }
+            })
+
+        return () => {
+            controller.abort()
+        }
+    }, [search])
 
     useScrollRestoration({
         pathname,

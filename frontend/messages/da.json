@@ -60,6 +60,7 @@
       "confirm_password": "Bekræft adgangskode",
       "password_hint": "Mindst 8 tegn",
       "submit": "Opdater adgangskode",
+      "back_to_login": "Tilbage til login",
       "submitting": "Opdaterer…",
       "error_mismatch": "Adgangskoderne stemmer ikke overens",
       "error_short": "Adgangskoden skal være mindst 8 tegn",

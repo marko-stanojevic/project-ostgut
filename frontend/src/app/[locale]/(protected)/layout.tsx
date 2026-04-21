@@ -11,6 +11,10 @@ import { AppSidebarMobile } from '@/components/app-sidebar'
 import { MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
+function getSearchTarget(pathname: string) {
+  return pathname === '/explore' || pathname === '/curated' ? pathname : '/explore'
+}
+
 function ExploreSearchInner() {
   const router = useRouter()
   const pathname = usePathname()
@@ -30,7 +34,7 @@ function ExploreSearchInner() {
       const params = new URLSearchParams()
       if (q.trim()) params.set('q', q.trim())
       const qs = params.toString()
-      const target = pathname === '/explore' || pathname === '/curated' ? pathname : '/explore'
+      const target = getSearchTarget(pathname)
       router.push(qs ? `${target}?${qs}` : target, { scroll: false })
     }, 200)
   }
@@ -47,7 +51,8 @@ function ExploreSearchInner() {
     const params = new URLSearchParams(searchParams.toString())
     params.delete('q')
     const qs = params.toString()
-    router.replace(qs ? `/explore?${qs}` : '/explore', { scroll: false })
+    const target = getSearchTarget(pathname)
+    router.replace(qs ? `${target}?${qs}` : target, { scroll: false })
   }
 
   return (

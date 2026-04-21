@@ -129,19 +129,31 @@ function ExploreContent() {
         formatFilter.forEach(v => params.append('format', v))
         textureFilter.forEach(v => params.append('texture', v))
 
+        const controller = new AbortController()
 
-        fetch(`${API}/stations?${params.toString()}`)
+        fetch(`${API}/stations?${params.toString()}`, {
+            signal: controller.signal,
+        })
             .then((r) => r.json())
             .then((data) => {
                 setStations(data.stations ?? [])
                 setTotal(data.total ?? data.count ?? 0)
             })
-            .catch(() => {
+            .catch((error: unknown) => {
+                if (error instanceof DOMException && error.name === 'AbortError') return
                 setStations([])
                 setTotal(0)
                 setStationsError(true)
             })
-            .finally(() => setLoading(false))
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setLoading(false)
+                }
+            })
+
+        return () => {
+            controller.abort()
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [query, genreKey, styleKey, formatKey, textureKey])
 
