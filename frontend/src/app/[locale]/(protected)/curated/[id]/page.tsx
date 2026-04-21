@@ -6,85 +6,20 @@ import { useParams, useSearchParams } from 'next/navigation'
 import { useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { ArrowLeftIcon, GlobeIcon, HeartIcon, LinkSimpleIcon, PauseIcon, PlayIcon, RadioIcon, ShareNetworkIcon } from '@phosphor-icons/react'
-import { usePlayer, type Station } from '@/context/PlayerContext'
+import { usePlayer } from '@/context/PlayerContext'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toStation } from '@/lib/station'
+import type { ApiStation } from '@/types/station'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
-interface ApiStream {
-    id: string
-    url: string
-    resolved_url: string
-    kind: string
-    container: string
-    transport: string
-    mime_type: string
-    codec: string
-    lossless: boolean
-    bitrate: number
-    bit_depth: number
-    sample_rate_hz: number
-    sample_rate_confidence: string
-    channels: number
-    priority: number
-    is_active: boolean
-    health_score: number
-    last_checked_at?: string
-    last_error?: string
-}
-
-interface ApiStationDetail {
-    id: string
-    name: string
-    stream_url: string
-    streams?: ApiStream[]
+interface ApiStationDetail extends ApiStation {
     logo?: string
     website?: string
     overview?: string
     description?: string
     editor_notes?: string
-    genres: string[]
-    language: string
-    country: string
-    city: string
-    country_code: string
     tags: string[]
-    reliability_score: number
-    featured: boolean
-}
-
-function toStation(s: ApiStationDetail): Station {
-    return {
-        id: s.id,
-        name: s.name,
-        streamUrl: s.stream_url,
-        streams: s.streams?.map((st) => ({
-            id: st.id,
-            url: st.url,
-            resolvedUrl: st.resolved_url,
-            kind: st.kind,
-            container: st.container,
-            transport: st.transport,
-            mimeType: st.mime_type,
-            codec: st.codec,
-            lossless: st.lossless,
-            bitrate: st.bitrate,
-            bitDepth: st.bit_depth,
-            sampleRateHz: st.sample_rate_hz,
-            sampleRateConfidence: st.sample_rate_confidence,
-            channels: st.channels,
-            priority: st.priority,
-            isActive: st.is_active,
-            healthScore: st.health_score,
-            lastCheckedAt: st.last_checked_at,
-            lastError: st.last_error,
-        })),
-        logo: s.logo,
-        genres: s.genres ?? [],
-        country: s.country,
-        city: s.city,
-        countryCode: s.country_code,
-    }
 }
 
 function CuratedDetailsContent() {

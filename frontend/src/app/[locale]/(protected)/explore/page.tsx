@@ -1,58 +1,22 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
-import { usePlayer, type Station } from '@/context/PlayerContext'
+import { usePlayer } from '@/context/PlayerContext'
+import { StationCard, StationCardSkeleton } from '@/components/StationCard'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CompassIcon, PlayIcon, PauseIcon, RadioIcon, XIcon } from '@phosphor-icons/react'
+import { useScrollRestoration } from '@/hooks/useScrollRestoration'
+import { toStation } from '@/lib/station'
+import type { ApiStation } from '@/types/station'
+import { CompassIcon, XIcon } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const PAGE_SIZE = 24
 const LIST_RETURN_KEY = 'explore:list:return'
 const LIST_SCROLL_KEY = 'explore:list:scrollY'
-
-interface ApiStream {
-    id: string
-    url: string
-    resolved_url: string
-    kind: string
-    container: string
-    transport: string
-    mime_type: string
-    codec: string
-    lossless: boolean
-    bitrate: number
-    bit_depth: number
-    sample_rate_hz: number
-    sample_rate_confidence: string
-    channels: number
-    priority: number
-    is_active: boolean
-    health_score: number
-    last_checked_at?: string
-    last_error?: string
-}
-
-interface ApiStation {
-    id: string
-    name: string
-    stream_url: string
-    streams?: ApiStream[]
-    logo?: string
-    genres: string[]
-    language: string
-    country: string
-    city: string
-    country_code: string
-    bitrate: number
-    codec: string
-    reliability_score: number
-    featured: boolean
-}
 
 interface FiltersResponse {
     genres?: string[]
@@ -68,135 +32,6 @@ function formatFilterLabel(value: string) {
     return value.replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
-function toStation(s: ApiStation): Station {
-    return {
-        id: s.id,
-        name: s.name,
-        streamUrl: s.stream_url,
-        streams: s.streams?.map((st) => ({
-            id: st.id,
-            url: st.url,
-            resolvedUrl: st.resolved_url,
-            kind: st.kind,
-            container: st.container,
-            transport: st.transport,
-            mimeType: st.mime_type,
-            codec: st.codec,
-            lossless: st.lossless,
-            bitrate: st.bitrate,
-            bitDepth: st.bit_depth,
-            sampleRateHz: st.sample_rate_hz,
-            sampleRateConfidence: st.sample_rate_confidence,
-            channels: st.channels,
-            priority: st.priority,
-            isActive: st.is_active,
-            healthScore: st.health_score,
-            lastCheckedAt: st.last_checked_at,
-            lastError: st.last_error,
-        })),
-        logo: s.logo,
-        genres: s.genres ?? [],
-        country: s.country,
-        city: s.city,
-        countryCode: s.country_code,
-        bitrate: s.bitrate,
-        codec: s.codec,
-    }
-}
-
-function StationCard({
-    s,
-    isActive,
-    isPlaying,
-    imagePriority,
-    onOpen,
-    onPlay,
-}: {
-    s: ApiStation
-    isActive: boolean
-    isPlaying: boolean
-    imagePriority?: boolean
-    onOpen: () => void
-    onPlay?: () => void
-}) {
-    const { play, pause } = usePlayer()
-
-    const handleTogglePlay = () => {
-        if (isActive && isPlaying) {
-            pause()
-            return
-        }
-        if (onPlay) {
-            onPlay()
-        } else {
-            play(toStation(s))
-        }
-        onOpen()
-    }
-
-    return (
-        <article className="group relative rounded-xl p-1.5 text-left transition-all duration-200 hover:bg-muted/50">
-            <div
-                onClick={onOpen}
-                className="relative block aspect-square w-full cursor-pointer overflow-hidden rounded-lg bg-muted"
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpen() }}
-                aria-label={`Open ${s.name} details`}
-            >
-                {s.logo ? (
-                    <Image
-                        src={s.logo}
-                        alt={s.name}
-                        fill
-                        priority={imagePriority}
-                        sizes="(max-width: 640px) 25vw, (max-width: 1024px) 16vw, 14vw"
-                        className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-                        unoptimized
-                    />
-                ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                        <RadioIcon className="h-6 w-6 text-muted-foreground/50" />
-                    </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <button
-                        onClick={(e) => { e.stopPropagation(); handleTogglePlay() }}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 hover:scale-110 hover:bg-white group-hover:opacity-100"
-                        aria-label={isActive && isPlaying ? `Pause ${s.name}` : `Play ${s.name}`}
-                    >
-                        {isActive && isPlaying
-                            ? <PauseIcon weight="fill" className="h-4 w-4 text-black" />
-                            : <PlayIcon weight="fill" className="ml-0.5 h-4 w-4 text-black" />}
-                    </button>
-                </div>
-            </div>
-            <div className="mt-1.5 px-0.5">
-                <button onClick={onOpen} className="w-full cursor-pointer text-left" aria-label={`Open ${s.name} details`}>
-                    <p className="ui-card-title">{s.name}</p>
-                    <p className="ui-card-meta">{[(s.genres ?? []).join(', ') || 'Unknown genre', s.country].filter(Boolean).join(' · ')}</p>
-                </button>
-            </div>
-            {isActive && isPlaying && (
-                <span className="absolute right-2.5 top-2.5 h-2 w-2 animate-pulse rounded-full bg-brand shadow-[0_0_6px_rgba(200,116,58,0.6)]" />
-            )}
-        </article>
-    )
-}
-
-function StationCardSkeleton() {
-    return (
-        <div className="rounded-xl p-1.5">
-            <Skeleton className="aspect-square w-full rounded-lg" />
-            <div className="mt-1.5 space-y-1">
-                <Skeleton className="h-3 w-4/5" />
-                <Skeleton className="h-2.5 w-2/3" />
-            </div>
-        </div>
-    )
-}
-
 function ExploreContent() {
     const t = useTranslations('explore')
     const router = useRouter()
@@ -208,12 +43,16 @@ function ExploreContent() {
     const [total, setTotal] = useState(0)
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
+    const [loadingFilters, setLoadingFilters] = useState(true)
+    const [stationsError, setStationsError] = useState(false)
+    const [filtersError, setFiltersError] = useState(false)
     const [genres, setGenres] = useState<string[]>([])
     const [styles, setStyles] = useState<string[]>([])
     const [formats, setFormats] = useState<string[]>([])
     const [textures, setTextures] = useState<string[]>([])
 
     const query = searchParams.get('q')?.trim() ?? ''
+    const searchQuery = searchParams.toString()
     const genreFilter = searchParams.getAll('genre')
     const styleFilter = searchParams.getAll('style')
     const formatFilter = searchParams.getAll('format')
@@ -237,6 +76,8 @@ function ExploreContent() {
     ], [t, genres, genreKey, styles, styleKey, formats, formatKey, textures, textureKey])
 
     const activeCategoryConfig = categoryConfig.find(c => c.id === activeCategory) ?? null
+    const stationsQueue = useMemo(() => stations.map(toStation), [stations])
+    const loadMoreRef = useRef(false)
 
     const activeChips = useMemo(() => [
         ...genreFilter.map(v => ({ key: 'genre', value: v })),
@@ -256,6 +97,8 @@ function ExploreContent() {
     }, [pathname, router, searchParams])
 
     useEffect(() => {
+        setLoadingFilters(true)
+        setFiltersError(false)
         fetch(`${API}/stations/filters`)
             .then((r) => r.json())
             .then((data: FiltersResponse) => {
@@ -269,11 +112,14 @@ function ExploreContent() {
                 setStyles([])
                 setFormats([])
                 setTextures([])
+                setFiltersError(true)
             })
+            .finally(() => setLoadingFilters(false))
     }, [])
 
     useEffect(() => {
         setLoading(true)
+        setStationsError(false)
         const params = new URLSearchParams()
         params.set('limit', String(PAGE_SIZE))
         params.set('offset', '0')
@@ -293,31 +139,19 @@ function ExploreContent() {
             .catch(() => {
                 setStations([])
                 setTotal(0)
+                setStationsError(true)
             })
             .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [query, genreKey, styleKey, formatKey, textureKey])
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return
-
-        const savedReturn = sessionStorage.getItem(LIST_RETURN_KEY)
-        const savedScrollY = sessionStorage.getItem(LIST_SCROLL_KEY)
-        const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
-
-        if (!savedReturn || !savedScrollY || savedReturn !== current) return
-
-        const y = Number(savedScrollY)
-        if (!Number.isFinite(y)) return
-
-        const rafID = window.requestAnimationFrame(() => {
-            window.scrollTo({ top: y, behavior: 'auto' })
-            sessionStorage.removeItem(LIST_RETURN_KEY)
-            sessionStorage.removeItem(LIST_SCROLL_KEY)
-        })
-
-        return () => window.cancelAnimationFrame(rafID)
-    }, [pathname, searchParams, loading])
+    useScrollRestoration({
+        pathname,
+        search: searchQuery,
+        returnKey: LIST_RETURN_KEY,
+        scrollKey: LIST_SCROLL_KEY,
+        ready: !loading,
+    })
 
     const toggleFilter = (key: string, value: string) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -333,6 +167,8 @@ function ExploreContent() {
     }
 
     const loadMore = async () => {
+        if (loadMoreRef.current) return
+        loadMoreRef.current = true
         setLoadingMore(true)
         try {
             const params = new URLSearchParams()
@@ -349,6 +185,7 @@ function ExploreContent() {
             setStations((prev) => [...prev, ...(data.stations ?? [])])
             setTotal(data.total ?? data.count ?? 0)
         } finally {
+            loadMoreRef.current = false
             setLoadingMore(false)
         }
     }
@@ -408,7 +245,15 @@ function ExploreContent() {
                 </div>
 
                 {/* Tag pills for active category */}
-                {activeCategoryConfig && activeCategoryConfig.options.length > 0 && (
+                {loadingFilters && (
+                    <div className="flex flex-wrap gap-1.5 border-t border-border/40 py-3">
+                        {Array.from({ length: 8 }).map((_, index) => (
+                            <Skeleton key={index} className="h-9 w-20 rounded-full" />
+                        ))}
+                    </div>
+                )}
+
+                {!loadingFilters && activeCategoryConfig && activeCategoryConfig.options.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 border-t border-border/40 py-3">
                         {activeCategoryConfig.options.map((option) => {
                             const value = activeCategoryConfig.getValue(option)
@@ -429,6 +274,12 @@ function ExploreContent() {
                                 </button>
                             )
                         })}
+                    </div>
+                )}
+
+                {!loadingFilters && filtersError && (
+                    <div className="border-t border-border/40 py-3">
+                        <p className="text-sm text-muted-foreground">{t('filters_error')}</p>
                     </div>
                 )}
 
@@ -465,6 +316,12 @@ function ExploreContent() {
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                     {Array.from({ length: 12 }).map((_, i) => <StationCardSkeleton key={i} />)}
                 </div>
+            ) : stationsError ? (
+                <div className="py-24 text-center">
+                    <CompassIcon className="mx-auto mb-4 h-10 w-10 text-destructive/40" />
+                    <p className="text-sm font-medium text-foreground">{t('results_error')}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('results_error_hint')}</p>
+                </div>
             ) : stations.length === 0 ? (
                 <div className="py-24 text-center">
                     <CompassIcon className="mx-auto mb-4 h-10 w-10 text-muted-foreground/25" />
@@ -479,8 +336,9 @@ function ExploreContent() {
                                 key={s.id}
                                 s={s}
                                 imagePriority={index < 3}
+                                showCountry
                                 onOpen={() => openStation(s.id)}
-                                onPlay={() => setQueue(stations.map(toStation), index)}
+                                onPlay={() => setQueue(stationsQueue, index)}
                                 isActive={activeStation?.id === s.id}
                                 isPlaying={activeStation?.id === s.id && state === 'playing'}
                             />
