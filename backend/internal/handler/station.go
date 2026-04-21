@@ -37,25 +37,30 @@ type stationResponse struct {
 }
 
 type streamResponse struct {
-	ID                   string  `json:"id"`
-	URL                  string  `json:"url"`
-	ResolvedURL          string  `json:"resolved_url"`
-	Kind                 string  `json:"kind"`
-	Container            string  `json:"container"`
-	Transport            string  `json:"transport"`
-	MimeType             string  `json:"mime_type"`
-	Codec                string  `json:"codec"`
-	Lossless             bool    `json:"lossless"`
-	Bitrate              int     `json:"bitrate"`
-	BitDepth             int     `json:"bit_depth"`
-	SampleRateHz         int     `json:"sample_rate_hz"`
-	SampleRateConfidence string  `json:"sample_rate_confidence"`
-	Channels             int     `json:"channels"`
-	Priority             int     `json:"priority"`
-	IsActive             bool    `json:"is_active"`
-	HealthScore          float64 `json:"health_score"`
-	LastCheckedAt        *string `json:"last_checked_at,omitempty"`
-	LastError            *string `json:"last_error,omitempty"`
+	ID                    string  `json:"id"`
+	URL                   string  `json:"url"`
+	ResolvedURL           string  `json:"resolved_url"`
+	Kind                  string  `json:"kind"`
+	Container             string  `json:"container"`
+	Transport             string  `json:"transport"`
+	MimeType              string  `json:"mime_type"`
+	Codec                 string  `json:"codec"`
+	Lossless              bool    `json:"lossless"`
+	Bitrate               int     `json:"bitrate"`
+	BitDepth              int     `json:"bit_depth"`
+	SampleRateHz          int     `json:"sample_rate_hz"`
+	SampleRateConfidence  string  `json:"sample_rate_confidence"`
+	Channels              int     `json:"channels"`
+	Priority              int     `json:"priority"`
+	IsActive              bool    `json:"is_active"`
+	MetadataEnabled       bool    `json:"metadata_enabled"`
+	MetadataType          string  `json:"metadata_type"`
+	MetadataError         *string `json:"metadata_error,omitempty"`
+	MetadataErrorCode     *string `json:"metadata_error_code,omitempty"`
+	MetadataLastFetchedAt *string `json:"metadata_last_fetched_at,omitempty"`
+	HealthScore           float64 `json:"health_score"`
+	LastCheckedAt         *string `json:"last_checked_at,omitempty"`
+	LastError             *string `json:"last_error,omitempty"`
 }
 
 func toStreamResponse(s *store.StationStream) streamResponse {
@@ -64,26 +69,36 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 		formatted := s.LastCheckedAt.UTC().Format(time.RFC3339)
 		lastCheckedAt = &formatted
 	}
+	var metadataLastFetchedAt *string
+	if s.MetadataLastFetchedAt != nil {
+		formatted := s.MetadataLastFetchedAt.UTC().Format(time.RFC3339)
+		metadataLastFetchedAt = &formatted
+	}
 	return streamResponse{
-		ID:                   s.ID,
-		URL:                  s.URL,
-		ResolvedURL:          s.ResolvedURL,
-		Kind:                 s.Kind,
-		Container:            s.Container,
-		Transport:            s.Transport,
-		MimeType:             s.MimeType,
-		Codec:                s.Codec,
-		Lossless:             isLosslessStream(s.Codec, s.MimeType, s.URL, s.ResolvedURL),
-		Bitrate:              s.Bitrate,
-		BitDepth:             s.BitDepth,
-		SampleRateHz:         s.SampleRateHz,
-		SampleRateConfidence: s.SampleRateConfidence,
-		Channels:             s.Channels,
-		Priority:             s.Priority,
-		IsActive:             s.IsActive,
-		HealthScore:          s.HealthScore,
-		LastCheckedAt:        lastCheckedAt,
-		LastError:            s.LastError,
+		ID:                    s.ID,
+		URL:                   s.URL,
+		ResolvedURL:           s.ResolvedURL,
+		Kind:                  s.Kind,
+		Container:             s.Container,
+		Transport:             s.Transport,
+		MimeType:              s.MimeType,
+		Codec:                 s.Codec,
+		Lossless:              isLosslessStream(s.Codec, s.MimeType, s.URL, s.ResolvedURL),
+		Bitrate:               s.Bitrate,
+		BitDepth:              s.BitDepth,
+		SampleRateHz:          s.SampleRateHz,
+		SampleRateConfidence:  s.SampleRateConfidence,
+		Channels:              s.Channels,
+		Priority:              s.Priority,
+		IsActive:              s.IsActive,
+		MetadataEnabled:       s.MetadataEnabled,
+		MetadataType:          s.MetadataType,
+		MetadataError:         s.MetadataError,
+		MetadataErrorCode:     s.MetadataErrorCode,
+		MetadataLastFetchedAt: metadataLastFetchedAt,
+		HealthScore:           s.HealthScore,
+		LastCheckedAt:         lastCheckedAt,
+		LastError:             s.LastError,
 	}
 }
 
@@ -109,6 +124,8 @@ func defaultStreamResponseForStation(s *store.Station) []streamResponse {
 		Channels:             0,
 		Priority:             1,
 		IsActive:             true,
+		MetadataEnabled:      true,
+		MetadataType:         "auto",
 		HealthScore:          s.ReliabilityScore,
 	}}
 }

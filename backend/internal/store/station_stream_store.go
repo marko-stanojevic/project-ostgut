@@ -11,46 +11,56 @@ import (
 
 // StationStream represents one playable variant for a station.
 type StationStream struct {
-	ID                   string
-	StationID            string
-	URL                  string
-	ResolvedURL          string
-	Kind                 string // direct | playlist | hls
-	Container            string // none | m3u | m3u8 | pls
-	Transport            string // http | https | icy | shoutcast | icecast
-	MimeType             string
-	Codec                string
-	Bitrate              int
-	BitDepth             int
-	SampleRateHz         int
-	SampleRateConfidence string
-	Channels             int
-	Priority             int
-	IsActive             bool
-	HealthScore          float64
-	LastCheckedAt        *time.Time
-	LastError            *string
+	ID                    string
+	StationID             string
+	URL                   string
+	ResolvedURL           string
+	Kind                  string // direct | playlist | hls
+	Container             string // none | m3u | m3u8 | pls
+	Transport             string // http | https | icy | shoutcast | icecast
+	MimeType              string
+	Codec                 string
+	Bitrate               int
+	BitDepth              int
+	SampleRateHz          int
+	SampleRateConfidence  string
+	Channels              int
+	Priority              int
+	IsActive              bool
+	MetadataEnabled       bool
+	MetadataType          string
+	MetadataError         *string
+	MetadataErrorCode     *string
+	MetadataLastFetchedAt *time.Time
+	HealthScore           float64
+	LastCheckedAt         *time.Time
+	LastError             *string
 }
 
 // StationStreamInput is the write payload for station stream variants.
 type StationStreamInput struct {
-	URL                  string
-	ResolvedURL          string
-	Kind                 string
-	Container            string
-	Transport            string
-	MimeType             string
-	Codec                string
-	Bitrate              int
-	BitDepth             int
-	SampleRateHz         int
-	SampleRateConfidence string
-	Channels             int
-	Priority             int
-	IsActive             bool
-	HealthScore          float64
-	LastCheckedAt        *time.Time
-	LastError            *string
+	URL                   string
+	ResolvedURL           string
+	Kind                  string
+	Container             string
+	Transport             string
+	MimeType              string
+	Codec                 string
+	Bitrate               int
+	BitDepth              int
+	SampleRateHz          int
+	SampleRateConfidence  string
+	Channels              int
+	Priority              int
+	IsActive              bool
+	MetadataEnabled       bool
+	MetadataType          string
+	MetadataError         *string
+	MetadataErrorCode     *string
+	MetadataLastFetchedAt *time.Time
+	HealthScore           float64
+	LastCheckedAt         *time.Time
+	LastError             *string
 }
 
 // StationStreamStore executes queries against station_streams.
@@ -81,6 +91,11 @@ func scanStationStreamRow(row Scanner) (*StationStream, error) {
 		&s.Channels,
 		&s.Priority,
 		&s.IsActive,
+		&s.MetadataEnabled,
+		&s.MetadataType,
+		&s.MetadataError,
+		&s.MetadataErrorCode,
+		&s.MetadataLastFetchedAt,
 		&s.HealthScore,
 		&s.LastCheckedAt,
 		&s.LastError,
@@ -135,24 +150,38 @@ func sanitizeStreamInput(in StationStreamInput, fallbackPriority int) StationStr
 		health = 1
 	}
 
+	metadataType := strings.ToLower(strings.TrimSpace(in.MetadataType))
+	switch metadataType {
+	case "", "auto":
+		metadataType = "auto"
+	case "icy", "icecast", "shoutcast":
+	default:
+		metadataType = "auto"
+	}
+
 	return StationStreamInput{
-		URL:                  url,
-		ResolvedURL:          resolved,
-		Kind:                 kind,
-		Container:            container,
-		Transport:            transport,
-		MimeType:             strings.TrimSpace(in.MimeType),
-		Codec:                strings.ToUpper(strings.TrimSpace(in.Codec)),
-		Bitrate:              in.Bitrate,
-		BitDepth:             in.BitDepth,
-		SampleRateHz:         in.SampleRateHz,
-		SampleRateConfidence: normalizeSampleRateConfidence(in.SampleRateConfidence),
-		Channels:             in.Channels,
-		Priority:             priority,
-		IsActive:             in.IsActive,
-		HealthScore:          health,
-		LastCheckedAt:        in.LastCheckedAt,
-		LastError:            in.LastError,
+		URL:                   url,
+		ResolvedURL:           resolved,
+		Kind:                  kind,
+		Container:             container,
+		Transport:             transport,
+		MimeType:              strings.TrimSpace(in.MimeType),
+		Codec:                 strings.ToUpper(strings.TrimSpace(in.Codec)),
+		Bitrate:               in.Bitrate,
+		BitDepth:              in.BitDepth,
+		SampleRateHz:          in.SampleRateHz,
+		SampleRateConfidence:  normalizeSampleRateConfidence(in.SampleRateConfidence),
+		Channels:              in.Channels,
+		Priority:              priority,
+		IsActive:              in.IsActive,
+		MetadataEnabled:       in.MetadataEnabled,
+		MetadataType:          metadataType,
+		MetadataError:         in.MetadataError,
+		MetadataErrorCode:     in.MetadataErrorCode,
+		MetadataLastFetchedAt: in.MetadataLastFetchedAt,
+		HealthScore:           health,
+		LastCheckedAt:         in.LastCheckedAt,
+		LastError:             in.LastError,
 	}
 }
 
@@ -171,7 +200,7 @@ func (s *StationStreamStore) ListByStationID(ctx context.Context, stationID stri
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, health_score,
+			priority, is_active, metadata_enabled, metadata_type, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE station_id = $1
@@ -203,7 +232,7 @@ func (s *StationStreamStore) ListByStationIDs(ctx context.Context, stationIDs []
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, health_score,
+			priority, is_active, metadata_enabled, metadata_type, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE station_id = ANY($1::uuid[])
@@ -259,13 +288,13 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			INSERT INTO station_streams (
 				station_id, url, resolved_url, kind, container, transport,
 				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-				priority, is_active, health_score,
+				priority, is_active, metadata_enabled, metadata_type, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 				last_checked_at, last_error, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
 				$7, $8, $9, $10, $11, $12, $13,
-				$14, $15, $16,
-				$17, $18, NOW()
+				$14, $15, $16, $17, $18, $19, $20, $21,
+				$22, $23, NOW()
 			)`,
 			stationID,
 			in.URL,
@@ -282,6 +311,11 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			in.Channels,
 			in.Priority,
 			in.IsActive,
+			in.MetadataEnabled,
+			in.MetadataType,
+			in.MetadataError,
+			in.MetadataErrorCode,
+			in.MetadataLastFetchedAt,
 			in.HealthScore,
 			in.LastCheckedAt,
 			in.LastError,
@@ -323,13 +357,13 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		INSERT INTO station_streams (
 			station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, health_score,
+			priority, is_active, metadata_enabled, metadata_type, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 			last_checked_at, last_error, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12, $13,
-			1, true, $14,
-			$15, $16, NOW()
+			1, true, $14, $15, $16, $17, $18, $19,
+			$20, $21, NOW()
 		)
 		ON CONFLICT (station_id, priority) DO UPDATE SET
 			url = EXCLUDED.url,
@@ -345,6 +379,11 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			sample_rate_confidence = EXCLUDED.sample_rate_confidence,
 			channels = EXCLUDED.channels,
 			is_active = EXCLUDED.is_active,
+			metadata_enabled = EXCLUDED.metadata_enabled,
+			metadata_type = EXCLUDED.metadata_type,
+			metadata_error = EXCLUDED.metadata_error,
+			metadata_error_code = EXCLUDED.metadata_error_code,
+			metadata_last_fetched_at = EXCLUDED.metadata_last_fetched_at,
 			health_score = EXCLUDED.health_score,
 			last_checked_at = EXCLUDED.last_checked_at,
 			last_error = EXCLUDED.last_error,
@@ -362,6 +401,11 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		n.SampleRateHz,
 		n.SampleRateConfidence,
 		n.Channels,
+		n.MetadataEnabled,
+		n.MetadataType,
+		n.MetadataError,
+		n.MetadataErrorCode,
+		n.MetadataLastFetchedAt,
 		n.HealthScore,
 		n.LastCheckedAt,
 		n.LastError,
@@ -397,7 +441,7 @@ func (s *StationStreamStore) ListAllActive(ctx context.Context) ([]*StationStrea
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, health_score,
+			priority, is_active, metadata_enabled, metadata_type, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE is_active = true
@@ -464,6 +508,39 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 	)
 	if err != nil {
 		return fmt.Errorf("update probe result: %w", err)
+	}
+	return nil
+}
+
+// UpdateMetadataHealth stores the latest metadata fetch outcome for one stream.
+func (s *StationStreamStore) UpdateMetadataHealth(
+	ctx context.Context,
+	id string,
+	metadataError *string,
+	metadataErrorCode *string,
+	metadataLastFetchedAt *time.Time,
+) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE station_streams
+		SET
+			metadata_error = $1,
+			metadata_error_code = $2,
+			metadata_last_fetched_at = $3,
+			last_checked_at = NOW(),
+			updated_at = NOW()
+		WHERE id = $4
+		  AND (
+			metadata_error IS DISTINCT FROM $1
+			OR metadata_error_code IS DISTINCT FROM $2
+			OR metadata_last_fetched_at IS DISTINCT FROM $3
+		  )`,
+		metadataError,
+		metadataErrorCode,
+		metadataLastFetchedAt,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("update metadata health: %w", err)
 	}
 	return nil
 }

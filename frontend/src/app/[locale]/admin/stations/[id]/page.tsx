@@ -36,6 +36,7 @@ import {
 } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+type MetadataType = 'auto' | 'icy' | 'icecast' | 'shoutcast'
 
 interface AdminStream {
     id: string
@@ -54,6 +55,11 @@ interface AdminStream {
     channels: number
     priority: number
     is_active: boolean
+    metadata_enabled: boolean
+    metadata_type: MetadataType
+    metadata_error?: string
+    metadata_error_code?: string
+    metadata_last_fetched_at?: string
     health_score: number
     last_checked_at?: string
     last_error?: string
@@ -78,11 +84,6 @@ interface AdminStation {
     reliability_score: number
     featured: boolean
     status: string
-    metadata_enabled: boolean
-    metadata_type: 'auto' | 'icy' | 'icecast' | 'shoutcast'
-    metadata_error?: string
-    metadata_error_code?: string
-    metadata_last_fetched_at?: string
     overview?: string
     editor_notes?: string
 }
@@ -91,6 +92,8 @@ interface StreamFormEntry {
     url: string
     priority: number
     bitrate: string
+    metadata_enabled: boolean
+    metadata_type: MetadataType
 }
 
 interface StationForm {
@@ -109,8 +112,6 @@ interface StationForm {
     reliability_score: string
     overview: string
     status: 'pending' | 'approved'
-    metadata_enabled: boolean
-    metadata_type: 'auto' | 'icy' | 'icecast' | 'shoutcast'
     featured: boolean
     editor_notes: string
 }
@@ -182,6 +183,50 @@ function formatSampleRateConfidenceLabel(stream: AdminStream): string {
     }
 }
 
+function createEmptyStream(priority: number): StreamFormEntry {
+    return {
+        url: '',
+        priority,
+        bitrate: '',
+        metadata_enabled: true,
+        metadata_type: 'auto',
+    }
+}
+
+function toStreamFormEntry(stream: AdminStream, fallbackPriority: number): StreamFormEntry {
+    return {
+        url: stream.url,
+        priority: stream.priority || fallbackPriority,
+        bitrate: stream.bitrate > 0 ? String(stream.bitrate) : '',
+        metadata_enabled: stream.metadata_enabled ?? true,
+        metadata_type: stream.metadata_type ?? 'auto',
+    }
+}
+
+function toStationForm(station: AdminStation): StationForm {
+    return {
+        name: station.name,
+        streams: station.streams && station.streams.length > 0
+            ? [...station.streams].sort((a, b) => a.priority - b.priority).map((stream, index) => toStreamFormEntry(stream, index + 1))
+            : [{ ...createEmptyStream(1), url: station.stream_url }],
+        logo: station.logo ?? '',
+        website: station.website ?? '',
+        genre: (station.genres ?? []).join(', '),
+        language: station.language,
+        country: station.country,
+        city: station.city ?? '',
+        country_code: station.country_code,
+        style_tags: (station.style_tags ?? []).join(', '),
+        format_tags: (station.format_tags ?? []).join(', '),
+        texture_tags: (station.texture_tags ?? []).join(', '),
+        reliability_score: String(station.reliability_score ?? 0),
+        overview: station.overview ?? '',
+        status: station.status === 'approved' ? 'approved' : 'pending',
+        featured: !!station.featured,
+        editor_notes: station.editor_notes ?? '',
+    }
+}
+
 export default function StationEditorPage() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
@@ -199,7 +244,7 @@ export default function StationEditorPage() {
 
     const [form, setForm] = useState<StationForm>({
         name: '',
-        streams: [{ url: '', priority: 1, bitrate: '' }],
+        streams: [createEmptyStream(1)],
         logo: '',
         website: '',
         genre: '',
@@ -213,8 +258,6 @@ export default function StationEditorPage() {
         reliability_score: '',
         overview: '',
         status: 'pending',
-        metadata_enabled: true,
-        metadata_type: 'auto',
         featured: false,
         editor_notes: '',
     })
@@ -253,29 +296,7 @@ export default function StationEditorPage() {
                 if (cancelled) return
 
                 setStation(s)
-                setForm({
-                    name: s.name,
-                    streams: s.streams && s.streams.length > 0
-                        ? [...s.streams].sort((a, b) => a.priority - b.priority).map((st, i) => ({ url: st.url, priority: st.priority || i + 1, bitrate: st.bitrate > 0 ? String(st.bitrate) : '' }))
-                        : [{ url: s.stream_url, priority: 1, bitrate: '' }],
-                    logo: s.logo ?? '',
-                    website: s.website ?? '',
-                    genre: (s.genres ?? []).join(', '),
-                    language: s.language,
-                    country: s.country,
-                    city: s.city ?? '',
-                    country_code: s.country_code,
-                    style_tags: (s.style_tags ?? []).join(', '),
-                    format_tags: (s.format_tags ?? []).join(', '),
-                    texture_tags: (s.texture_tags ?? []).join(', '),
-                    reliability_score: String(s.reliability_score ?? 0),
-                    overview: s.overview ?? '',
-                    status: s.status === 'approved' ? 'approved' : 'pending',
-                    metadata_enabled: s.metadata_enabled ?? true,
-                    metadata_type: (s.metadata_type as StationForm['metadata_type']) || 'auto',
-                    featured: !!s.featured,
-                    editor_notes: s.editor_notes ?? '',
-                })
+                setForm(toStationForm(s))
 
                 try {
                     const icon = await fetchJSONWithAuth<MediaAssetResponse>(
@@ -393,6 +414,8 @@ export default function StationEditorPage() {
                         url: s.url.trim(),
                         priority: s.priority || i + 1,
                         bitrate: Number.isFinite(parsedBitrate) && parsedBitrate > 0 ? parsedBitrate : undefined,
+                        metadata_enabled: s.metadata_enabled,
+                        metadata_type: s.metadata_type,
                     }
                 }),
             logo: logoURL,
@@ -408,8 +431,6 @@ export default function StationEditorPage() {
             reliability_score: reliabilityNum,
             overview: form.overview.trim() || null,
             status: form.status,
-            metadata_enabled: form.metadata_enabled,
-            metadata_type: form.metadata_type,
             featured: form.featured,
             editor_notes: form.editor_notes.trim() || null,
         }
@@ -421,29 +442,7 @@ export default function StationEditorPage() {
             })
 
             setStation(updated)
-            setForm({
-                name: updated.name,
-                streams: updated.streams && updated.streams.length > 0
-                    ? [...updated.streams].sort((a, b) => a.priority - b.priority).map((st, i) => ({ url: st.url, priority: st.priority || i + 1, bitrate: st.bitrate > 0 ? String(st.bitrate) : '' }))
-                    : [{ url: updated.stream_url, priority: 1, bitrate: '' }],
-                logo: updated.logo ?? '',
-                website: updated.website ?? '',
-                genre: (updated.genres ?? []).join(', '),
-                language: updated.language,
-                country: updated.country,
-                city: updated.city ?? '',
-                country_code: updated.country_code,
-                style_tags: (updated.style_tags ?? []).join(', '),
-                format_tags: (updated.format_tags ?? []).join(', '),
-                texture_tags: (updated.texture_tags ?? []).join(', '),
-                reliability_score: String(updated.reliability_score ?? 0),
-                overview: updated.overview ?? '',
-                status: updated.status === 'approved' ? 'approved' : 'pending',
-                metadata_enabled: updated.metadata_enabled ?? true,
-                metadata_type: (updated.metadata_type as StationForm['metadata_type']) || 'auto',
-                featured: !!updated.featured,
-                editor_notes: updated.editor_notes ?? '',
-            })
+            setForm(toStationForm(updated))
             setSaved(true)
             setTimeout(() => setSaved(false), 3000)
         } catch (err) {
@@ -477,6 +476,7 @@ export default function StationEditorPage() {
     const currentGenreTags = form.genre.split(',').map((g) => g.trim().toLowerCase()).filter(Boolean)
     const allCurrentTags = [...new Set([...currentGenreTags, ...currentStyleTags, ...currentFormatTags, ...currentTextureTags])]
     const iconUrl = getPreferredMediaUrl(stationIcon) || logoURL
+    const streamDetails = [...(station.streams ?? [])].sort((a, b) => a.priority - b.priority)
 
     return (
         <div className="max-w-6xl space-y-6">
@@ -516,128 +516,276 @@ export default function StationEditorPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                            Station Preview
+                            Streams
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-                                {iconUrl ? (
-                                    <Image src={iconUrl} alt="" fill className="object-cover" unoptimized />
-                                ) : (
-                                    <RadioIcon className="h-5 w-5 text-muted-foreground" />
-                                )}
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium">{trimmedName || '-'}</p>
-                                <p className="text-xs text-muted-foreground">{form.genre || '-'} · {[form.city, form.country].filter(Boolean).join(', ') || '-'}</p>
-                            </div>
-                        </div>
+                        <div className="space-y-2">
+                            {form.streams.map((stream, i) => (
+                                <div key={i} className="space-y-3 rounded-lg border p-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                                        <Input
+                                            value={stream.url}
+                                            placeholder="https://…"
+                                            className="flex-1"
+                                            onChange={(e) => setForm((prev) => ({
+                                                ...prev,
+                                                streams: prev.streams.map((s, idx) =>
+                                                    idx === i ? { ...s, url: e.target.value } : s
+                                                ),
+                                            }))}
+                                        />
+                                        <Input
+                                            value={stream.bitrate}
+                                            type="number"
+                                            min={0}
+                                            placeholder="kbps"
+                                            className="w-24 shrink-0"
+                                            onChange={(e) => setForm((prev) => ({
+                                                ...prev,
+                                                streams: prev.streams.map((s, idx) =>
+                                                    idx === i ? { ...s, bitrate: e.target.value } : s
+                                                ),
+                                            }))}
+                                        />
+                                        {form.streams.length > 1 && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                onClick={() => setForm((prev) => ({
+                                                    ...prev,
+                                                    streams: prev.streams
+                                                        .filter((_, idx) => idx !== i)
+                                                        .map((s, idx) => ({ ...s, priority: idx + 1 })),
+                                                }))}
+                                            >
+                                                <TrashIcon className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
 
-                        <Separator />
+                                    <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
+                                        <div className="flex items-center justify-between rounded-lg border p-3">
+                                            <div>
+                                                <p className="text-sm font-medium">Metadata polling</p>
+                                                <p className="text-xs text-muted-foreground">Disable for streams that do not expose now-playing metadata</p>
+                                            </div>
+                                            <Switch
+                                                checked={stream.metadata_enabled}
+                                                onCheckedChange={(checked) => setForm((prev) => ({
+                                                    ...prev,
+                                                    streams: prev.streams.map((s, idx) =>
+                                                        idx === i ? { ...s, metadata_enabled: !!checked } : s
+                                                    ),
+                                                }))}
+                                            />
+                                        </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <SourceField label="Genre" value={form.genre} />
-                            <SourceField label="Language" value={form.language} />
-                            <SourceField label="Country" value={form.country} />
-                            <SourceField label="City" value={form.city} />
-                            <SourceField label="Country Code" value={form.country_code.toUpperCase()} />
-                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label>Metadata type</Label>
+                                            <Select
+                                                value={stream.metadata_type}
+                                                onValueChange={(value) => value && setForm((prev) => ({
+                                                    ...prev,
+                                                    streams: prev.streams.map((s, idx) =>
+                                                        idx === i ? { ...s, metadata_type: value as MetadataType } : s
+                                                    ),
+                                                }))}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="auto">Auto-detect</SelectItem>
+                                                    <SelectItem value="icy">ICY (in-stream)</SelectItem>
+                                                    <SelectItem value="icecast">Icecast status-json</SelectItem>
+                                                    <SelectItem value="shoutcast">Shoutcast endpoints</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
 
-                        <Separator />
-
-                        <SourceField label="Stream URL" value={primaryStreamURL} />
-                        <SourceField label="Website" value={websiteURL} />
-
-                        <Separator />
-
-                        <div>
-                            <p className="mb-1.5 text-xs text-muted-foreground">Station icon</p>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    ref={iconInputRef}
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp"
-                                    className="hidden"
-                                    onChange={handleStationIconUpload}
-                                />
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="default"
-                                    className="gap-2"
-                                    onClick={() => iconInputRef.current?.click()}
-                                    disabled={uploadingIcon}
-                                >
-                                    <UploadSimpleIcon className="h-4 w-4" />
-                                    {uploadingIcon ? 'Uploading…' : 'Upload icon'}
-                                </Button>
-                                <p className="text-xs text-muted-foreground">JPG, PNG, or WebP up to 10 MB.</p>
-                            </div>
-                            {iconError && <p className="mt-2 text-xs text-destructive">{iconError}</p>}
-                        </div>
-
-                        {allCurrentTags.length > 0 && (
-                            <div>
-                                <p className="mb-1.5 text-xs text-muted-foreground">Tags</p>
-                                <div className="flex flex-wrap gap-1">
-                                    {currentGenreTags.map((t) => (
-                                        <Badge key={`genre-${t}`} variant="default" className="text-xs">{t}</Badge>
-                                    ))}
-                                    {currentStyleTags.map((t) => (
-                                        <Badge key={`style-${t}`} variant="default" className="text-xs">{t}</Badge>
-                                    ))}
-                                    {currentFormatTags.map((t) => (
-                                        <Badge key={`format-${t}`} variant="default" className="text-xs">{t}</Badge>
-                                    ))}
-                                    {currentTextureTags.map((t) => (
-                                        <Badge key={`texture-${t}`} className="text-xs">{t}</Badge>
-                                    ))}
+                                    {streamDetails[i] && (
+                                        <div className="rounded-lg border p-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs text-muted-foreground">Latest metadata status</p>
+                                                    <p className="mt-1 break-all text-sm">{streamDetails[i].url}</p>
+                                                </div>
+                                                <Badge variant={streamDetails[i].metadata_enabled ? 'default' : 'secondary'} className="text-[10px] uppercase tracking-wide">
+                                                    {streamDetails[i].metadata_enabled ? (streamDetails[i].metadata_type || 'auto') : 'disabled'}
+                                                </Badge>
+                                            </div>
+                                            <div className="mt-3 space-y-1">
+                                                {streamDetails[i].metadata_error_code && (
+                                                    <Badge variant="default" className="text-[10px] uppercase tracking-wide">
+                                                        {streamDetails[i].metadata_error_code}
+                                                    </Badge>
+                                                )}
+                                                <p className="text-sm">
+                                                    {streamDetails[i].metadata_error ? streamDetails[i].metadata_error : 'No metadata errors recorded'}
+                                                </p>
+                                                {streamDetails[i].metadata_last_fetched_at && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Last checked: {new Date(streamDetails[i].metadata_last_fetched_at).toLocaleString()}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        )}
-
-                        <Separator />
-
-                        <div>
-                            <p className="mb-1.5 text-xs text-muted-foreground">Reliability score</p>
-                            <div className="flex items-center gap-3">
-                                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                                    <div
-                                        className={`h-full rounded-full ${reliabilityPct >= 70 ? 'bg-green-500' : reliabilityPct >= 40 ? 'bg-yellow-500' : 'bg-red-400'}`}
-                                        style={{ width: `${reliabilityPct}%` }}
-                                    />
-                                </div>
-                                <span className="text-sm font-medium tabular-nums">{reliabilityPct}%</span>
-                            </div>
+                            ))}
                         </div>
-
-                        {primaryStreamURL && (
-                            <a
-                                href={primaryStreamURL}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                            >
-                                <ArrowSquareOutIcon className="h-3.5 w-3.5" />
-                                Open stream
-                            </a>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="mt-1 gap-1.5"
+                            onClick={() => setForm((prev) => ({
+                                ...prev,
+                                streams: [...prev.streams, createEmptyStream(prev.streams.length + 1)],
+                            }))}
+                        >
+                            <PlusIcon className="h-3.5 w-3.5" />
+                            Add stream URL
+                        </Button>
+                        {!hasValidStreams && (
+                            <p className="text-xs text-destructive">At least one valid absolute URL is required</p>
                         )}
-                        {websiteURL && (
-                            <a
-                                href={websiteURL}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ml-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                            >
-                                <ArrowSquareOutIcon className="h-3.5 w-3.5" />
-                                Open website
-                            </a>
-                        )}
+                        <p className="text-xs text-muted-foreground">
+                            URLs are probed on save. The first entry is primary and determines the station&apos;s canonical stream URL.
+                        </p>
                     </CardContent>
                 </Card>
 
                 <div className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                                Station Preview
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                                    {iconUrl ? (
+                                        <Image src={iconUrl} alt="" fill className="object-cover" unoptimized />
+                                    ) : (
+                                        <RadioIcon className="h-5 w-5 text-muted-foreground" />
+                                    )}
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium">{trimmedName || '-'}</p>
+                                    <p className="text-xs text-muted-foreground">{form.genre || '-'} · {[form.city, form.country].filter(Boolean).join(', ') || '-'}</p>
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <SourceField label="Genre" value={form.genre} />
+                                <SourceField label="Language" value={form.language} />
+                                <SourceField label="Country" value={form.country} />
+                                <SourceField label="City" value={form.city} />
+                                <SourceField label="Country Code" value={form.country_code.toUpperCase()} />
+                            </div>
+
+                            <Separator />
+
+                            <SourceField label="Primary Stream" value={primaryStreamURL} />
+                            <SourceField label="Website" value={websiteURL} />
+
+                            <Separator />
+
+                            <div>
+                                <p className="mb-1.5 text-xs text-muted-foreground">Station icon</p>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        ref={iconInputRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        className="hidden"
+                                        onChange={handleStationIconUpload}
+                                    />
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="default"
+                                        className="gap-2"
+                                        onClick={() => iconInputRef.current?.click()}
+                                        disabled={uploadingIcon}
+                                    >
+                                        <UploadSimpleIcon className="h-4 w-4" />
+                                        {uploadingIcon ? 'Uploading…' : 'Upload icon'}
+                                    </Button>
+                                    <p className="text-xs text-muted-foreground">JPG, PNG, or WebP up to 10 MB.</p>
+                                </div>
+                                {iconError && <p className="mt-2 text-xs text-destructive">{iconError}</p>}
+                            </div>
+
+                            {allCurrentTags.length > 0 && (
+                                <div>
+                                    <p className="mb-1.5 text-xs text-muted-foreground">Tags</p>
+                                    <div className="flex flex-wrap gap-1">
+                                        {currentGenreTags.map((t) => (
+                                            <Badge key={`genre-${t}`} variant="default" className="text-xs">{t}</Badge>
+                                        ))}
+                                        {currentStyleTags.map((t) => (
+                                            <Badge key={`style-${t}`} variant="default" className="text-xs">{t}</Badge>
+                                        ))}
+                                        {currentFormatTags.map((t) => (
+                                            <Badge key={`format-${t}`} variant="default" className="text-xs">{t}</Badge>
+                                        ))}
+                                        {currentTextureTags.map((t) => (
+                                            <Badge key={`texture-${t}`} className="text-xs">{t}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <Separator />
+
+                            <div>
+                                <p className="mb-1.5 text-xs text-muted-foreground">Reliability score</p>
+                                <div className="flex items-center gap-3">
+                                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                                        <div
+                                            className={`h-full rounded-full ${reliabilityPct >= 70 ? 'bg-green-500' : reliabilityPct >= 40 ? 'bg-yellow-500' : 'bg-red-400'}`}
+                                            style={{ width: `${reliabilityPct}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-sm font-medium tabular-nums">{reliabilityPct}%</span>
+                                </div>
+                            </div>
+
+                            {primaryStreamURL && (
+                                <a
+                                    href={primaryStreamURL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                >
+                                    <ArrowSquareOutIcon className="h-3.5 w-3.5" />
+                                    Open stream
+                                </a>
+                            )}
+                            {websiteURL && (
+                                <a
+                                    href={websiteURL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="ml-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                >
+                                    <ArrowSquareOutIcon className="h-3.5 w-3.5" />
+                                    Open website
+                                </a>
+                            )}
+                        </CardContent>
+                    </Card>
+
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
@@ -665,57 +813,6 @@ export default function StationEditorPage() {
                                 </div>
                                 <Switch checked={form.featured} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, featured: !!checked }))} />
                             </div>
-
-                            <Separator />
-
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between rounded-lg border p-3">
-                                    <div>
-                                        <p className="text-sm font-medium">Metadata polling</p>
-                                        <p className="text-xs text-muted-foreground">Disable for streams that do not expose now-playing metadata</p>
-                                    </div>
-                                    <Switch
-                                        checked={form.metadata_enabled}
-                                        onCheckedChange={(checked) => setForm((prev) => ({ ...prev, metadata_enabled: !!checked }))}
-                                    />
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <Label>Metadata type</Label>
-                                    <Select
-                                        value={form.metadata_type}
-                                        onValueChange={(v) => v && setForm((prev) => ({ ...prev, metadata_type: v as StationForm['metadata_type'] }))}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="auto">Auto-detect</SelectItem>
-                                            <SelectItem value="icy">ICY (in-stream)</SelectItem>
-                                            <SelectItem value="icecast">Icecast status-json</SelectItem>
-                                            <SelectItem value="shoutcast">Shoutcast endpoints</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <p className="text-xs text-muted-foreground">When set to a provider, only that strategy is used.</p>
-                                </div>
-
-                                <div className="rounded-lg border p-3">
-                                    <p className="text-xs text-muted-foreground">Latest metadata error</p>
-                                    {station.metadata_error_code && (
-                                        <Badge variant="default" className="mt-2 text-[10px] uppercase tracking-wide">
-                                            {station.metadata_error_code}
-                                        </Badge>
-                                    )}
-                                    <p className="mt-1 text-sm">
-                                        {station.metadata_error ? station.metadata_error : 'No metadata errors recorded'}
-                                    </p>
-                                    {station.metadata_last_fetched_at && (
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            Last checked: {new Date(station.metadata_last_fetched_at).toLocaleString()}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
                         </CardContent>
                     </Card>
 
@@ -734,76 +831,6 @@ export default function StationEditorPage() {
                                 ) : (
                                     <p className="text-xs text-muted-foreground">Used directly in public APIs</p>
                                 )}
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label>Stream URLs</Label>
-                                <div className="space-y-2">
-                                    {form.streams.map((stream, i) => (
-                                        <div key={i} className="flex items-center gap-2">
-                                            <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
-                                            <Input
-                                                value={stream.url}
-                                                placeholder="https://…"
-                                                className="flex-1"
-                                                onChange={(e) => setForm((prev) => ({
-                                                    ...prev,
-                                                    streams: prev.streams.map((s, idx) =>
-                                                        idx === i ? { ...s, url: e.target.value } : s
-                                                    ),
-                                                }))}
-                                            />
-                                            <Input
-                                                value={stream.bitrate}
-                                                type="number"
-                                                min={0}
-                                                placeholder="kbps"
-                                                className="w-24 shrink-0"
-                                                onChange={(e) => setForm((prev) => ({
-                                                    ...prev,
-                                                    streams: prev.streams.map((s, idx) =>
-                                                        idx === i ? { ...s, bitrate: e.target.value } : s
-                                                    ),
-                                                }))}
-                                            />
-                                            {form.streams.length > 1 && (
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                                                    onClick={() => setForm((prev) => ({
-                                                        ...prev,
-                                                        streams: prev.streams
-                                                            .filter((_, idx) => idx !== i)
-                                                            .map((s, idx) => ({ ...s, priority: idx + 1 })),
-                                                    }))}
-                                                >
-                                                    <TrashIcon className="h-4 w-4" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="mt-1 gap-1.5"
-                                    onClick={() => setForm((prev) => ({
-                                        ...prev,
-                                        streams: [...prev.streams, { url: '', priority: prev.streams.length + 1, bitrate: '' }],
-                                    }))}
-                                >
-                                    <PlusIcon className="h-3.5 w-3.5" />
-                                    Add stream URL
-                                </Button>
-                                {!hasValidStreams && (
-                                    <p className="text-xs text-destructive">At least one valid absolute URL is required</p>
-                                )}
-                                <p className="text-xs text-muted-foreground">
-                                    URLs are probed on save. The first entry is primary and determines the station&apos;s canonical stream URL.
-                                </p>
                             </div>
 
                             <div className="grid gap-4 sm:grid-cols-2">

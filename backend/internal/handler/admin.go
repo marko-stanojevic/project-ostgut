@@ -98,12 +98,7 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 // adminStationResponse extends the public response with editorial + status fields.
 type adminStationResponse struct {
 	stationResponse
-	Status                string  `json:"status"`
-	MetadataEnabled       bool    `json:"metadata_enabled"`
-	MetadataType          string  `json:"metadata_type"`
-	MetadataError         *string `json:"metadata_error,omitempty"`
-	MetadataErrorCode     *string `json:"metadata_error_code,omitempty"`
-	MetadataLastFetchedAt *string `json:"metadata_last_fetched_at,omitempty"`
+	Status string `json:"status"`
 }
 
 // adminStationWithStreams fetches the stream variants for s and builds the
@@ -117,27 +112,18 @@ func (h *Handler) adminStationWithStreams(ctx context.Context, s *store.Station)
 }
 
 type adminStreamRequest struct {
-	URL      string `json:"url"`
-	Priority int    `json:"priority"`
-	IsActive *bool  `json:"is_active"`
-	Bitrate  *int   `json:"bitrate"`
+	URL             string  `json:"url"`
+	Priority        int     `json:"priority"`
+	IsActive        *bool   `json:"is_active"`
+	Bitrate         *int    `json:"bitrate"`
+	MetadataEnabled *bool   `json:"metadata_enabled"`
+	MetadataType    *string `json:"metadata_type"`
 }
 
 func toAdminStationResponse(s *store.Station, streams []streamResponse) adminStationResponse {
-	var metadataLastFetchedAt *string
-	if s.MetadataLastFetchedAt != nil {
-		formatted := s.MetadataLastFetchedAt.UTC().Format(time.RFC3339)
-		metadataLastFetchedAt = &formatted
-	}
-
 	return adminStationResponse{
-		stationResponse:       toStationResponse(s, streams),
-		Status:                s.Status,
-		MetadataEnabled:       s.MetadataEnabled,
-		MetadataType:          s.MetadataType,
-		MetadataError:         s.MetadataError,
-		MetadataErrorCode:     s.MetadataErrorCode,
-		MetadataLastFetchedAt: metadataLastFetchedAt,
+		stationResponse: toStationResponse(s, streams),
+		Status:          s.Status,
 	}
 }
 
@@ -162,8 +148,6 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Status           string   `json:"status"`
 		Featured         bool     `json:"featured"`
 		Overview         *string  `json:"overview"`
-		MetadataEnabled  *bool    `json:"metadata_enabled"`
-		MetadataType     *string  `json:"metadata_type"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
@@ -202,22 +186,6 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
-	metadataEnabled := true
-	if req.MetadataEnabled != nil {
-		metadataEnabled = *req.MetadataEnabled
-	}
-
-	metadataType := "auto"
-	if req.MetadataType != nil {
-		metadataType = normalizeMetadataType(*req.MetadataType)
-	} else {
-		metadataType = normalizeMetadataType(metadataType)
-	}
-	if metadataType == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "metadata_type must be one of auto, icy, icecast, shoutcast"})
-		return
-	}
-
 	manual := store.ManualStationInput{
 		Name:             name,
 		StreamURL:        streamURL,
@@ -236,8 +204,6 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Status:           status,
 		Featured:         req.Featured,
 		Overview:         normalizeOptionalText(req.Overview),
-		MetadataEnabled:  metadataEnabled,
-		MetadataType:     metadataType,
 	}
 
 	probeCtx, probeCancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -271,6 +237,8 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Channels:             probe.Channels,
 		Priority:             1,
 		IsActive:             true,
+		MetadataEnabled:      true,
+		MetadataType:         "auto",
 		HealthScore:          reliability,
 		LastCheckedAt:        &probe.LastCheckedAt,
 		LastError:            probe.LastError,
@@ -381,6 +349,13 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		return
 	}
 
+	currentStreams, err := h.stationStreamStore.ListByStationID(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("admin update station fetch streams", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
 	var req struct {
 		Name             *string               `json:"name"`
 		StreamURL        *string               `json:"stream_url"`
@@ -398,8 +373,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		TextureTags      *[]string             `json:"texture_tags"`
 		ReliabilityScore *float64              `json:"reliability_score"`
 		Status           *string               `json:"status"`
-		MetadataEnabled  *bool                 `json:"metadata_enabled"`
-		MetadataType     *string               `json:"metadata_type"`
 		Overview         *string               `json:"overview"`
 		EditorNotes      *string               `json:"editor_notes"`
 		Featured         *bool                 `json:"featured"`
@@ -426,8 +399,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		TextureTags:      current.TextureTags,
 		ReliabilityScore: current.ReliabilityScore,
 		Status:           current.Status,
-		MetadataEnabled:  current.MetadataEnabled,
-		MetadataType:     current.MetadataType,
 		EditorNotes:      current.EditorNotes,
 		Featured:         current.Featured,
 	}
@@ -502,17 +473,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			return
 		}
 	}
-	if req.MetadataEnabled != nil {
-		u.MetadataEnabled = *req.MetadataEnabled
-	}
-	if req.MetadataType != nil {
-		normalized := normalizeMetadataType(*req.MetadataType)
-		if normalized == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "metadata_type must be one of auto, icy, icecast, shoutcast"})
-			return
-		}
-		u.MetadataType = normalized
-	}
 	if req.Overview != nil {
 		u.Overview = normalizeOptionalText(req.Overview)
 	}
@@ -565,6 +525,18 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 
 	if primaryProbe != nil {
+		metadataEnabled := true
+		metadataType := "auto"
+		for _, stream := range currentStreams {
+			if stream.Priority != 1 {
+				continue
+			}
+			metadataEnabled = stream.MetadataEnabled
+			if stream.MetadataType != "" {
+				metadataType = stream.MetadataType
+			}
+			break
+		}
 		_ = h.stationStreamStore.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
 			URL:                  u.StreamURL,
 			ResolvedURL:          primaryProbe.ResolvedURL,
@@ -580,6 +552,8 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			Channels:             primaryProbe.Channels,
 			Priority:             1,
 			IsActive:             true,
+			MetadataEnabled:      metadataEnabled,
+			MetadataType:         metadataType,
 			HealthScore:          u.ReliabilityScore,
 			LastCheckedAt:        &primaryProbe.LastCheckedAt,
 			LastError:            primaryProbe.LastError,
@@ -620,18 +594,21 @@ func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []admin
 			continue
 		}
 		streams = append(streams, adminStreamRequest{
-			URL:      strings.TrimSpace(stream.URL),
-			Priority: stream.Priority,
-			IsActive: stream.IsActive,
-			Bitrate:  stream.Bitrate,
+			URL:             strings.TrimSpace(stream.URL),
+			Priority:        stream.Priority,
+			IsActive:        stream.IsActive,
+			Bitrate:         stream.Bitrate,
+			MetadataEnabled: stream.MetadataEnabled,
+			MetadataType:    stream.MetadataType,
 		})
 	}
 	if len(streams) == 0 && strings.TrimSpace(fallbackURL) != "" {
 		active := true
 		streams = append(streams, adminStreamRequest{
-			URL:      strings.TrimSpace(fallbackURL),
-			Priority: 1,
-			IsActive: &active,
+			URL:             strings.TrimSpace(fallbackURL),
+			Priority:        1,
+			IsActive:        &active,
+			MetadataEnabled: &active,
 		})
 	}
 
@@ -698,6 +675,18 @@ func (h *Handler) buildStationStreams(
 		if stream.IsActive != nil {
 			isActive = *stream.IsActive
 		}
+		metadataEnabled := true
+		if stream.MetadataEnabled != nil {
+			metadataEnabled = *stream.MetadataEnabled
+		}
+		metadataType := "auto"
+		if stream.MetadataType != nil {
+			normalized := normalizeMetadataType(*stream.MetadataType)
+			if normalized == "" {
+				return nil, fmt.Errorf("stream %d metadata_type must be one of auto, icy, icecast, shoutcast", i+1)
+			}
+			metadataType = normalized
+		}
 
 		health := 0.8
 		if fallbackReliability > 0 {
@@ -719,6 +708,8 @@ func (h *Handler) buildStationStreams(
 			Channels:             probe.Channels,
 			Priority:             priority,
 			IsActive:             isActive,
+			MetadataEnabled:      metadataEnabled,
+			MetadataType:         metadataType,
 			HealthScore:          health,
 			LastCheckedAt:        &probe.LastCheckedAt,
 			LastError:            probe.LastError,

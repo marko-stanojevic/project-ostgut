@@ -39,6 +39,7 @@ export interface NowPlaying {
  */
 export function useNowPlaying(
   stationId: string | null | undefined,
+  streamId: string | null | undefined,
   active: boolean,
 ): NowPlaying | null {
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null)
@@ -47,7 +48,7 @@ export function useNowPlaying(
   // Clear track immediately on station change so stale data never shows.
   useEffect(() => {
     setNowPlaying(null)
-  }, [stationId])
+  }, [stationId, streamId])
 
   useEffect(() => {
     if (!stationId || !active) {
@@ -78,11 +79,18 @@ export function useNowPlaying(
       const controller = new AbortController()
       currentController = controller
       try {
-        const res = await fetch(`${API}/stations/${stationId}/now-playing`, { signal: controller.signal })
+        const params = new URLSearchParams()
+        if (streamId) {
+          params.set('stream_id', streamId)
+        }
+        const query = params.toString()
+        const url = `${API}/stations/${stationId}/now-playing${query ? `?${query}` : ''}`
+        const res = await fetch(url, { signal: controller.signal })
         if (cancelled) return
 
         if (!res.ok) {
           // Server error — keep current cadence and retry.
+          setNowPlaying(null)
           schedule(slow ? SLOW_MS : FAST_MS)
           return
         }
@@ -92,10 +100,11 @@ export function useNowPlaying(
 
         if (data.status === 'disabled') {
           // Admin explicitly disabled metadata polling for this station.
+          setNowPlaying(null)
           return
         }
 
-        if (data.title) {
+        if (data.status === 'ok' && data.title) {
           // Metadata found — reset counters and stay on fast cadence.
           fastMisses = 0
           slowMisses = 0
@@ -106,6 +115,7 @@ export function useNowPlaying(
         }
 
         // No metadata this poll.
+        setNowPlaying(null)
         if (!slow) {
           fastMisses++
           if (fastMisses >= MAX_FAST_MISSES) {
@@ -123,7 +133,10 @@ export function useNowPlaying(
       } catch (err) {
         if ((err as { name?: string }).name === 'AbortError') return
         // Network error — keep current cadence.
-        if (!cancelled) schedule(slow ? SLOW_MS : FAST_MS)
+        if (!cancelled) {
+          setNowPlaying(null)
+          schedule(slow ? SLOW_MS : FAST_MS)
+        }
       }
     }
 
@@ -134,7 +147,7 @@ export function useNowPlaying(
       clearTimer()
       currentController?.abort()
     }
-  }, [stationId, active])
+  }, [stationId, streamId, active])
 
   return nowPlaying
 }

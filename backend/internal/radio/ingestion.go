@@ -131,6 +131,8 @@ func (s *Syncer) sync(ctx context.Context) {
 			Channels:             probe.Channels,
 			Priority:             1,
 			IsActive:             true,
+			MetadataEnabled:      true,
+			MetadataType:         "auto",
 			HealthScore:          clamp(st.ReliabilityScore, 0, 1),
 			LastCheckedAt:        &probe.LastCheckedAt,
 			LastError:            probe.LastError,

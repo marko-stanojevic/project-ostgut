@@ -67,7 +67,7 @@ export function PlayerBar() {
   const isLoading = state === 'loading'
   const isError = state === 'error'
 
-  const nowPlaying = useNowPlaying(station?.id, isPlaying || isLoading)
+  const nowPlaying = useNowPlaying(station?.id, currentStream?.id, isPlaying || isLoading)
   const displayStream = useMemo(() => {
     if (currentStream) return currentStream
     if (!station?.streams || station.streams.length === 0) return null
