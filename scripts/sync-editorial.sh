@@ -189,6 +189,44 @@ SQL
   echo "Exported ${stream_count} stream(s) across ${count} station(s)."
 }
 
+# ── Schema check ───────────────────────────────────────────────────────────────
+
+check_schema() {
+  local url="$1"
+  echo "Checking target schema..."
+
+  local missing
+  missing=$(psql "$url" -t -A -q -c "
+    SELECT string_agg(tbl || '.' || col, ', ' ORDER BY tbl, col)
+    FROM (VALUES
+      ('stations',        'custom_name'),
+      ('stations',        'overview'),
+      ('stations',        'style_tags'),
+      ('stations',        'format_tags'),
+      ('stations',        'texture_tags'),
+      ('stations',        'last_editor_action_at'),
+      ('station_streams', 'bit_depth'),
+      ('station_streams', 'sample_rate_hz'),
+      ('station_streams', 'channels'),
+      ('station_streams', 'sample_rate_confidence'),
+      ('station_streams', 'metadata_enabled'),
+      ('station_streams', 'metadata_type')
+    ) AS required(tbl, col)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM information_schema.columns c
+      WHERE c.table_name = required.tbl AND c.column_name = required.col
+    );
+  ")
+
+  if [[ -n "$missing" ]]; then
+    echo "Error: target database is missing required columns: ${missing}"
+    echo "Deploy the backend to the target environment to apply pending migrations, then retry."
+    exit 1
+  fi
+
+  echo "Schema OK."
+}
+
 # ── Import ─────────────────────────────────────────────────────────────────────
 
 do_import() {
@@ -199,6 +237,8 @@ do_import() {
     echo "Error: input file not found: $in_file"
     exit 1
   fi
+
+  check_schema "$tgt_url"
 
   local count stream_count
   count=$(grep -c 'INSERT INTO stations ' "$in_file" 2>/dev/null) || count=0
