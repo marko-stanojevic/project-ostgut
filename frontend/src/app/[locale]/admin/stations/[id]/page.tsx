@@ -630,7 +630,7 @@ export default function StationEditorPage() {
                                                 </p>
                                                 {streamDetails[i].metadata_last_fetched_at && (
                                                     <p className="text-xs text-muted-foreground">
-                                                        Last checked: {new Date(streamDetails[i].metadata_last_fetched_at).toLocaleString()}
+                                                        Last checked: {new Date(streamDetails[i].metadata_last_fetched_at!).toLocaleString()}
                                                     </p>
                                                 )}
                                             </div>
