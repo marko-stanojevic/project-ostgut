@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: ["main"]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "infra/**"
+      - "GitVersion.yml"
   pull_request:
     branches: ["main"]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "infra/**"
+      - "GitVersion.yml"
 
 permissions:
   contents: read
