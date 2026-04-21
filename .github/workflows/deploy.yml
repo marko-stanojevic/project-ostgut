@@ -1,13 +1,10 @@
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: ["main"]
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - "infra/**"
-      - ".github/workflows/deploy.yml"
   workflow_dispatch:
     inputs:
       environment:
@@ -41,6 +38,7 @@ permissions:
 
 env:
   ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+  COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -51,11 +49,17 @@ jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     outputs:
       backend: ${{ steps.filter.outputs.backend || steps.manual.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend || steps.manual.outputs.frontend }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.COMMIT_SHA }}
+          fetch-depth: 2
 
       - name: Set manual defaults
         if: github.event_name == 'workflow_dispatch'
@@ -65,7 +69,7 @@ jobs:
           echo "frontend=false" >> "$GITHUB_OUTPUT"
 
       - uses: dorny/paths-filter@v4.0.0
-        if: github.event_name == 'push'
+        if: github.event_name == 'workflow_run'
         id: filter
         with:
           filters: |
@@ -174,6 +178,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ env.COMMIT_SHA }}
           fetch-depth: 0
 
       - name: Install GitVersion
@@ -208,7 +213,7 @@ jobs:
           CHANGED="${{ needs.changes.outputs.backend }}"
           if [[ "$FORCE_BACKEND" == "true" || "$CHANGED" == "true" ]]; then
             SEMVER_TAG="${{ steps.gitversion.outputs.semVer }}"
-            IMMUTABLE_TAG="${SEMVER_TAG}-${GITHUB_SHA::7}"
+            IMMUTABLE_TAG="${SEMVER_TAG}-${COMMIT_SHA::7}"
             echo "deploy_tag=${IMMUTABLE_TAG}" >> "$GITHUB_OUTPUT"
             echo "semver_tag=${SEMVER_TAG}" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"
@@ -244,7 +249,7 @@ jobs:
           CHANGED="${{ needs.changes.outputs.frontend }}"
           if [[ "$FORCE_FRONTEND" == "true" || "$CHANGED" == "true" ]]; then
             SEMVER_TAG="${{ steps.gitversion.outputs.semVer }}"
-            IMMUTABLE_TAG="${SEMVER_TAG}-${GITHUB_SHA::7}"
+            IMMUTABLE_TAG="${SEMVER_TAG}-${COMMIT_SHA::7}"
             echo "deploy_tag=${IMMUTABLE_TAG}" >> "$GITHUB_OUTPUT"
             echo "semver_tag=${SEMVER_TAG}" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"

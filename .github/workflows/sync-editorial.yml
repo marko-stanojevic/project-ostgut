@@ -1,6 +1,7 @@
 name: Sync Editorial Stations
 
 # Syncs editorial station decisions (status, featured, custom_*, editor_notes)
+# and their associated streams (url, codec, bitrate, audio format, metadata config)
 # using Azure Blob Storage as a versioned intermediate artifact.
 #
 # Modes:
@@ -82,7 +83,7 @@ jobs:
     if: inputs.mode == 'sync' || inputs.mode == 'export'
     # local-import skips this job entirely — the blob was already uploaded manually.
     runs-on: ubuntu-latest
-    environment: staging
+    environment: ${{ inputs.source }}
 
     env:
       SOURCE_ENV: ${{ inputs.source }}
@@ -198,7 +199,7 @@ jobs:
       (inputs.mode == 'sync' || inputs.mode == 'import' || inputs.mode == 'local-import') &&
       (needs.export.result == 'success' || needs.export.result == 'skipped')
     runs-on: ubuntu-latest
-    environment: staging
+    environment: ${{ inputs.target }}
 
     env:
       SOURCE_ENV: ${{ inputs.source }}

@@ -23,9 +23,11 @@
 #   3. Trigger the "import" or "sync" workflow in GitHub Actions.
 #
 # What syncs:
-#   All stations where last_editor_action_at IS NOT NULL (set by admin actions).
+#   All stations where last_editor_action_at IS NOT NULL (set by admin actions),
+#   plus all station_streams belonging to those stations.
 #   Manual stations missing from target are inserted. Existing rows update only
-#   when source timestamp is newer than target's.
+#   when source timestamp is newer than target's. Streams are upserted by
+#   (station_id, priority); operational state (health, errors) is not synced.
 #
 # Dry run (direct and import modes):
 #   DRY_RUN=true ./sync-editorial.sh ...
@@ -63,15 +65,16 @@ do_export() {
 
   echo "Exporting editorial data from source..."
 
-  # Generate one INSERT … ON CONFLICT statement per station using PostgreSQL's
-  # format() with %L (literal quoting) — handles all type edge cases natively.
+  # ── Stations ────────────────────────────────────────────────────────────────
+  # Generate one INSERT … ON CONFLICT per station using PostgreSQL's format()
+  # with %L (literal quoting) — handles all type edge cases natively.
   psql "$src_url" -t -A -q <<'SQL' > "$out_file"
 SELECT format(
   $f$INSERT INTO stations (
   external_id, name, stream_url, homepage, logo,
   genres, language, country, country_code, city, tags,
   style_tags, format_tags, texture_tags,
-  bitrate, codec, reliability_score,
+  reliability_score,
   is_active, status, featured,
   custom_name, custom_website, overview, editor_notes,
   last_editor_action_at, last_synced_at, updated_at
@@ -79,7 +82,7 @@ SELECT format(
   %L, %L, %L, %L, %L,
   %L::text[], %L, %L, %L, %L, %L::text[],
   %L::text[], %L::text[], %L::text[],
-  %L::int, %L, %L::float8,
+  %L::float8,
   true, %L, %L::bool,
   %L, %L, %L, %L,
   %L::timestamptz, NOW(), NOW()
@@ -105,7 +108,7 @@ $f$,
   external_id, name, stream_url, homepage, logo,
   genres, language, country, country_code, city, tags,
   style_tags, format_tags, texture_tags,
-  bitrate, codec, reliability_score,
+  reliability_score,
   status, featured,
   custom_name, custom_website, overview, editor_notes,
   last_editor_action_at
@@ -117,7 +120,7 @@ ORDER BY last_editor_action_at;
 SQL
 
   local count
-  count=$(grep -c 'INSERT INTO' "$out_file" 2>/dev/null) || count=0
+  count=$(grep -c 'INSERT INTO stations ' "$out_file" 2>/dev/null) || count=0
   echo "Exported ${count} station(s) with editorial data."
 
   if [[ "$count" -eq 0 ]]; then
@@ -125,6 +128,65 @@ SQL
     rm -f "$out_file"
     exit 0
   fi
+
+  # ── Streams ─────────────────────────────────────────────────────────────────
+  # Sync streams for all editorial stations. Uses a subquery on external_id to
+  # resolve station_id on the target, so stations must be inserted first.
+  # Operational state (health_score, last_checked_at, last_error,
+  # metadata_error, metadata_error_code, metadata_last_fetched_at) is excluded
+  # — those are managed by the health checker, not editorial decisions.
+  psql "$src_url" -t -A -q <<'SQL' >> "$out_file"
+SELECT format(
+  $f$INSERT INTO station_streams (
+  station_id,
+  url, resolved_url, kind, container, transport,
+  mime_type, codec, bitrate, priority, is_active,
+  bit_depth, sample_rate_hz, channels, sample_rate_confidence,
+  metadata_enabled, metadata_type,
+  created_at, updated_at
+)
+SELECT
+  s.id,
+  %L, %L, %L, %L, %L,
+  %L, %L, %L::int, %L::int, %L::bool,
+  %L::int, %L::int, %L::int, %L,
+  %L::bool, %L,
+  NOW(), NOW()
+FROM stations s WHERE s.external_id = %L
+ON CONFLICT (station_id, priority) DO UPDATE SET
+  url                    = EXCLUDED.url,
+  resolved_url           = EXCLUDED.resolved_url,
+  kind                   = EXCLUDED.kind,
+  container              = EXCLUDED.container,
+  transport              = EXCLUDED.transport,
+  mime_type              = EXCLUDED.mime_type,
+  codec                  = EXCLUDED.codec,
+  bitrate                = EXCLUDED.bitrate,
+  is_active              = EXCLUDED.is_active,
+  bit_depth              = EXCLUDED.bit_depth,
+  sample_rate_hz         = EXCLUDED.sample_rate_hz,
+  channels               = EXCLUDED.channels,
+  sample_rate_confidence = EXCLUDED.sample_rate_confidence,
+  metadata_enabled       = EXCLUDED.metadata_enabled,
+  metadata_type          = EXCLUDED.metadata_type,
+  updated_at             = NOW();
+$f$,
+  ss.url, ss.resolved_url, ss.kind, ss.container, ss.transport,
+  ss.mime_type, ss.codec, ss.bitrate, ss.priority, ss.is_active,
+  ss.bit_depth, ss.sample_rate_hz, ss.channels, ss.sample_rate_confidence,
+  ss.metadata_enabled, ss.metadata_type,
+  st.external_id
+)
+FROM station_streams ss
+JOIN stations st ON st.id = ss.station_id
+WHERE st.last_editor_action_at IS NOT NULL
+  AND st.is_active = true
+ORDER BY st.last_editor_action_at, ss.priority;
+SQL
+
+  local stream_count
+  stream_count=$(grep -c 'INSERT INTO station_streams' "$out_file" 2>/dev/null) || stream_count=0
+  echo "Exported ${stream_count} stream(s) across ${count} station(s)."
 }
 
 # ── Import ─────────────────────────────────────────────────────────────────────
@@ -138,9 +200,10 @@ do_import() {
     exit 1
   fi
 
-  local count
-  count=$(grep -c 'INSERT INTO' "$in_file" 2>/dev/null) || count=0
-  echo "Importing ${count} station(s) from ${in_file}..."
+  local count stream_count
+  count=$(grep -c 'INSERT INTO stations ' "$in_file" 2>/dev/null) || count=0
+  stream_count=$(grep -c 'INSERT INTO station_streams' "$in_file" 2>/dev/null) || stream_count=0
+  echo "Importing ${count} station(s) and ${stream_count} stream(s) from ${in_file}..."
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "--- DRY RUN: SQL that would be applied ---"
