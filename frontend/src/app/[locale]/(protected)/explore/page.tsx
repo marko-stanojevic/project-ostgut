@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl'
 import { usePlayer, type Station } from '@/context/PlayerContext'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CompassIcon, PlayIcon, PauseIcon, RadioIcon, XIcon } from '@phosphor-icons/react'
+import { cn } from '@/lib/utils'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const PAGE_SIZE = 24
@@ -213,15 +214,22 @@ function ExploreContent() {
     const [textures, setTextures] = useState<string[]>([])
 
     const query = searchParams.get('q')?.trim() ?? ''
-    const genre = searchParams.get('genre') ?? ''
-    const style = searchParams.get('style') ?? ''
-    const format = searchParams.get('format') ?? ''
-    const texture = searchParams.get('texture') ?? ''
+    const genreFilter = searchParams.getAll('genre')
+    const styleFilter = searchParams.getAll('style')
+    const formatFilter = searchParams.getAll('format')
+    const textureFilter = searchParams.getAll('texture')
     const sort = searchParams.get('sort') === 'popular' ? 'popular' : 'recommended'
 
+    // Stable string keys for effect dependencies — array refs change every render
+    const genreKey = genreFilter.join('\0')
+    const styleKey = styleFilter.join('\0')
+    const formatKey = formatFilter.join('\0')
+    const textureKey = textureFilter.join('\0')
+
     const activeFilters = useMemo(
-        () => [query, genre, style, format, texture, sort === 'popular' ? 'popular' : ''].filter(Boolean).length,
-        [query, genre, style, format, texture, sort]
+        () => [query, ...genreFilter, ...styleFilter, ...formatFilter, ...textureFilter, sort === 'popular' ? 'popular' : ''].filter(Boolean).length,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [query, genreKey, styleKey, formatKey, textureKey, sort]
     )
 
     useEffect(() => {
@@ -256,10 +264,10 @@ function ExploreContent() {
         params.set('limit', String(PAGE_SIZE))
         params.set('offset', '0')
         if (query) params.set('q', query)
-        if (genre) params.set('genre', genre)
-        if (style) params.set('style', style)
-        if (format) params.set('format', format)
-        if (texture) params.set('texture', texture)
+        genreFilter.forEach(v => params.append('genre', v))
+        styleFilter.forEach(v => params.append('style', v))
+        formatFilter.forEach(v => params.append('format', v))
+        textureFilter.forEach(v => params.append('texture', v))
         if (sort === 'popular') params.set('sort', 'popular')
 
         fetch(`${API}/stations?${params.toString()}`)
@@ -273,7 +281,8 @@ function ExploreContent() {
                 setTotal(0)
             })
             .finally(() => setLoading(false))
-    }, [query, genre, style, format, texture, sort])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [query, genreKey, styleKey, formatKey, textureKey, sort])
 
     useEffect(() => {
         if (typeof window === 'undefined') return
@@ -296,12 +305,22 @@ function ExploreContent() {
         return () => window.cancelAnimationFrame(rafID)
     }, [pathname, searchParams, loading])
 
-    const updateParams = (updates: Record<string, string | null>) => {
+    const toggleFilter = (key: string, value: string) => {
         const params = new URLSearchParams(searchParams.toString())
-        for (const [key, value] of Object.entries(updates)) {
-            if (!value) params.delete(key)
-            else params.set(key, value)
+        const current = params.getAll(key)
+        params.delete(key)
+        if (current.includes(value)) {
+            current.filter(v => v !== value).forEach(v => params.append(key, v))
+        } else {
+            [...current, value].forEach(v => params.append(key, v))
         }
+        const qs = params.toString()
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    }
+
+    const clearFilter = (key: string) => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.delete(key)
         const qs = params.toString()
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     }
@@ -313,10 +332,10 @@ function ExploreContent() {
             params.set('limit', String(PAGE_SIZE))
             params.set('offset', String(stations.length))
             if (query) params.set('q', query)
-            if (genre) params.set('genre', genre)
-            if (style) params.set('style', style)
-            if (format) params.set('format', format)
-            if (texture) params.set('texture', texture)
+            genreFilter.forEach(v => params.append('genre', v))
+            styleFilter.forEach(v => params.append('style', v))
+            formatFilter.forEach(v => params.append('format', v))
+            textureFilter.forEach(v => params.append('texture', v))
             if (sort === 'popular') params.set('sort', 'popular')
 
             const data = await fetch(`${API}/stations?${params.toString()}`).then((r) => r.json())
@@ -343,7 +362,7 @@ function ExploreContent() {
     }
 
     return (
-        <div className="max-w-5xl">
+        <div>
             <div className="mb-8 max-w-3xl">
                 <p className="ui-section-title">{t('section_label')}</p>
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -369,63 +388,48 @@ function ExploreContent() {
                     </button>
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                    <label className="flex min-w-0 flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{t('filter_genre')}</span>
-                        <select
-                            value={genre}
-                            onChange={(e) => updateParams({ genre: e.target.value || null })}
-                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
-                        >
-                            <option value="">{t('all_genres')}</option>
-                            {genres.map((option) => (
-                                <option key={option} value={option.toLowerCase()}>{formatFilterLabel(option)}</option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="flex min-w-0 flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{t('filter_style')}</span>
-                        <select
-                            value={style}
-                            onChange={(e) => updateParams({ style: e.target.value || null })}
-                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
-                        >
-                            <option value="">{t('any_style')}</option>
-                            {styles.map((option) => (
-                                <option key={option} value={option}>{formatFilterLabel(option)}</option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="flex min-w-0 flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{t('filter_format')}</span>
-                        <select
-                            value={format}
-                            onChange={(e) => updateParams({ format: e.target.value || null })}
-                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
-                        >
-                            <option value="">{t('any_format')}</option>
-                            {formats.map((option) => (
-                                <option key={option} value={option}>{formatFilterLabel(option)}</option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="flex min-w-0 flex-col gap-1.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{t('filter_texture')}</span>
-                        <select
-                            value={texture}
-                            onChange={(e) => updateParams({ texture: e.target.value || null })}
-                            className="explore-filter-select h-10 rounded-xl border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
-                        >
-                            <option value="">{t('any_texture')}</option>
-                            {textures.map((option) => (
-                                <option key={option} value={option}>{formatFilterLabel(option)}</option>
-                            ))}
-                        </select>
-                    </label>
-
+                <div className="space-y-3">
+                    {[
+                        { label: t('filter_genre'), options: genres, selected: genreFilter, key: 'genre', getValue: (o: string) => o.toLowerCase(), allLabel: t('all_genres') },
+                        { label: t('filter_style'), options: styles, selected: styleFilter, key: 'style', getValue: (o: string) => o, allLabel: t('any_style') },
+                        { label: t('filter_format'), options: formats, selected: formatFilter, key: 'format', getValue: (o: string) => o, allLabel: t('any_format') },
+                        { label: t('filter_texture'), options: textures, selected: textureFilter, key: 'texture', getValue: (o: string) => o, allLabel: t('any_texture') },
+                    ].map(({ label, options, selected, key, getValue, allLabel }) => (
+                        <div key={key} className="flex flex-wrap items-center gap-1.5">
+                            <span className="mr-1 shrink-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{label}</span>
+                            <button
+                                type="button"
+                                onClick={() => clearFilter(key)}
+                                className={cn(
+                                    'rounded-full border px-3 py-1 text-xs transition-colors',
+                                    selected.length === 0
+                                        ? 'border-foreground/20 bg-foreground/[0.06] font-medium text-foreground'
+                                        : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
+                                )}
+                            >
+                                {allLabel}
+                            </button>
+                            {options.map((option) => {
+                                const value = getValue(option)
+                                const isActive = selected.includes(value)
+                                return (
+                                    <button
+                                        key={option}
+                                        type="button"
+                                        onClick={() => toggleFilter(key, value)}
+                                        className={cn(
+                                            'rounded-full border px-3 py-1 text-xs transition-colors',
+                                            isActive
+                                                ? 'border-brand/50 bg-brand/10 font-medium text-foreground'
+                                                : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
+                                        )}
+                                    >
+                                        {formatFilterLabel(option)}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -448,7 +452,13 @@ function ExploreContent() {
                         <select
                             id="explore-sort"
                             value={sort}
-                            onChange={(e) => updateParams({ sort: e.target.value === 'recommended' ? null : e.target.value })}
+                            onChange={(e) => {
+                                const params = new URLSearchParams(searchParams.toString())
+                                if (e.target.value === 'recommended') params.delete('sort')
+                                else params.set('sort', e.target.value)
+                                const qs = params.toString()
+                                router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+                            }}
                             className="h-9 rounded-full border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
                         >
                             <option value="recommended">{t('sort_recommended')}</option>

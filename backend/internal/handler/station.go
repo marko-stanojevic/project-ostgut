@@ -244,13 +244,13 @@ func (h *Handler) attachStreamsToStations(ctx context.Context, stations []*store
 func (h *Handler) ListStations(c *gin.Context) {
 	f := store.StationFilter{
 		Search:       strings.TrimSpace(c.Query("q")),
-		Genre:        strings.ToLower(c.Query("genre")),
+		Genres:       lowerAll(c.QueryArray("genre")),
 		CountryCode:  strings.ToUpper(c.Query("country")),
 		Language:     strings.ToLower(c.Query("language")),
 		MinBitrate:   queryInt(c, "min_bitrate", 0),
-		Style:        strings.ToLower(c.Query("style")),
-		Format:       strings.ToLower(c.Query("format")),
-		Texture:      strings.ToLower(c.Query("texture")),
+		Styles:       lowerAll(c.QueryArray("style")),
+		Formats:      lowerAll(c.QueryArray("format")),
+		Textures:     lowerAll(c.QueryArray("texture")),
 		Sort:         c.Query("sort"),
 		FeaturedOnly: c.Query("featured") == "true",
 		Limit:        queryInt(c, "limit", 50),
@@ -404,6 +404,16 @@ func (h *Handler) GetFilters(c *gin.Context) {
 		"formats":  formats,
 		"textures": textures,
 	})
+}
+
+func lowerAll(ss []string) []string {
+	out := ss[:0:len(ss)]
+	for _, s := range ss {
+		if v := strings.ToLower(strings.TrimSpace(s)); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func queryInt(c *gin.Context, key string, def int) int {
