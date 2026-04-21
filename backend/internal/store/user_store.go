@@ -36,16 +36,16 @@ type User struct {
 
 // PlayerStation is the persisted station snapshot used for player resume.
 type PlayerStation struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	StreamURL   string `json:"streamUrl"`
-	Logo        string `json:"logo,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	StreamURL   string   `json:"streamUrl"`
+	Logo        string   `json:"logo,omitempty"`
 	Genres      []string `json:"genres"`
-	Country     string `json:"country"`
-	City        string `json:"city,omitempty"`
-	CountryCode string `json:"countryCode"`
-	Bitrate     int    `json:"bitrate"`
-	Codec       string `json:"codec"`
+	Country     string   `json:"country"`
+	City        string   `json:"city,omitempty"`
+	CountryCode string   `json:"countryCode"`
+	Bitrate     int      `json:"bitrate"`
+	Codec       string   `json:"codec"`
 }
 
 // PlayerPreferences stores user-level player state for cross-device continuity.
@@ -53,6 +53,13 @@ type PlayerPreferences struct {
 	Volume    float64
 	Station   *PlayerStation
 	UpdatedAt time.Time
+}
+
+// PlayerPreferencesWriteResult describes whether a player preference write won
+// the timestamp race and which state is persisted after the call.
+type PlayerPreferencesWriteResult struct {
+	Applied     bool
+	Preferences PlayerPreferences
 }
 
 // UserStore executes queries against the users and password_reset_tokens tables.
@@ -247,13 +254,14 @@ func (s *UserStore) GetPlayerPreferences(ctx context.Context, id string) (*Playe
 	return &prefs, nil
 }
 
-// UpdatePlayerPreferences upserts persisted player preferences for a user.
-func (s *UserStore) UpdatePlayerPreferences(ctx context.Context, id string, prefs PlayerPreferences) error {
+// UpdatePlayerPreferences upserts persisted player preferences for a user and
+// reports the state that remains persisted after conflict resolution.
+func (s *UserStore) UpdatePlayerPreferences(ctx context.Context, id string, prefs PlayerPreferences) (*PlayerPreferencesWriteResult, error) {
 	var stationRaw []byte
 	if prefs.Station != nil {
 		b, err := json.Marshal(prefs.Station)
 		if err != nil {
-			return fmt.Errorf("marshal player station: %w", err)
+			return nil, fmt.Errorf("marshal player station: %w", err)
 		}
 		stationRaw = b
 	}
@@ -272,23 +280,33 @@ func (s *UserStore) UpdatePlayerPreferences(ctx context.Context, id string, pref
 		id,
 	)
 	if err != nil {
-		return fmt.Errorf("update player preferences: %w", err)
+		return nil, fmt.Errorf("update player preferences: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		var exists bool
 		existsErr := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, id).Scan(&exists)
 		if existsErr != nil {
-			return fmt.Errorf("check user exists for player preferences: %w", existsErr)
+			return nil, fmt.Errorf("check user exists for player preferences: %w", existsErr)
 		}
 		if !exists {
-			return ErrNotFound
+			return nil, ErrNotFound
 		}
 
-		// Ignore stale updates from older clients/tabs.
-		return nil
+		current, err := s.GetPlayerPreferences(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("load current player preferences after stale write: %w", err)
+		}
+
+		return &PlayerPreferencesWriteResult{
+			Applied:     false,
+			Preferences: *current,
+		}, nil
 	}
 
-	return nil
+	return &PlayerPreferencesWriteResult{
+		Applied:     true,
+		Preferences: prefs,
+	}, nil
 }
 
 // IsAdmin returns true if the user has the is_admin flag set.

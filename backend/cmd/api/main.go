@@ -73,20 +73,25 @@ func main() {
 	stationStreamStore := store.NewStationStreamStore(pool)
 	mediaAssetStore := store.NewMediaAssetStore(pool)
 	h := handler.New(
-		userStore,
-		subStore,
-		stationStore,
-		stationStreamStore,
-		mediaAssetStore,
-		logger,
-		cfg.PaddleWebhookSecret,
-		cfg.PaddleClientToken,
-		cfg.PaddlePriceID,
-		cfg.MediaUploadBaseURL,
-		cfg.MediaUploadSigningSecret,
-		cfg.MediaStorageAccountName,
-		cfg.MediaStorageContainerName,
-		cfg.MediaStorageAccountKey,
+		handler.Dependencies{
+			UserStore:          userStore,
+			SubscriptionStore:  subStore,
+			StationStore:       stationStore,
+			StationStreamStore: stationStreamStore,
+			MediaAssetStore:    mediaAssetStore,
+		},
+		handler.Options{
+			Log:                    logger,
+			JWTSecret:              cfg.JWTSecret,
+			PaddleWebhookSecret:    cfg.PaddleWebhookSecret,
+			PaddleClientToken:      cfg.PaddleClientToken,
+			PaddlePriceID:          cfg.PaddlePriceID,
+			MediaUploadBaseURL:     cfg.MediaUploadBaseURL,
+			MediaUploadSecret:      cfg.MediaUploadSigningSecret,
+			MediaStorageAccount:    cfg.MediaStorageAccountName,
+			MediaStorageContainer:  cfg.MediaStorageContainerName,
+			MediaStorageAccountKey: cfg.MediaStorageAccountKey,
+		},
 	)
 
 	// Start background station sync (Radio Browser ingestion).
@@ -136,7 +141,7 @@ func main() {
 	router.POST("/auth/oauth", h.OAuthLogin)
 	router.POST("/auth/forgot-password", h.ForgotPassword)
 	router.POST("/auth/reset-password", h.ResetPassword)
-	router.POST("/auth/verify", handler.AuthVerify)
+	router.POST("/auth/verify", h.AuthVerify)
 
 	// Station routes (public — no auth required)
 	router.GET("/stations", h.ListStations)

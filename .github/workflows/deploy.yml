@@ -54,17 +54,14 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     outputs:
-      backend: ${{ steps.filter.outputs.backend || steps.manual.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend || steps.manual.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend || steps.initial.outputs.backend || steps.manual.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend || steps.initial.outputs.frontend || steps.manual.outputs.frontend }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: false
-          ref: ${{ github.ref }}
-
-      - name: Fetch main branch
-        run: git fetch origin main:refs/remotes/origin/main
+          ref: ${{ env.COMMIT_SHA }}
 
       - name: Set manual defaults
         if: github.event_name == 'workflow_dispatch'
@@ -73,11 +70,31 @@ jobs:
           echo "backend=false" >> "$GITHUB_OUTPUT"
           echo "frontend=false" >> "$GITHUB_OUTPUT"
 
-      - uses: dorny/paths-filter@v4.0.0
+      - name: Resolve workflow_run diff range
         if: github.event_name == 'workflow_run'
+        id: range
+        run: |
+          if git rev-parse --verify "${COMMIT_SHA}^" >/dev/null 2>&1; then
+            echo "base=${COMMIT_SHA}^" >> "$GITHUB_OUTPUT"
+            echo "head=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "has_parent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_parent=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mark all services changed for initial commit
+        if: github.event_name == 'workflow_run' && steps.range.outputs.has_parent == 'false'
+        id: initial
+        run: |
+          echo "backend=true" >> "$GITHUB_OUTPUT"
+          echo "frontend=true" >> "$GITHUB_OUTPUT"
+
+      - uses: dorny/paths-filter@v4.0.0
+        if: github.event_name == 'workflow_run' && steps.range.outputs.has_parent == 'true'
         id: filter
         with:
-          base: HEAD~1
+          base: ${{ steps.range.outputs.base }}
+          ref: ${{ steps.range.outputs.head }}
           filters: |
             backend:
               - 'backend/**'

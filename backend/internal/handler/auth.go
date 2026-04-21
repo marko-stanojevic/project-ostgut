@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -21,8 +22,8 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	u, err := h.store.GetByEmail(c.Request.Context(), req.Email)
-	if errors.Is(err, store.ErrNotFound) || (err == nil && !h.store.CheckPassword(u.PasswordHash, req.Password)) {
+	u, err := h.auth.users.GetByEmail(c.Request.Context(), req.Email)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && !h.auth.users.CheckPassword(u.PasswordHash, req.Password)) {
 		// Same response for unknown email and wrong password — avoid user enumeration
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
@@ -52,7 +53,7 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	u, err := h.store.Create(c.Request.Context(), req.Email, req.Password)
+	u, err := h.auth.users.Create(c.Request.Context(), req.Email, req.Password)
 	if errors.Is(err, store.ErrEmailTaken) {
 		c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
 		return
@@ -81,7 +82,7 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	token, err := h.store.CreateResetToken(c.Request.Context(), req.Email)
+	token, err := h.auth.users.CreateResetToken(c.Request.Context(), req.Email)
 	if errors.Is(err, store.ErrNotFound) {
 		// Don't reveal whether the email exists
 		c.JSON(http.StatusOK, gin.H{"message": "if that email is registered, a reset link has been sent"})
@@ -114,7 +115,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	err := h.store.ResetPassword(c.Request.Context(), req.Token, req.Password)
+	err := h.auth.users.ResetPassword(c.Request.Context(), req.Token, req.Password)
 	if errors.Is(err, store.ErrBadToken) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired reset token"})
 		return
@@ -143,7 +144,7 @@ func (h *Handler) OAuthLogin(c *gin.Context) {
 		return
 	}
 
-	u, err := h.store.UpsertOAuthUser(c.Request.Context(), req.Provider, req.ProviderID, req.Email, req.Name)
+	u, err := h.auth.users.UpsertOAuthUser(c.Request.Context(), req.Provider, req.ProviderID, req.Email, req.Name)
 	if err != nil {
 		h.log.Error("oauth login: upsert user", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -157,9 +158,9 @@ func (h *Handler) OAuthLogin(c *gin.Context) {
 	})
 }
 
-// AuthVerify is a lightweight token validation endpoint.
+// AuthVerify validates a JWT and returns the token subject when valid.
 // POST /auth/verify
-func AuthVerify(c *gin.Context) {
+func (h *Handler) AuthVerify(c *gin.Context) {
 	var req struct {
 		Token string `json:"token" binding:"required"`
 	}
@@ -167,5 +168,16 @@ func AuthVerify(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"valid": true})
+
+	claims, err := middleware.ValidateJWTToken(req.Token, h.auth.jwtSecret)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"valid": false, "error": "invalid or expired token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"valid": true,
+		"sub":   claims.Sub,
+		"email": claims.Email,
+	})
 }

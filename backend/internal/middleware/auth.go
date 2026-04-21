@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -21,33 +23,21 @@ type Claims struct {
 // with the shared JWT_SECRET (== frontend AUTH_SECRET).
 func AuthMiddleware(logger *slog.Logger, jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			logger.Warn("missing authorization header")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
-			c.Abort()
-			return
-		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			logger.Warn("invalid authorization header format")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
-
-		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
+		tokenString, err := BearerTokenFromHeader(c.GetHeader("Authorization"))
+		if err != nil {
+			if errors.Is(err, errMissingAuthorizationHeader) {
+				logger.Warn("missing authorization header")
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+			} else {
+				logger.Warn("invalid authorization header format")
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header"})
 			}
-			return []byte(jwtSecret), nil
-		})
+			c.Abort()
+			return
+		}
 
-		if err != nil || !token.Valid {
+		claims, err := ValidateJWTToken(tokenString, jwtSecret)
+		if err != nil {
 			logger.Warn("invalid or expired token", "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
 			c.Abort()
@@ -67,6 +57,47 @@ func AuthMiddleware(logger *slog.Logger, jwtSecret string) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+var (
+	errMissingAuthorizationHeader = errors.New("missing authorization header")
+	errInvalidAuthorizationHeader = errors.New("invalid authorization header")
+)
+
+// BearerTokenFromHeader extracts a bearer token from an Authorization header.
+func BearerTokenFromHeader(header string) (string, error) {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return "", errMissingAuthorizationHeader
+	}
+
+	parts := strings.Split(header, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" || strings.TrimSpace(parts[1]) == "" {
+		return "", errInvalidAuthorizationHeader
+	}
+
+	return parts[1], nil
+}
+
+// ValidateJWTToken parses and validates an Auth.js HS256 token.
+func ValidateJWTToken(tokenString, jwtSecret string) (*Claims, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(jwtSecret), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !token.Valid {
+		return nil, fmt.Errorf("token is invalid")
+	}
+	if claims.Sub == "" {
+		return nil, fmt.Errorf("missing subject claim")
+	}
+	return claims, nil
 }
 
 // GetUserID retrieves the user ID from the request context

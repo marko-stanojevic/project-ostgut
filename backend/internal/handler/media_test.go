@@ -27,7 +27,7 @@ func TestBuildObjectURLPreservesQuery(t *testing.T) {
 }
 
 func TestMediaUploadTokenRoundTrip(t *testing.T) {
-	h := &Handler{mediaUploadSecret: "test-secret"}
+	h := &Handler{media: mediaHandlers{config: mediaConfig{uploadSecret: "test-secret"}}}
 	expiresAt := time.Now().Add(15 * time.Minute).UTC()
 
 	token, err := h.createMediaUploadToken("asset-123", "avatars/user-1/asset-123/original", expiresAt)
@@ -78,7 +78,7 @@ func TestProcessUploadedAssetUploadsVariants(t *testing.T) {
 	}))
 	defer server.Close()
 
-	h := &Handler{mediaUploadBaseURL: server.URL + "/container?sig=test"}
+	h := &Handler{media: mediaHandlers{config: mediaConfig{uploadBaseURL: server.URL + "/container?sig=test"}}}
 	asset := &store.MediaAsset{
 		ID:                 "asset-1",
 		OwnerType:          store.MediaAssetOwnerUser,
@@ -128,7 +128,7 @@ func TestProcessUploadedAssetRejectsUnsupportedPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	h := &Handler{mediaUploadBaseURL: server.URL + "/container"}
+	h := &Handler{media: mediaHandlers{config: mediaConfig{uploadBaseURL: server.URL + "/container"}}}
 	asset := &store.MediaAsset{
 		ID:                 "asset-2",
 		OwnerType:          store.MediaAssetOwnerUser,

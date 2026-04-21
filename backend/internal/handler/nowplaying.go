@@ -19,7 +19,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 	id := c.Param("id")
 	requestedStreamID := strings.TrimSpace(c.Query("stream_id"))
 
-	station, err := h.stationStore.GetByID(c.Request.Context(), id)
+	station, err := h.station.stations.GetByID(c.Request.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "station not found"})
 		return
@@ -36,7 +36,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 	metadataType := metadata.TypeAuto
 	var metadataError *string
 	var metadataErrorCode *string
-	streams, err := h.stationStreamStore.ListByStationID(c.Request.Context(), station.ID)
+	streams, err := h.station.streams.ListByStationID(c.Request.Context(), station.ID)
 	if err != nil {
 		h.log.Warn("list station streams for now-playing", "station_id", station.ID, "error", err)
 	} else {
@@ -101,7 +101,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 		return
 	}
 
-	np := h.metaFetcher.Fetch(c.Request.Context(), streamURL, metadata.Config{
+	np := h.station.metaFetcher.Fetch(c.Request.Context(), streamURL, metadata.Config{
 		Enabled: metadataEnabled,
 		Type:    metadataType,
 	})
@@ -121,7 +121,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 	}
 
 	if selectedStreamID != "" {
-		if err := h.stationStreamStore.UpdateMetadataHealth(c.Request.Context(), selectedStreamID, resultMetadataError, resultMetadataErrorCode, &np.FetchedAt); err != nil {
+		if err := h.station.streams.UpdateMetadataHealth(c.Request.Context(), selectedStreamID, resultMetadataError, resultMetadataErrorCode, &np.FetchedAt); err != nil {
 			h.log.Warn("update metadata health", "station_id", station.ID, "stream_id", selectedStreamID, "error", err)
 		}
 	}

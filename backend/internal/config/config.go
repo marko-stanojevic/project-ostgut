@@ -83,7 +83,7 @@ func Load() (*Config, error) {
 		",",
 	)
 
-	return &Config{
+	cfg := &Config{
 		Port:                      port,
 		DatabaseURL:               databaseURL,
 		JWTSecret:                 jwtSecret,
@@ -101,7 +101,13 @@ func Load() (*Config, error) {
 		MediaStorageAccountKey:    strings.TrimSpace(os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")),
 		NewRelicLicenseKey:        os.Getenv("NEW_RELIC_LICENSE_KEY"),
 		NewRelicAppName:           getEnv("NEW_RELIC_APP_NAME", "bouji-backend"),
-	}, nil
+	}
+
+	if err := validatePaddleConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }
 
 func getEnv(key, fallback string) string {
@@ -109,4 +115,24 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func validatePaddleConfig(cfg *Config) error {
+	if cfg.PaddleAPIKey == "" &&
+		cfg.PaddleWebhookSecret == "" &&
+		cfg.PaddleClientToken == "" &&
+		cfg.PaddlePriceID == "" {
+		return nil
+	}
+
+	if cfg.PaddleWebhookSecret == "" {
+		return fmt.Errorf("PADDLE_WEBHOOK_SECRET must be set when Paddle billing is configured")
+	}
+	if cfg.PaddleClientToken == "" {
+		return fmt.Errorf("PADDLE_CLIENT_TOKEN must be set when Paddle billing is configured")
+	}
+	if cfg.PaddlePriceID == "" {
+		return fmt.Errorf("PADDLE_PRICE_ID must be set when Paddle billing is configured")
+	}
+	return nil
 }

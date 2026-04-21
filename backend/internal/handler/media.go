@@ -72,7 +72,7 @@ type mediaUploadClaims struct {
 }
 
 func (h *Handler) mediaResponse(asset *store.MediaAsset) gin.H {
-	variants := resolveMediaVariantURLs(asset, h.mediaUploadBaseURL)
+	variants := resolveMediaVariantURLs(asset, h.media.config.uploadBaseURL)
 	if variants == nil {
 		variants = map[string]string{}
 	}
@@ -83,7 +83,7 @@ func (h *Handler) mediaResponse(asset *store.MediaAsset) gin.H {
 		"owner_id":             asset.OwnerID,
 		"kind":                 asset.Kind,
 		"storage_key_original": asset.StorageKeyOriginal,
-		"original_url":         resolveMediaObjectURL(asset.StorageKeyOriginal, h.mediaUploadBaseURL),
+		"original_url":         resolveMediaObjectURL(asset.StorageKeyOriginal, h.media.config.uploadBaseURL),
 		"variants":             variants,
 		"mime_type":            asset.MIMEType,
 		"status":               asset.Status,
@@ -145,7 +145,7 @@ func (h *Handler) CreateUploadIntent(c *gin.Context) {
 		ownerID = userID
 		maxBytes = maxAvatarBytes
 	case store.MediaAssetKindStationIcon:
-		isAdmin, err := h.store.IsAdmin(c.Request.Context(), userID)
+		isAdmin, err := h.media.users.IsAdmin(c.Request.Context(), userID)
 		if err != nil {
 			h.log.Error("check admin for media upload intent", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -159,7 +159,7 @@ func (h *Handler) CreateUploadIntent(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "ownerId is required for station_icon"})
 			return
 		}
-		if _, err := h.stationStore.GetByIDAdmin(c.Request.Context(), req.OwnerID); errors.Is(err, store.ErrNotFound) {
+		if _, err := h.media.stations.GetByIDAdmin(c.Request.Context(), req.OwnerID); errors.Is(err, store.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "station not found"})
 			return
 		} else if err != nil {
@@ -180,7 +180,7 @@ func (h *Handler) CreateUploadIntent(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.mediaAssetStore.CreatePending(c.Request.Context(), store.CreateMediaAssetParams{
+	asset, err := h.media.assets.CreatePending(c.Request.Context(), store.CreateMediaAssetParams{
 		OwnerType: ownerType,
 		OwnerID:   ownerID,
 		Kind:      req.Kind,
@@ -193,7 +193,7 @@ func (h *Handler) CreateUploadIntent(c *gin.Context) {
 	}
 
 	storageKey := buildOriginalStorageKey(asset)
-	if err := h.mediaAssetStore.UpdateStorageKeyOriginal(c.Request.Context(), asset.ID, storageKey); err != nil {
+	if err := h.media.assets.UpdateStorageKeyOriginal(c.Request.Context(), asset.ID, storageKey); err != nil {
 		h.log.Error("update media storage key", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
@@ -237,7 +237,7 @@ func (h *Handler) CompleteUpload(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.mediaAssetStore.GetByID(c.Request.Context(), req.AssetID)
+	asset, err := h.media.assets.GetByID(c.Request.Context(), req.AssetID)
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
 		return
@@ -272,13 +272,13 @@ func (h *Handler) CompleteUpload(c *gin.Context) {
 		}
 
 		if reason != "" {
-			if err := h.mediaAssetStore.MarkRejected(c.Request.Context(), asset.ID, reason); err != nil {
+			if err := h.media.assets.MarkRejected(c.Request.Context(), asset.ID, reason); err != nil {
 				h.log.Error("mark media asset rejected", "asset_id", asset.ID, "error", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 				return
 			}
 
-			rejectedAsset, getErr := h.mediaAssetStore.GetByID(c.Request.Context(), asset.ID)
+			rejectedAsset, getErr := h.media.assets.GetByID(c.Request.Context(), asset.ID)
 			if getErr != nil {
 				h.log.Error("get rejected media asset", "asset_id", asset.ID, "error", getErr)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -290,7 +290,7 @@ func (h *Handler) CompleteUpload(c *gin.Context) {
 		}
 
 		hash := processed.ContentHash
-		if err := h.mediaAssetStore.MarkReady(c.Request.Context(), asset.ID, store.MarkMediaAssetReadyParams{
+		if err := h.media.assets.MarkReady(c.Request.Context(), asset.ID, store.MarkMediaAssetReadyParams{
 			Variants:    processed.Variants,
 			MIMEType:    processed.MIMEType,
 			Width:       processed.Width,
@@ -303,7 +303,7 @@ func (h *Handler) CompleteUpload(c *gin.Context) {
 			return
 		}
 
-		updatedAsset, getErr := h.mediaAssetStore.GetByID(c.Request.Context(), asset.ID)
+		updatedAsset, getErr := h.media.assets.GetByID(c.Request.Context(), asset.ID)
 		if getErr != nil {
 			h.log.Error("get ready media asset", "asset_id", asset.ID, "error", getErr)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -332,7 +332,7 @@ func (h *Handler) GetMedia(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.mediaAssetStore.GetByID(c.Request.Context(), c.Param("id"))
+	asset, err := h.media.assets.GetByID(c.Request.Context(), c.Param("id"))
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
 		return
@@ -358,7 +358,7 @@ func (h *Handler) GetMedia(c *gin.Context) {
 
 // UploadMediaObject handles PUT /media/upload/:id.
 func (h *Handler) UploadMediaObject(c *gin.Context) {
-	if h.mediaUploadBaseURL == "" && !h.hasManagedIdentityMediaStorage() {
+	if h.media.config.uploadBaseURL == "" && !h.hasManagedIdentityMediaStorage() {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "media upload storage is not configured"})
 		return
 	}
@@ -375,7 +375,7 @@ func (h *Handler) UploadMediaObject(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.mediaAssetStore.GetByID(c.Request.Context(), assetID)
+	asset, err := h.media.assets.GetByID(c.Request.Context(), assetID)
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "asset not found"})
 		return
@@ -440,7 +440,7 @@ func (h *Handler) authorizeMediaAssetAccess(c *gin.Context, userID string, asset
 		}
 		return nil
 	case store.MediaAssetOwnerStation:
-		isAdmin, err := h.store.IsAdmin(c.Request.Context(), userID)
+		isAdmin, err := h.media.users.IsAdmin(c.Request.Context(), userID)
 		if err != nil {
 			return err
 		}
@@ -464,16 +464,16 @@ func (h *Handler) linkOwnerAsset(c *gin.Context, asset *store.MediaAsset) {
 	var err error
 	switch asset.Kind {
 	case store.MediaAssetKindAvatar:
-		err = h.mediaAssetStore.SetUserAvatarAsset(c.Request.Context(), asset.OwnerID, asset.ID)
+		err = h.media.assets.SetUserAvatarAsset(c.Request.Context(), asset.OwnerID, asset.ID)
 	case store.MediaAssetKindStationIcon:
-		err = h.mediaAssetStore.SetStationIconAsset(c.Request.Context(), asset.OwnerID, asset.ID)
+		err = h.media.assets.SetStationIconAsset(c.Request.Context(), asset.OwnerID, asset.ID)
 		if err == nil {
 			// Resolve the best available variant URL and write it directly to logo.
 			for _, size := range []string{"png_512", "png_192", "png_96", "original"} {
 				if key, ok := asset.Variants[size]; ok && key != "" {
-					iconURL := resolveMediaObjectURL(key, h.mediaUploadBaseURL)
+					iconURL := resolveMediaObjectURL(key, h.media.config.uploadBaseURL)
 					if iconURL != "" {
-						if uerr := h.stationStore.UpdateLogo(c.Request.Context(), asset.OwnerID, iconURL); uerr != nil {
+						if uerr := h.media.stations.UpdateLogo(c.Request.Context(), asset.OwnerID, iconURL); uerr != nil {
 							h.log.Error("update station logo after icon upload", "station_id", asset.OwnerID, "error", uerr)
 						}
 					}
@@ -588,7 +588,7 @@ func (h *Handler) createMediaUploadToken(assetID, blobKey string, expiresAt time
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(h.mediaUploadSecret))
+	return token.SignedString([]byte(h.media.config.uploadSecret))
 }
 
 func (h *Handler) parseMediaUploadToken(raw string) (*mediaUploadClaims, error) {
@@ -600,7 +600,7 @@ func (h *Handler) parseMediaUploadToken(raw string) (*mediaUploadClaims, error) 
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
 		}
-		return []byte(h.mediaUploadSecret), nil
+		return []byte(h.media.config.uploadSecret), nil
 	})
 	if err != nil || !token.Valid {
 		return nil, errors.New("invalid upload token")
@@ -733,7 +733,7 @@ func (h *Handler) putMediaObject(ctx context.Context, objectKey string, payload 
 }
 
 func (h *Handler) putMediaObjectWithBaseURL(ctx context.Context, objectKey string, payload []byte, contentType string) error {
-	objectURL, err := buildObjectURL(h.mediaUploadBaseURL, objectKey)
+	objectURL, err := buildObjectURL(h.media.config.uploadBaseURL, objectKey)
 	if err != nil {
 		return err
 	}
@@ -770,7 +770,7 @@ func (h *Handler) putMediaObjectWithManagedIdentity(ctx context.Context, objectK
 	}
 
 	cacheControl := "public, max-age=31536000, immutable"
-	_, err = client.UploadBuffer(ctx, h.mediaStorageContainer, objectKey, payload, &azblob.UploadBufferOptions{
+	_, err = client.UploadBuffer(ctx, h.media.config.storageContainer, objectKey, payload, &azblob.UploadBufferOptions{
 		HTTPHeaders: &blob.HTTPHeaders{
 			BlobContentType:  to.Ptr(contentType),
 			BlobCacheControl: to.Ptr(cacheControl),
@@ -784,7 +784,7 @@ func (h *Handler) putMediaObjectWithManagedIdentity(ctx context.Context, objectK
 }
 
 func (h *Handler) processUploadedAsset(ctx context.Context, asset *store.MediaAsset) (*processedMediaResult, string, error) {
-	if h.mediaUploadBaseURL == "" && !h.hasManagedIdentityMediaStorage() {
+	if h.media.config.uploadBaseURL == "" && !h.hasManagedIdentityMediaStorage() {
 		return nil, "", errors.New("MEDIA_UPLOAD_BASE_URL is not configured")
 	}
 
@@ -849,7 +849,7 @@ func (h *Handler) processUploadedAsset(ctx context.Context, asset *store.MediaAs
 }
 
 func (h *Handler) hasManagedIdentityMediaStorage() bool {
-	return h.mediaStorageAccount != "" && h.mediaStorageContainer != ""
+	return h.media.config.storageAccount != "" && h.media.config.storageContainer != ""
 }
 
 func (h *Handler) mediaBlobStorageClient() (*azblob.Client, error) {
@@ -864,12 +864,12 @@ func (h *Handler) mediaBlobStorageClient() (*azblob.Client, error) {
 		return h.mediaBlobClient, nil
 	}
 
-	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", h.mediaStorageAccount)
+	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net/", h.media.config.storageAccount)
 
 	var client *azblob.Client
-	if h.mediaStorageAccountKey != "" {
+	if h.media.config.storageAccountKey != "" {
 		// Local dev: shared key auth — no managed identity or az login required.
-		sharedKey, err := azblob.NewSharedKeyCredential(h.mediaStorageAccount, h.mediaStorageAccountKey)
+		sharedKey, err := azblob.NewSharedKeyCredential(h.media.config.storageAccount, h.media.config.storageAccountKey)
 		if err != nil {
 			return nil, fmt.Errorf("create shared key credential: %w", err)
 		}
@@ -912,7 +912,7 @@ func (h *Handler) readMediaObjectWithManagedIdentity(ctx context.Context, object
 		return nil, false, err
 	}
 
-	resp, err := client.DownloadStream(ctx, h.mediaStorageContainer, objectKey, nil)
+	resp, err := client.DownloadStream(ctx, h.media.config.storageContainer, objectKey, nil)
 	if err != nil {
 		if bloberror.HasCode(err, bloberror.BlobNotFound) {
 			return nil, false, nil
@@ -930,7 +930,7 @@ func (h *Handler) readMediaObjectWithManagedIdentity(ctx context.Context, object
 }
 
 func (h *Handler) readMediaObjectWithBaseURL(ctx context.Context, objectKey string, maxBytes int64) ([]byte, bool, error) {
-	objectURL, err := buildObjectURL(h.mediaUploadBaseURL, objectKey)
+	objectURL, err := buildObjectURL(h.media.config.uploadBaseURL, objectKey)
 	if err != nil {
 		return nil, false, err
 	}
