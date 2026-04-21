@@ -124,6 +124,7 @@
     "filters_label": "Filters",
     "active_filters": "{count} actief",
     "filter_clear": "Wissen",
+    "filter_clear_all": "Alles wissen",
     "filter_genre": "Genre",
     "filter_style": "Stijl",
     "filter_format": "Formaat",

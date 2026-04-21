@@ -226,7 +226,7 @@ function ExploreContent() {
     const textureKey = textureFilter.join('\0')
 
     type FilterCategory = 'genre' | 'style' | 'format' | 'texture'
-    const [activeCategory, setActiveCategory] = useState<FilterCategory | null>('genre')
+    const [activeCategory, setActiveCategory] = useState<FilterCategory | null>(null)
 
     const categoryConfig = useMemo(() => [
         { id: 'genre' as FilterCategory, label: t('filter_genre'), options: genres, selected: genreFilter, getValue: (o: string) => o.toLowerCase() },
@@ -389,7 +389,7 @@ function ExploreContent() {
                             key={id}
                             type="button"
                             onClick={() => setActiveCategory(prev => prev === id ? null : id)}
-                            className={`relative px-3 py-2 text-sm font-medium transition-colors ${
+                            className={`relative px-3 py-2 text-base font-medium transition-colors ${
                                 activeCategory === id
                                     ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:bg-brand'
                                     : selected.length > 0
@@ -419,7 +419,7 @@ function ExploreContent() {
                                     type="button"
                                     onClick={() => toggleFilter(activeCategoryConfig.id, value)}
                                     className={cn(
-                                        'rounded-full border px-4 py-1.5 text-sm transition-colors',
+                                        'border px-4 py-1.5 text-sm transition-colors',
                                         isSelected
                                             ? 'border-brand bg-brand font-medium text-black'
                                             : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
@@ -440,17 +440,17 @@ function ExploreContent() {
                                 key={`${key}:${value}`}
                                 type="button"
                                 onClick={() => toggleFilter(key, value)}
-                                className="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-brand/20"
+                                className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
                             >
-                                {formatFilterLabel(value)} <XIcon className="h-3 w-3" />
+                                <span className="text-muted-foreground/60">{categoryConfig.find(c => c.id === key)?.label}:</span> {formatFilterLabel(value)} <XIcon className="h-3 w-3" />
                             </button>
                         ))}
                         <button
                             type="button"
                             onClick={clearFilters}
-                            className="px-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                            className="px-1 text-xs text-muted-foreground underline transition-colors hover:text-foreground"
                         >
-                            {t('filter_clear')}
+                            {t('filter_clear_all')}
                         </button>
                     </div>
                 )}

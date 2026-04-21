@@ -124,6 +124,7 @@
     "filters_label": "Filtre",
     "active_filters": "{count} aktive",
     "filter_clear": "Ryd",
+    "filter_clear_all": "Ryd alt",
     "filter_genre": "Genre",
     "filter_style": "Stil",
     "filter_format": "Format",

@@ -124,6 +124,7 @@
     "filters_label": "Filtros",
     "active_filters": "{count} activos",
     "filter_clear": "Limpiar",
+    "filter_clear_all": "Limpiar todo",
     "filter_genre": "Género",
     "filter_style": "Estilo",
     "filter_format": "Formato",
