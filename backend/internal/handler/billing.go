@@ -88,13 +88,16 @@ func (h *Handler) PaddleWebhook(c *gin.Context) {
 		return
 	}
 
-	// Verify signature when secret is configured.
-	if h.paddleWebhookSecret != "" {
-		sig := c.GetHeader("Paddle-Signature")
-		if !verifyPaddleSignature(body, sig, h.paddleWebhookSecret) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
-			return
-		}
+	if h.paddleWebhookSecret == "" {
+		h.log.Error("paddle webhook rejected: signing secret is not configured")
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "billing webhook unavailable"})
+		return
+	}
+
+	sig := c.GetHeader("Paddle-Signature")
+	if !verifyPaddleSignature(body, sig, h.paddleWebhookSecret) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
+		return
 	}
 
 	var event paddleWebhookEvent

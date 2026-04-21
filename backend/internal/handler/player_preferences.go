@@ -73,7 +73,7 @@ func (h *Handler) UpdatePlayerPreferences(c *gin.Context) {
 		updatedAt = parsed.UTC()
 	}
 
-	err := h.store.UpdatePlayerPreferences(c.Request.Context(), userID, store.PlayerPreferences{
+	result, err := h.store.UpdatePlayerPreferences(c.Request.Context(), userID, store.PlayerPreferences{
 		Volume:    req.Volume,
 		Station:   req.Station,
 		UpdatedAt: updatedAt,
@@ -88,8 +88,16 @@ func (h *Handler) UpdatePlayerPreferences(c *gin.Context) {
 		return
 	}
 
+	message := "player preferences updated"
+	if !result.Applied {
+		message = "stale player preferences ignored"
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":   "player preferences updated",
-		"updatedAt": updatedAt.Format(time.RFC3339Nano),
+		"message":   message,
+		"stale":     !result.Applied,
+		"volume":    result.Preferences.Volume,
+		"station":   result.Preferences.Station,
+		"updatedAt": result.Preferences.UpdatedAt.Format(time.RFC3339Nano),
 	})
 }

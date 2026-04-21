@@ -166,80 +166,57 @@ func normalizeGenres(genres []string) []string {
 	return out
 }
 
-// GetByID returns a single approved station by its internal UUID.
-func (s *StationStore) GetByID(ctx context.Context, id string) (*Station, error) {
-	row := s.pool.QueryRow(ctx,
-		`SELECT `+stationColumns+` FROM stations WHERE id = $1 AND is_active = true AND status = 'approved'`, id)
-	st, err := scanStation(row)
-	if err != nil {
-		return nil, fmt.Errorf("get station: %w", err)
-	}
-	return st, nil
+type stationQueryParts struct {
+	where        string
+	searchClause string
+	orderClause  string
+	args         []any
 }
 
-// GetByIDAdmin returns any station by ID regardless of status (for admin use).
-func (s *StationStore) GetByIDAdmin(ctx context.Context, id string) (*Station, error) {
-	row := s.pool.QueryRow(ctx,
-		`SELECT `+stationColumns+` FROM stations WHERE id = $1`, id)
-	st, err := scanStation(row)
-	if err != nil {
-		return nil, fmt.Errorf("get station (admin): %w", err)
-	}
-	return st, nil
-}
-
-// List returns stations matching the given filter.
-// If filter.Status is empty, only approved stations are returned (public default).
-func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, error) {
-	if f.Limit == 0 {
-		f.Limit = 50
-	}
+func buildStationQueryParts(f StationFilter) stationQueryParts {
 	statusFilter := f.Status
 	if statusFilter == "" {
 		statusFilter = "approved"
 	}
 
-	args := []any{}
-	i := 1
-
-	where := fmt.Sprintf("is_active = true AND status = $%d", i)
-	args = append(args, statusFilter)
-	i++
+	args := []any{statusFilter}
+	nextArg := 2
+	where := "is_active = true AND status = $1"
 
 	if len(f.Genres) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", i)
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", nextArg)
 		args = append(args, f.Genres)
-		i++
+		nextArg++
 	}
 	if f.CountryCode != "" {
-		where += fmt.Sprintf(" AND upper(country_code) = $%d", i)
+		where += fmt.Sprintf(" AND upper(country_code) = $%d", nextArg)
 		args = append(args, f.CountryCode)
-		i++
+		nextArg++
 	}
 	if f.Language != "" {
-		where += fmt.Sprintf(" AND lower(language) = $%d", i)
+		where += fmt.Sprintf(" AND lower(language) = $%d", nextArg)
 		args = append(args, f.Language)
-		i++
+		nextArg++
 	}
 	if f.MinBitrate > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM station_streams WHERE station_id = stations.id AND bitrate >= $%d)", i)
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM station_streams WHERE station_id = stations.id AND bitrate >= $%d)", nextArg)
 		args = append(args, f.MinBitrate)
-		i++
+		nextArg++
 	}
 	if len(f.Styles) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(style_tags) t WHERE lower(t) = ANY($%d))", i)
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(style_tags) t WHERE lower(t) = ANY($%d))", nextArg)
 		args = append(args, f.Styles)
-		i++
+		nextArg++
 	}
 	if len(f.Formats) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(format_tags) t WHERE lower(t) = ANY($%d))", i)
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(format_tags) t WHERE lower(t) = ANY($%d))", nextArg)
 		args = append(args, f.Formats)
-		i++
+		nextArg++
 	}
 	if len(f.Textures) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(texture_tags) t WHERE lower(t) = ANY($%d))", i)
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(texture_tags) t WHERE lower(t) = ANY($%d))", nextArg)
 		args = append(args, f.Textures)
-		i++
+		nextArg++
 	}
 	if f.FeaturedOnly {
 		where += " AND featured = true"
@@ -263,9 +240,9 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 						FROM unnest(tags) AS tag
 						WHERE tag ILIKE $%[7]d
 					)
-				)`, i, i+1, i+2, i+3, i+4, i+5, i+6))
+				)`, nextArg, nextArg+1, nextArg+2, nextArg+3, nextArg+4, nextArg+5, nextArg+6))
 			args = append(args, pattern, pattern, pattern, pattern, pattern, pattern, pattern)
-			i += 7
+			nextArg += 7
 		}
 	}
 
@@ -299,19 +276,55 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 			END,
 			featured DESC,
 			reliability_score DESC,
-			name ASC`, i, i+1, i+2, i+3, i+4, i+5, i+6)
+			name ASC`, nextArg, nextArg+1, nextArg+2, nextArg+3, nextArg+4, nextArg+5, nextArg+6)
 		args = append(args, exactMatch, prefixMatch, containsMatch, exactMatch, prefixMatch, prefixMatch, prefixMatch)
-		i += 7
 	}
 
-	args = append(args, f.Limit, f.Offset)
-	limitClause := fmt.Sprintf("$%d OFFSET $%d", i, i+1)
+	return stationQueryParts{
+		where:        where,
+		searchClause: searchClause,
+		orderClause:  orderClause,
+		args:         args,
+	}
+}
+
+// GetByID returns a single approved station by its internal UUID.
+func (s *StationStore) GetByID(ctx context.Context, id string) (*Station, error) {
+	row := s.pool.QueryRow(ctx,
+		`SELECT `+stationColumns+` FROM stations WHERE id = $1 AND is_active = true AND status = 'approved'`, id)
+	st, err := scanStation(row)
+	if err != nil {
+		return nil, fmt.Errorf("get station: %w", err)
+	}
+	return st, nil
+}
+
+// GetByIDAdmin returns any station by ID regardless of status (for admin use).
+func (s *StationStore) GetByIDAdmin(ctx context.Context, id string) (*Station, error) {
+	row := s.pool.QueryRow(ctx,
+		`SELECT `+stationColumns+` FROM stations WHERE id = $1`, id)
+	st, err := scanStation(row)
+	if err != nil {
+		return nil, fmt.Errorf("get station (admin): %w", err)
+	}
+	return st, nil
+}
+
+// List returns stations matching the given filter.
+// If filter.Status is empty, only approved stations are returned (public default).
+func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, error) {
+	if f.Limit == 0 {
+		f.Limit = 50
+	}
+	parts := buildStationQueryParts(f)
+	args := append(append([]any{}, parts.args...), f.Limit, f.Offset)
+	limitClause := fmt.Sprintf("$%d OFFSET $%d", len(parts.args)+1, len(parts.args)+2)
 
 	q := fmt.Sprintf(`
 		SELECT %s FROM stations
 		WHERE %s%s
 		ORDER BY %s
-		LIMIT %s`, stationColumns, where, searchClause, orderClause, limitClause)
+		LIMIT %s`, stationColumns, parts.where, parts.searchClause, parts.orderClause, limitClause)
 
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
@@ -464,90 +477,12 @@ func (s *StationStore) UpdateLogo(ctx context.Context, id, logoURL string) error
 
 // Count returns the total number of stations matching a filter (ignoring Limit/Offset).
 func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) {
-	statusFilter := f.Status
-	if statusFilter == "" {
-		statusFilter = "approved"
-	}
-
-	args := []any{}
-	i := 1
-
-	where := fmt.Sprintf("is_active = true AND status = $%d", i)
-	args = append(args, statusFilter)
-	i++
-
-	if len(f.Genres) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", i)
-		args = append(args, f.Genres)
-		i++
-	}
-	if f.CountryCode != "" {
-		where += fmt.Sprintf(" AND upper(country_code) = $%d", i)
-		args = append(args, f.CountryCode)
-		i++
-	}
-	if f.Language != "" {
-		where += fmt.Sprintf(" AND lower(language) = $%d", i)
-		args = append(args, f.Language)
-		i++
-	}
-	if f.MinBitrate > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM station_streams WHERE station_id = stations.id AND bitrate >= $%d)", i)
-		args = append(args, f.MinBitrate)
-		i++
-	}
-	if len(f.Styles) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(style_tags) t WHERE lower(t) = ANY($%d))", i)
-		args = append(args, f.Styles)
-		i++
-	}
-	if len(f.Formats) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(format_tags) t WHERE lower(t) = ANY($%d))", i)
-		args = append(args, f.Formats)
-		i++
-	}
-	if len(f.Textures) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(texture_tags) t WHERE lower(t) = ANY($%d))", i)
-		args = append(args, f.Textures)
-		i++
-	}
-	if f.FeaturedOnly {
-		where += " AND featured = true"
-	}
-
-	trimmedSearch := strings.TrimSpace(f.Search)
-	var searchClauses []string
-	if trimmedSearch != "" {
-		for _, term := range strings.Fields(trimmedSearch) {
-			pattern := "%" + term + "%"
-			searchClauses = append(searchClauses, fmt.Sprintf(`
-				(
-					name ILIKE $%[1]d OR
-					EXISTS (SELECT 1 FROM unnest(genres) g WHERE g ILIKE $%[2]d) OR
-					language ILIKE $%[3]d OR
-					country ILIKE $%[4]d OR
-					city ILIKE $%[5]d OR
-					country_code ILIKE $%[6]d OR
-					EXISTS (
-						SELECT 1
-						FROM unnest(tags) AS tag
-						WHERE tag ILIKE $%[7]d
-					)
-				)`, i, i+1, i+2, i+3, i+4, i+5, i+6))
-			args = append(args, pattern, pattern, pattern, pattern, pattern, pattern, pattern)
-			i += 7
-		}
-	}
-
-	searchClause := ""
-	if len(searchClauses) > 0 {
-		searchClause = " AND " + strings.Join(searchClauses, " AND ")
-	}
+	parts := buildStationQueryParts(f)
 
 	var n int
 	err := s.pool.QueryRow(ctx,
-		fmt.Sprintf(`SELECT COUNT(*) FROM stations WHERE %s%s`, where, searchClause),
-		args...,
+		fmt.Sprintf(`SELECT COUNT(*) FROM stations WHERE %s%s`, parts.where, parts.searchClause),
+		parts.args...,
 	).Scan(&n)
 	return n, err
 }

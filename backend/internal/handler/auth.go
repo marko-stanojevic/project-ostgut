@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -157,9 +158,9 @@ func (h *Handler) OAuthLogin(c *gin.Context) {
 	})
 }
 
-// AuthVerify is a lightweight token validation endpoint.
+// AuthVerify validates a JWT and returns the token subject when valid.
 // POST /auth/verify
-func AuthVerify(c *gin.Context) {
+func (h *Handler) AuthVerify(c *gin.Context) {
 	var req struct {
 		Token string `json:"token" binding:"required"`
 	}
@@ -167,5 +168,16 @@ func AuthVerify(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"valid": true})
+
+	claims, err := middleware.ValidateJWTToken(req.Token, h.jwtSecret)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"valid": false, "error": "invalid or expired token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"valid": true,
+		"sub":   claims.Sub,
+		"email": claims.Email,
+	})
 }

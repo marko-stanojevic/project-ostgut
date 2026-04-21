@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -39,15 +40,8 @@ func AuthMiddleware(logger *slog.Logger, jwtSecret string) gin.HandlerFunc {
 
 		tokenString := parts[1]
 
-		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
-			return []byte(jwtSecret), nil
-		})
-
-		if err != nil || !token.Valid {
+		claims, err := ValidateJWTToken(tokenString, jwtSecret)
+		if err != nil {
 			logger.Warn("invalid or expired token", "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
 			c.Abort()
@@ -67,6 +61,27 @@ func AuthMiddleware(logger *slog.Logger, jwtSecret string) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// ValidateJWTToken parses and validates an Auth.js HS256 token.
+func ValidateJWTToken(tokenString, jwtSecret string) (*Claims, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(jwtSecret), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !token.Valid {
+		return nil, fmt.Errorf("token is invalid")
+	}
+	if claims.Sub == "" {
+		return nil, fmt.Errorf("missing subject claim")
+	}
+	return claims, nil
 }
 
 // GetUserID retrieves the user ID from the request context

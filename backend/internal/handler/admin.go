@@ -560,7 +560,12 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		})
 	}
 
-	updated, _ := h.stationStore.GetByIDAdmin(c.Request.Context(), id)
+	updated, err := h.stationStore.GetByIDAdmin(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("admin update station reload", "station_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
 	c.JSON(http.StatusOK, h.adminStationWithStreams(c.Request.Context(), updated))
 }
 

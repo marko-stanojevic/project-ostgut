@@ -12,6 +12,29 @@ import (
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
+// Dependencies groups the stores required by HTTP handlers.
+type Dependencies struct {
+	UserStore          *store.UserStore
+	SubscriptionStore  *store.SubscriptionStore
+	StationStore       *store.StationStore
+	StationStreamStore *store.StationStreamStore
+	MediaAssetStore    *store.MediaAssetStore
+}
+
+// Options groups runtime settings used by handlers.
+type Options struct {
+	Log                    *slog.Logger
+	JWTSecret              string
+	PaddleWebhookSecret    string
+	PaddleClientToken      string
+	PaddlePriceID          string
+	MediaUploadBaseURL     string
+	MediaUploadSecret      string
+	MediaStorageAccount    string
+	MediaStorageContainer  string
+	MediaStorageAccountKey string
+}
+
 // Handler holds shared dependencies for HTTP handlers.
 type Handler struct {
 	store                  *store.UserStore
@@ -22,6 +45,7 @@ type Handler struct {
 	metaFetcher            *metadata.Fetcher
 	streamProbeClient      *http.Client
 	log                    *slog.Logger
+	jwtSecret              string
 	paddleWebhookSecret    string
 	paddleClientToken      string
 	paddlePriceID          string
@@ -34,33 +58,25 @@ type Handler struct {
 	mediaBlobClient        *azblob.Client
 }
 
-// New creates a Handler with the given stores and logger.
-func New(
-	s *store.UserStore,
-	sub *store.SubscriptionStore,
-	stations *store.StationStore,
-	stationStreams *store.StationStreamStore,
-	mediaAssets *store.MediaAssetStore,
-	log *slog.Logger,
-	paddleWebhookSecret, paddleClientToken, paddlePriceID, mediaUploadBaseURL, mediaUploadSecret,
-	mediaStorageAccount, mediaStorageContainer, mediaStorageAccountKey string,
-) *Handler {
+// New creates a Handler with grouped dependencies and runtime options.
+func New(deps Dependencies, opts Options) *Handler {
 	return &Handler{
-		store:                  s,
-		subStore:               sub,
-		stationStore:           stations,
-		stationStreamStore:     stationStreams,
-		mediaAssetStore:        mediaAssets,
-		metaFetcher:            metadata.NewFetcher(log),
+		store:                  deps.UserStore,
+		subStore:               deps.SubscriptionStore,
+		stationStore:           deps.StationStore,
+		stationStreamStore:     deps.StationStreamStore,
+		mediaAssetStore:        deps.MediaAssetStore,
+		metaFetcher:            metadata.NewFetcher(opts.Log),
 		streamProbeClient:      &http.Client{Timeout: 8 * time.Second},
-		log:                    log,
-		paddleWebhookSecret:    paddleWebhookSecret,
-		paddleClientToken:      paddleClientToken,
-		paddlePriceID:          paddlePriceID,
-		mediaUploadBaseURL:     mediaUploadBaseURL,
-		mediaUploadSecret:      mediaUploadSecret,
-		mediaStorageAccount:    mediaStorageAccount,
-		mediaStorageContainer:  mediaStorageContainer,
-		mediaStorageAccountKey: mediaStorageAccountKey,
+		log:                    opts.Log,
+		jwtSecret:              opts.JWTSecret,
+		paddleWebhookSecret:    opts.PaddleWebhookSecret,
+		paddleClientToken:      opts.PaddleClientToken,
+		paddlePriceID:          opts.PaddlePriceID,
+		mediaUploadBaseURL:     opts.MediaUploadBaseURL,
+		mediaUploadSecret:      opts.MediaUploadSecret,
+		mediaStorageAccount:    opts.MediaStorageAccount,
+		mediaStorageContainer:  opts.MediaStorageContainer,
+		mediaStorageAccountKey: opts.MediaStorageAccountKey,
 	}
 }
