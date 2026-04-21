@@ -218,7 +218,6 @@ function ExploreContent() {
     const styleFilter = searchParams.getAll('style')
     const formatFilter = searchParams.getAll('format')
     const textureFilter = searchParams.getAll('texture')
-    const sort = searchParams.get('sort') === 'popular' ? 'popular' : 'recommended'
 
     // Stable string keys for effect dependencies — array refs change every render
     const genreKey = genreFilter.join('\0')
@@ -226,11 +225,26 @@ function ExploreContent() {
     const formatKey = formatFilter.join('\0')
     const textureKey = textureFilter.join('\0')
 
-    const activeFilters = useMemo(
-        () => [query, ...genreFilter, ...styleFilter, ...formatFilter, ...textureFilter, sort === 'popular' ? 'popular' : ''].filter(Boolean).length,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [query, genreKey, styleKey, formatKey, textureKey, sort]
-    )
+    type FilterCategory = 'genre' | 'style' | 'format' | 'texture'
+    const [activeCategory, setActiveCategory] = useState<FilterCategory | null>('genre')
+
+    const categoryConfig = useMemo(() => [
+        { id: 'genre' as FilterCategory, label: t('filter_genre'), options: genres, selected: genreFilter, getValue: (o: string) => o.toLowerCase() },
+        { id: 'style' as FilterCategory, label: t('filter_style'), options: styles, selected: styleFilter, getValue: (o: string) => o },
+        { id: 'format' as FilterCategory, label: t('filter_format'), options: formats, selected: formatFilter, getValue: (o: string) => o },
+        { id: 'texture' as FilterCategory, label: t('filter_texture'), options: textures, selected: textureFilter, getValue: (o: string) => o },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [t, genres, genreKey, styles, styleKey, formats, formatKey, textures, textureKey])
+
+    const activeCategoryConfig = categoryConfig.find(c => c.id === activeCategory) ?? null
+
+    const activeChips = useMemo(() => [
+        ...genreFilter.map(v => ({ key: 'genre', value: v })),
+        ...styleFilter.map(v => ({ key: 'style', value: v })),
+        ...formatFilter.map(v => ({ key: 'format', value: v })),
+        ...textureFilter.map(v => ({ key: 'texture', value: v })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [genreKey, styleKey, formatKey, textureKey])
 
     useEffect(() => {
         if (searchParams.get('featured') !== 'true') return
@@ -268,7 +282,7 @@ function ExploreContent() {
         styleFilter.forEach(v => params.append('style', v))
         formatFilter.forEach(v => params.append('format', v))
         textureFilter.forEach(v => params.append('texture', v))
-        if (sort === 'popular') params.set('sort', 'popular')
+
 
         fetch(`${API}/stations?${params.toString()}`)
             .then((r) => r.json())
@@ -282,7 +296,7 @@ function ExploreContent() {
             })
             .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [query, genreKey, styleKey, formatKey, textureKey, sort])
+    }, [query, genreKey, styleKey, formatKey, textureKey])
 
     useEffect(() => {
         if (typeof window === 'undefined') return
@@ -318,13 +332,6 @@ function ExploreContent() {
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     }
 
-    const clearFilter = (key: string) => {
-        const params = new URLSearchParams(searchParams.toString())
-        params.delete(key)
-        const qs = params.toString()
-        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-    }
-
     const loadMore = async () => {
         setLoadingMore(true)
         try {
@@ -336,7 +343,7 @@ function ExploreContent() {
             styleFilter.forEach(v => params.append('style', v))
             formatFilter.forEach(v => params.append('format', v))
             textureFilter.forEach(v => params.append('texture', v))
-            if (sort === 'popular') params.set('sort', 'popular')
+    
 
             const data = await fetch(`${API}/stations?${params.toString()}`).then((r) => r.json())
             setStations((prev) => [...prev, ...(data.stations ?? [])])
@@ -363,7 +370,7 @@ function ExploreContent() {
 
     return (
         <div>
-            <div className="mb-8 max-w-3xl">
+            <div className="mb-8">
                 <p className="ui-section-title">{t('section_label')}</p>
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
                     {t('heading')}
@@ -373,103 +380,89 @@ function ExploreContent() {
                 </p>
             </div>
 
-            <div className="mb-6 rounded-2xl border border-border/60 bg-card/55 px-4 py-3 backdrop-blur-sm">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">{t('filters_label')}</p>
-                        <span className="text-[11px] font-medium text-muted-foreground">{t('active_filters', { count: activeFilters })}</span>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={clearFilters}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                        <XIcon className="h-3.5 w-3.5" /> {t('filter_clear')}
-                    </button>
-                </div>
-
-                <div className="space-y-3">
-                    {[
-                        { label: t('filter_genre'), options: genres, selected: genreFilter, key: 'genre', getValue: (o: string) => o.toLowerCase(), allLabel: t('all_genres') },
-                        { label: t('filter_style'), options: styles, selected: styleFilter, key: 'style', getValue: (o: string) => o, allLabel: t('any_style') },
-                        { label: t('filter_format'), options: formats, selected: formatFilter, key: 'format', getValue: (o: string) => o, allLabel: t('any_format') },
-                        { label: t('filter_texture'), options: textures, selected: textureFilter, key: 'texture', getValue: (o: string) => o, allLabel: t('any_texture') },
-                    ].map(({ label, options, selected, key, getValue, allLabel }) => (
-                        <div key={key} className="flex flex-wrap items-center gap-1.5">
-                            <span className="mr-1 shrink-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{label}</span>
-                            <button
-                                type="button"
-                                onClick={() => clearFilter(key)}
-                                className={cn(
-                                    'rounded-full border px-3 py-1 text-xs transition-colors',
-                                    selected.length === 0
-                                        ? 'border-foreground/20 bg-foreground/[0.06] font-medium text-foreground'
-                                        : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
-                                )}
-                            >
-                                {allLabel}
-                            </button>
-                            {options.map((option) => {
-                                const value = getValue(option)
-                                const isActive = selected.includes(value)
-                                return (
-                                    <button
-                                        key={option}
-                                        type="button"
-                                        onClick={() => toggleFilter(key, value)}
-                                        className={cn(
-                                            'rounded-full border px-3 py-1 text-xs transition-colors',
-                                            isActive
-                                                ? 'border-brand/50 bg-brand/10 font-medium text-foreground'
-                                                : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
-                                        )}
-                                    >
-                                        {formatFilterLabel(option)}
-                                    </button>
-                                )
-                            })}
-                        </div>
+            {/* Filters section */}
+            <div className="border-y border-border/50">
+                {/* Category tab bar */}
+                <div className="flex items-center gap-4">
+                    {categoryConfig.map(({ id, label, selected }) => (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={() => setActiveCategory(prev => prev === id ? null : id)}
+                            className={`relative px-3 py-2 text-sm font-medium transition-colors ${
+                                activeCategory === id
+                                    ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:bg-brand'
+                                    : selected.length > 0
+                                        ? 'text-brand/80 hover:text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            {label}
+                            {selected.length > 0 && (
+                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand/15 px-1 text-[10px] font-semibold text-brand">
+                                    {selected.length}
+                                </span>
+                            )}
+                        </button>
                     ))}
                 </div>
+
+                {/* Tag pills for active category */}
+                {activeCategoryConfig && activeCategoryConfig.options.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 border-t border-border/40 py-3">
+                        {activeCategoryConfig.options.map((option) => {
+                            const value = activeCategoryConfig.getValue(option)
+                            const isSelected = activeCategoryConfig.selected.includes(value)
+                            return (
+                                <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => toggleFilter(activeCategoryConfig.id, value)}
+                                    className={cn(
+                                        'rounded-full border px-4 py-1.5 text-sm transition-colors',
+                                        isSelected
+                                            ? 'border-brand/50 bg-brand/10 font-medium text-foreground'
+                                            : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
+                                    )}
+                                >
+                                    {formatFilterLabel(option)}
+                                </button>
+                            )
+                        })}
+                    </div>
+                )}
+
+                {/* Active filter chips */}
+                {activeChips.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 border-t border-border/40 py-3">
+                        {activeChips.map(({ key, value }) => (
+                            <button
+                                key={`${key}:${value}`}
+                                type="button"
+                                onClick={() => toggleFilter(key, value)}
+                                className="inline-flex items-center gap-1 rounded-full border border-brand/40 bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-brand/20"
+                            >
+                                {formatFilterLabel(value)} <XIcon className="h-3 w-3" />
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={clearFilters}
+                            className="px-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                            {t('filter_clear')}
+                        </button>
+                    </div>
+                )}
             </div>
 
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                <div className="hidden">
-                    <p className="text-sm text-muted-foreground">
-                        {query
-                            ? <>Results for <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span></>
-                            : 'Browse across the catalog with more control than Curated.'}
-                    </p>
-                </div>
-                <div className="flex items-center gap-3 self-start sm:self-auto">
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                        <CompassIcon className="h-3.5 w-3.5" /> {t('matches', { count: total })}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <label htmlFor="explore-sort" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            {t('sort_label')}
-                        </label>
-                        <select
-                            id="explore-sort"
-                            value={sort}
-                            onChange={(e) => {
-                                const params = new URLSearchParams(searchParams.toString())
-                                if (e.target.value === 'recommended') params.delete('sort')
-                                else params.set('sort', e.target.value)
-                                const qs = params.toString()
-                                router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-                            }}
-                            className="h-9 rounded-full border border-border/90 bg-background/90 px-3 text-sm text-foreground outline-none transition-colors focus:border-border/80"
-                        >
-                            <option value="recommended">{t('sort_recommended')}</option>
-                            <option value="popular">{t('sort_popular')}</option>
-                        </select>
-                    </div>
-                </div>
+            {/* Count */}
+            <div className="my-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                <CompassIcon className="h-3.5 w-3.5" /> {t('matches', { count: total })}
             </div>
 
             {loading ? (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                     {Array.from({ length: 12 }).map((_, i) => <StationCardSkeleton key={i} />)}
                 </div>
             ) : stations.length === 0 ? (
@@ -480,7 +473,7 @@ function ExploreContent() {
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                         {stations.map((s, index) => (
                             <StationCard
                                 key={s.id}
