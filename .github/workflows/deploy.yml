@@ -59,8 +59,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: main
-          fetch-depth: 2
+          fetch-depth: 0
+          fetch-tags: false
+          ref: ${{ github.ref }}
+
+      - name: Fetch main branch
+        run: git fetch origin main:refs/remotes/origin/main
 
       - name: Set manual defaults
         if: github.event_name == 'workflow_dispatch'
