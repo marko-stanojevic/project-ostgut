@@ -421,7 +421,7 @@ function ExploreContent() {
                                     className={cn(
                                         'rounded-full border px-4 py-1.5 text-sm transition-colors',
                                         isSelected
-                                            ? 'border-brand/50 bg-brand/10 font-medium text-foreground'
+                                            ? 'border-brand bg-brand font-medium text-black'
                                             : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
                                     )}
                                 >
