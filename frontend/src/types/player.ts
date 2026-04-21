@@ -11,6 +11,7 @@ export interface StationStream {
     bitrate?: number
     bitDepth?: number
     sampleRateHz?: number
+    sampleRateConfidence?: string
     channels?: number
     priority: number
     isActive: boolean

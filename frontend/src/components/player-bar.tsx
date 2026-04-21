@@ -20,6 +20,7 @@ function formatStreamDetails(stream?: {
   lossless?: boolean
   bitDepth?: number
   sampleRateHz?: number
+  sampleRateConfidence?: string
   channels?: number
 } | null): string {
   if (!stream) return ''
@@ -31,6 +32,9 @@ function formatStreamDetails(stream?: {
     parts.push(`${(stream.bitDepth ?? 0) > 0 ? `${stream.bitDepth}` : '-'}-bit`)
     parts.push(`${(stream.sampleRateHz ?? 0) > 0 ? `${stream.sampleRateHz}` : '-'} Hz`)
     parts.push(`${(stream.channels ?? 0) > 0 ? `${stream.channels}` : '-'}ch`)
+    const confidence = (stream.sampleRateConfidence || '').toLowerCase()
+    if (confidence === 'parsed_streaminfo') parts.push('Verified')
+    if (confidence === 'parsed_frame') parts.push('Frame-verified')
   }
   return parts.join(' / ')
 }

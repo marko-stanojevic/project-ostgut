@@ -11,44 +11,46 @@ import (
 
 // StationStream represents one playable variant for a station.
 type StationStream struct {
-	ID            string
-	StationID     string
-	URL           string
-	ResolvedURL   string
-	Kind          string // direct | playlist | hls
-	Container     string // none | m3u | m3u8 | pls
-	Transport     string // http | https | icy | shoutcast | icecast
-	MimeType      string
-	Codec         string
-	Bitrate       int
-	BitDepth      int
-	SampleRateHz  int
-	Channels      int
-	Priority      int
-	IsActive      bool
-	HealthScore   float64
-	LastCheckedAt *time.Time
-	LastError     *string
+	ID                   string
+	StationID            string
+	URL                  string
+	ResolvedURL          string
+	Kind                 string // direct | playlist | hls
+	Container            string // none | m3u | m3u8 | pls
+	Transport            string // http | https | icy | shoutcast | icecast
+	MimeType             string
+	Codec                string
+	Bitrate              int
+	BitDepth             int
+	SampleRateHz         int
+	SampleRateConfidence string
+	Channels             int
+	Priority             int
+	IsActive             bool
+	HealthScore          float64
+	LastCheckedAt        *time.Time
+	LastError            *string
 }
 
 // StationStreamInput is the write payload for station stream variants.
 type StationStreamInput struct {
-	URL           string
-	ResolvedURL   string
-	Kind          string
-	Container     string
-	Transport     string
-	MimeType      string
-	Codec         string
-	Bitrate       int
-	BitDepth      int
-	SampleRateHz  int
-	Channels      int
-	Priority      int
-	IsActive      bool
-	HealthScore   float64
-	LastCheckedAt *time.Time
-	LastError     *string
+	URL                  string
+	ResolvedURL          string
+	Kind                 string
+	Container            string
+	Transport            string
+	MimeType             string
+	Codec                string
+	Bitrate              int
+	BitDepth             int
+	SampleRateHz         int
+	SampleRateConfidence string
+	Channels             int
+	Priority             int
+	IsActive             bool
+	HealthScore          float64
+	LastCheckedAt        *time.Time
+	LastError            *string
 }
 
 // StationStreamStore executes queries against station_streams.
@@ -75,6 +77,7 @@ func scanStationStreamRow(row Scanner) (*StationStream, error) {
 		&s.Bitrate,
 		&s.BitDepth,
 		&s.SampleRateHz,
+		&s.SampleRateConfidence,
 		&s.Channels,
 		&s.Priority,
 		&s.IsActive,
@@ -133,22 +136,32 @@ func sanitizeStreamInput(in StationStreamInput, fallbackPriority int) StationStr
 	}
 
 	return StationStreamInput{
-		URL:           url,
-		ResolvedURL:   resolved,
-		Kind:          kind,
-		Container:     container,
-		Transport:     transport,
-		MimeType:      strings.TrimSpace(in.MimeType),
-		Codec:         strings.ToUpper(strings.TrimSpace(in.Codec)),
-		Bitrate:       in.Bitrate,
-		BitDepth:      in.BitDepth,
-		SampleRateHz:  in.SampleRateHz,
-		Channels:      in.Channels,
-		Priority:      priority,
-		IsActive:      in.IsActive,
-		HealthScore:   health,
-		LastCheckedAt: in.LastCheckedAt,
-		LastError:     in.LastError,
+		URL:                  url,
+		ResolvedURL:          resolved,
+		Kind:                 kind,
+		Container:            container,
+		Transport:            transport,
+		MimeType:             strings.TrimSpace(in.MimeType),
+		Codec:                strings.ToUpper(strings.TrimSpace(in.Codec)),
+		Bitrate:              in.Bitrate,
+		BitDepth:             in.BitDepth,
+		SampleRateHz:         in.SampleRateHz,
+		SampleRateConfidence: normalizeSampleRateConfidence(in.SampleRateConfidence),
+		Channels:             in.Channels,
+		Priority:             priority,
+		IsActive:             in.IsActive,
+		HealthScore:          health,
+		LastCheckedAt:        in.LastCheckedAt,
+		LastError:            in.LastError,
+	}
+}
+
+func normalizeSampleRateConfidence(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "parsed_streaminfo", "parsed_frame":
+		return strings.ToLower(strings.TrimSpace(v))
+	default:
+		return "unknown"
 	}
 }
 
@@ -157,7 +170,7 @@ func (s *StationStreamStore) ListByStationID(ctx context.Context, stationID stri
 	rows, err := s.pool.Query(ctx, `
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
-			mime_type, codec, bitrate, bit_depth, sample_rate_hz, channels,
+			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, health_score,
 			last_checked_at, last_error
 		FROM station_streams
@@ -189,7 +202,7 @@ func (s *StationStreamStore) ListByStationIDs(ctx context.Context, stationIDs []
 	rows, err := s.pool.Query(ctx, `
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
-			mime_type, codec, bitrate, bit_depth, sample_rate_hz, channels,
+			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, health_score,
 			last_checked_at, last_error
 		FROM station_streams
@@ -245,14 +258,14 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO station_streams (
 				station_id, url, resolved_url, kind, container, transport,
-				mime_type, codec, bitrate, bit_depth, sample_rate_hz, channels,
+				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 				priority, is_active, health_score,
 				last_checked_at, last_error, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
-				$7, $8, $9, $10, $11, $12,
-				$13, $14, $15,
-				$16, $17, NOW()
+				$7, $8, $9, $10, $11, $12, $13,
+				$14, $15, $16,
+				$17, $18, NOW()
 			)`,
 			stationID,
 			in.URL,
@@ -265,6 +278,7 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			in.Bitrate,
 			in.BitDepth,
 			in.SampleRateHz,
+			in.SampleRateConfidence,
 			in.Channels,
 			in.Priority,
 			in.IsActive,
@@ -308,14 +322,14 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO station_streams (
 			station_id, url, resolved_url, kind, container, transport,
-			mime_type, codec, bitrate, bit_depth, sample_rate_hz, channels,
+			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, health_score,
 			last_checked_at, last_error, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
-			$7, $8, $9, $10, $11, $12,
-			1, true, $13,
-			$14, $15, NOW()
+			$7, $8, $9, $10, $11, $12, $13,
+			1, true, $14,
+			$15, $16, NOW()
 		)
 		ON CONFLICT (station_id, priority) DO UPDATE SET
 			url = EXCLUDED.url,
@@ -328,6 +342,7 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			bitrate = EXCLUDED.bitrate,
 			bit_depth = EXCLUDED.bit_depth,
 			sample_rate_hz = EXCLUDED.sample_rate_hz,
+			sample_rate_confidence = EXCLUDED.sample_rate_confidence,
 			channels = EXCLUDED.channels,
 			is_active = EXCLUDED.is_active,
 			health_score = EXCLUDED.health_score,
@@ -345,6 +360,7 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		n.Bitrate,
 		n.BitDepth,
 		n.SampleRateHz,
+		n.SampleRateConfidence,
 		n.Channels,
 		n.HealthScore,
 		n.LastCheckedAt,
@@ -358,19 +374,20 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 
 // ProbeUpdate carries the fields written back after a live HTTP probe.
 type ProbeUpdate struct {
-	ResolvedURL   string
-	Kind          string
-	Container     string
-	Transport     string
-	MimeType      string
-	Codec         string
-	Bitrate       int
-	BitDepth      int
-	SampleRateHz  int
-	Channels      int
-	HealthScore   *float64
-	LastCheckedAt time.Time
-	LastError     *string
+	ResolvedURL          string
+	Kind                 string
+	Container            string
+	Transport            string
+	MimeType             string
+	Codec                string
+	Bitrate              int
+	BitDepth             int
+	SampleRateHz         int
+	SampleRateConfidence string
+	Channels             int
+	HealthScore          *float64
+	LastCheckedAt        time.Time
+	LastError            *string
 }
 
 // ListAllActive returns every active stream ordered by last_checked_at ascending
@@ -379,7 +396,7 @@ func (s *StationStreamStore) ListAllActive(ctx context.Context) ([]*StationStrea
 	rows, err := s.pool.Query(ctx, `
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
-			mime_type, codec, bitrate, bit_depth, sample_rate_hz, channels,
+			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, health_score,
 			last_checked_at, last_error
 		FROM station_streams
@@ -415,17 +432,21 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 			codec          = CASE WHEN trim($6) <> '' THEN $6 ELSE codec END,
 			bit_depth      = CASE WHEN $7 > 0       THEN $7 ELSE bit_depth END,
 			sample_rate_hz = CASE WHEN $8 > 0       THEN $8 ELSE sample_rate_hz END,
-			channels       = CASE WHEN $9 > 0       THEN $9 ELSE channels END,
-			last_checked_at = $10,
-			last_error     = $11,
+			sample_rate_confidence = CASE
+				WHEN trim($9) = '' OR trim($9) = 'unknown' THEN sample_rate_confidence
+				ELSE $9
+			END,
+			channels       = CASE WHEN $10 > 0       THEN $10 ELSE channels END,
+			last_checked_at = $11,
+			last_error     = $12,
 			health_score   = CASE
-				WHEN $12::double precision IS NULL THEN health_score
-				WHEN $12::double precision < 0 THEN 0
-				WHEN $12::double precision > 1 THEN 1
-				ELSE $12::double precision
+				WHEN $13::double precision IS NULL THEN health_score
+				WHEN $13::double precision < 0 THEN 0
+				WHEN $13::double precision > 1 THEN 1
+				ELSE $13::double precision
 			END,
 			updated_at     = NOW()
-		WHERE id = $13`,
+		WHERE id = $14`,
 		u.ResolvedURL,
 		u.Kind,
 		u.Container,
@@ -434,6 +455,7 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 		u.Codec,
 		u.BitDepth,
 		u.SampleRateHz,
+		normalizeSampleRateConfidence(u.SampleRateConfidence),
 		u.Channels,
 		u.LastCheckedAt,
 		u.LastError,

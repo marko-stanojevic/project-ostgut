@@ -1,8 +1,8 @@
 package radio
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -22,19 +22,20 @@ const maxProbeRedirects = 5
 const maxProbeHostChanges = 2
 
 type StreamProbeResult struct {
-	URL           string
-	ResolvedURL   string
-	Kind          string
-	Container     string
-	Transport     string
-	MimeType      string
-	Codec         string
-	Bitrate       int
-	BitDepth      int
-	SampleRateHz  int
-	Channels      int
-	LastError     *string
-	LastCheckedAt time.Time
+	URL                  string
+	ResolvedURL          string
+	Kind                 string
+	Container            string
+	Transport            string
+	MimeType             string
+	Codec                string
+	Bitrate              int
+	BitDepth             int
+	SampleRateHz         int
+	SampleRateConfidence string
+	Channels             int
+	LastError            *string
+	LastCheckedAt        time.Time
 }
 
 func LightClassifyStreamURL(rawURL string) StreamProbeResult {
@@ -140,9 +141,13 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 	if err != nil {
 		return StreamProbeResult{}, fmt.Errorf("build request: %w", err)
 	}
+	// Radio endpoints often keep streaming bytes forever and can confuse
+	// keep-alive reuse; force one-shot probe connections.
+	req.Close = true
 	req.Header.Set("User-Agent", streamProbeUserAgent)
 	req.Header.Set("Range", "bytes=0-65535")
 	req.Header.Set("Icy-Metadata", "1")
+	req.Header.Set("Connection", "close")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -194,29 +199,45 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 	bitrate := parseBitrateHeader(resp.Header.Get("Icy-Br"))
 
 	result := StreamProbeResult{
-		URL:           target,
-		ResolvedURL:   finalURL,
-		Kind:          kind,
-		Container:     container,
-		Transport:     transport,
-		MimeType:      contentType,
-		Codec:         codec,
-		Bitrate:       bitrate,
-		LastCheckedAt: time.Now().UTC(),
-	}
-
-	if kind != "playlist" && isLikelyFLAC(codec, contentType, finalURL) {
-		probeBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 128*1024))
-		if readErr == nil {
-			if sr, bd, ch, ok := parseFLACStreamInfo(probeBytes); ok {
-				result.SampleRateHz = sr
-				result.BitDepth = bd
-				result.Channels = ch
-			}
-		}
+		URL:                  target,
+		ResolvedURL:          finalURL,
+		Kind:                 kind,
+		Container:            container,
+		Transport:            transport,
+		MimeType:             contentType,
+		Codec:                codec,
+		Bitrate:              bitrate,
+		SampleRateConfidence: "unknown",
+		LastCheckedAt:        time.Now().UTC(),
 	}
 
 	if kind != "playlist" {
+		probeBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 128*1024))
+		if readErr == nil && len(probeBytes) > 0 {
+			if isLikelyFLAC(codec, contentType, finalURL) {
+				if sr, bd, ch, ok := parseFLACStreamInfo(probeBytes); ok {
+					result.SampleRateHz = sr
+					result.SampleRateConfidence = "parsed_streaminfo"
+					result.BitDepth = bd
+					result.Channels = ch
+				}
+			}
+			if c, br, sr, ch, ok := parseMPEGAudioInfo(probeBytes); ok {
+				if result.Codec == "" {
+					result.Codec = c
+				}
+				if result.Bitrate <= 0 && br > 0 {
+					result.Bitrate = br
+				}
+				if result.SampleRateHz <= 0 && sr > 0 {
+					result.SampleRateHz = sr
+					result.SampleRateConfidence = "parsed_frame"
+				}
+				if result.Channels <= 0 && ch > 0 {
+					result.Channels = ch
+				}
+			}
+		}
 		return result, nil
 	}
 
@@ -359,6 +380,185 @@ func parseFLACStreamInfo(data []byte) (sampleRateHz int, bitDepth int, channels 
 		return sr, bd, ch, true
 	}
 	return 0, 0, 0, false
+}
+
+func parseMPEGAudioInfo(data []byte) (codec string, bitrate int, sampleRateHz int, channels int, ok bool) {
+	// Skip ID3v2 tag when present (common on MP3 streams).
+	start := 0
+	if len(data) >= 10 && string(data[:3]) == "ID3" {
+		size := int(data[6]&0x7F)<<21 | int(data[7]&0x7F)<<14 | int(data[8]&0x7F)<<7 | int(data[9]&0x7F)
+		start = 10 + size
+		if start >= len(data) {
+			start = 0
+		}
+	}
+
+	for i := start; i+7 <= len(data); i++ {
+		if c, br, sr, ch, ok := parseADTSAt(data, i); ok {
+			return c, br, sr, ch, true
+		}
+		if c, br, sr, ch, ok := parseMP3At(data, i); ok {
+			return c, br, sr, ch, true
+		}
+	}
+	return "", 0, 0, 0, false
+}
+
+func parseADTSAt(data []byte, i int) (codec string, bitrate int, sampleRateHz int, channels int, ok bool) {
+	if i+7 > len(data) {
+		return "", 0, 0, 0, false
+	}
+	b0 := data[i]
+	b1 := data[i+1]
+	b2 := data[i+2]
+	b3 := data[i+3]
+	b4 := data[i+4]
+	b5 := data[i+5]
+
+	// ADTS syncword (12 bits) + layer must be 00.
+	if b0 != 0xFF || (b1&0xF0) != 0xF0 || (b1&0x06) != 0x00 {
+		return "", 0, 0, 0, false
+	}
+
+	sampleRateTable := []int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350}
+	sampleIdx := int((b2 >> 2) & 0x0F)
+	if sampleIdx < 0 || sampleIdx >= len(sampleRateTable) {
+		return "", 0, 0, 0, false
+	}
+	sr := sampleRateTable[sampleIdx]
+
+	channelCfg := int((b2&0x01)<<2) | int((b3>>6)&0x03)
+	ch := channelCfg
+	if ch <= 0 {
+		ch = 0
+	}
+
+	frameLen := int(b3&0x03)<<11 | int(b4)<<3 | int((b5>>5)&0x07)
+	if frameLen <= 0 {
+		return "", 0, 0, 0, false
+	}
+
+	// Confirm next frame when available to reduce false positives.
+	next := i + frameLen
+	if next+1 < len(data) {
+		if data[next] != 0xFF || (data[next+1]&0xF0) != 0xF0 {
+			return "", 0, 0, 0, false
+		}
+	}
+
+	return "AAC", 0, sr, ch, true
+}
+
+func parseMP3At(data []byte, i int) (codec string, bitrate int, sampleRateHz int, channels int, ok bool) {
+	if i+4 > len(data) {
+		return "", 0, 0, 0, false
+	}
+	b0 := data[i]
+	b1 := data[i+1]
+	b2 := data[i+2]
+	b3 := data[i+3]
+
+	// MPEG audio frame sync (11 bits).
+	if b0 != 0xFF || (b1&0xE0) != 0xE0 {
+		return "", 0, 0, 0, false
+	}
+
+	versionID := int((b1 >> 3) & 0x03) // 3=MPEG1,2=MPEG2,0=MPEG2.5
+	layerID := int((b1 >> 1) & 0x03)   // 1=Layer III,2=Layer II,3=Layer I
+	if versionID == 1 || layerID == 0 {
+		return "", 0, 0, 0, false
+	}
+
+	bitrateIdx := int((b2 >> 4) & 0x0F)
+	sampleIdx := int((b2 >> 2) & 0x03)
+	padding := int((b2 >> 1) & 0x01)
+	if bitrateIdx == 0 || bitrateIdx == 0x0F || sampleIdx == 0x03 {
+		return "", 0, 0, 0, false
+	}
+
+	sr := mp3SampleRate(versionID, sampleIdx)
+	br := mp3BitrateKbps(versionID, layerID, bitrateIdx)
+	if sr <= 0 || br <= 0 {
+		return "", 0, 0, 0, false
+	}
+
+	chMode := int((b3 >> 6) & 0x03)
+	ch := 2
+	if chMode == 0x03 {
+		ch = 1
+	}
+
+	frameLen := mp3FrameLength(versionID, layerID, br, sr, padding)
+	if frameLen <= 0 {
+		return "", 0, 0, 0, false
+	}
+
+	// Confirm next frame when available to reduce false positives.
+	next := i + frameLen
+	if next+1 < len(data) {
+		if data[next] != 0xFF || (data[next+1]&0xE0) != 0xE0 {
+			return "", 0, 0, 0, false
+		}
+	}
+
+	return "MP3", br, sr, ch, true
+}
+
+func mp3SampleRate(versionID, sampleIdx int) int {
+	table := map[int][]int{
+		3: {44100, 48000, 32000}, // MPEG1
+		2: {22050, 24000, 16000}, // MPEG2
+		0: {11025, 12000, 8000},  // MPEG2.5
+	}
+	row, ok := table[versionID]
+	if !ok || sampleIdx < 0 || sampleIdx >= len(row) {
+		return 0
+	}
+	return row[sampleIdx]
+}
+
+func mp3BitrateKbps(versionID, layerID, bitrateIdx int) int {
+	mpeg1Layer1 := []int{0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448}
+	mpeg1Layer2 := []int{0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384}
+	mpeg1Layer3 := []int{0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320}
+	mpeg2Layer1 := []int{0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256}
+	mpeg2Layer23 := []int{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160}
+
+	if bitrateIdx <= 0 || bitrateIdx >= 15 {
+		return 0
+	}
+	if versionID == 3 {
+		switch layerID {
+		case 3:
+			return mpeg1Layer1[bitrateIdx]
+		case 2:
+			return mpeg1Layer2[bitrateIdx]
+		case 1:
+			return mpeg1Layer3[bitrateIdx]
+		}
+		return 0
+	}
+	switch layerID {
+	case 3:
+		return mpeg2Layer1[bitrateIdx]
+	case 2, 1:
+		return mpeg2Layer23[bitrateIdx]
+	default:
+		return 0
+	}
+}
+
+func mp3FrameLength(versionID, layerID, bitrateKbps, sampleRateHz, padding int) int {
+	if bitrateKbps <= 0 || sampleRateHz <= 0 {
+		return 0
+	}
+	if layerID == 3 {
+		return ((12 * bitrateKbps * 1000 / sampleRateHz) + padding) * 4
+	}
+	if layerID == 1 && versionID != 3 {
+		return (72 * bitrateKbps * 1000 / sampleRateHz) + padding
+	}
+	return (144 * bitrateKbps * 1000 / sampleRateHz) + padding
 }
 
 func firstPLSEntry(body string, base *url.URL) string {

@@ -69,6 +69,7 @@ interface ApiStationStream {
   bitrate: number
   bit_depth: number
   sample_rate_hz: number
+  sample_rate_confidence: string
   channels: number
   priority: number
   is_active: boolean
@@ -107,6 +108,7 @@ function toStationFromDetails(s: ApiStationDetails): Station {
       bitrate: st.bitrate,
       bitDepth: st.bit_depth,
       sampleRateHz: st.sample_rate_hz,
+      sampleRateConfidence: st.sample_rate_confidence,
       channels: st.channels,
       priority: st.priority,
       isActive: st.is_active,

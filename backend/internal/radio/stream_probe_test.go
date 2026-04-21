@@ -173,3 +173,35 @@ func TestParseFLACStreamInfoWithLeadingBytes(t *testing.T) {
 		t.Fatalf("unexpected parsed values: sr=%d bd=%d ch=%d", sr, bd, ch)
 	}
 }
+
+func TestParseMPEGAudioInfoMP3(t *testing.T) {
+	// MPEG1 Layer III, 128 kbps, 44.1 kHz, stereo.
+	header := []byte{0xFF, 0xFB, 0x90, 0x00}
+	frameLen := 417
+	data := make([]byte, frameLen+frameLen)
+	copy(data[0:4], header)
+	copy(data[frameLen:frameLen+4], header)
+
+	codec, br, sr, ch, ok := parseMPEGAudioInfo(data)
+	if !ok {
+		t.Fatalf("expected MP3 parse success")
+	}
+	if codec != "MP3" || br != 128 || sr != 44100 || ch != 2 {
+		t.Fatalf("unexpected parsed values: codec=%s br=%d sr=%d ch=%d", codec, br, sr, ch)
+	}
+}
+
+func TestParseMPEGAudioInfoAAC(t *testing.T) {
+	// ADTS AAC LC, 48 kHz, stereo, 2 short frames for sync validation.
+	header := []byte{0xFF, 0xF1, 0x4C, 0x80, 0x00, 0xFF, 0xFC}
+	data := append([]byte{}, header...)
+	data = append(data, header...)
+
+	codec, br, sr, ch, ok := parseMPEGAudioInfo(data)
+	if !ok {
+		t.Fatalf("expected AAC parse success")
+	}
+	if codec != "AAC" || br != 0 || sr != 48000 || ch != 2 {
+		t.Fatalf("unexpected parsed values: codec=%s br=%d sr=%d ch=%d", codec, br, sr, ch)
+	}
+}

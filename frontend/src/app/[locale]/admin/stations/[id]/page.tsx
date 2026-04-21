@@ -50,6 +50,7 @@ interface AdminStream {
     bitrate: number
     bit_depth: number
     sample_rate_hz: number
+    sample_rate_confidence: string
     channels: number
     priority: number
     is_active: boolean
@@ -168,6 +169,17 @@ function formatStreamAudioDetails(stream: AdminStream): string {
     const sampleRate = stream.sample_rate_hz > 0 ? `${stream.sample_rate_hz} Hz` : '- Hz'
     const channels = stream.channels > 0 ? `${stream.channels}ch` : '-ch'
     return `${bitDepth} / ${sampleRate} / ${channels}`
+}
+
+function formatSampleRateConfidenceLabel(stream: AdminStream): string {
+    switch ((stream.sample_rate_confidence || '').toLowerCase()) {
+        case 'parsed_streaminfo':
+            return 'Verified (STREAMINFO)'
+        case 'parsed_frame':
+            return 'Verified (Frame)'
+        default:
+            return 'Unknown confidence'
+    }
 }
 
 export default function StationEditorPage() {
@@ -902,7 +914,7 @@ export default function StationEditorPage() {
                                                     )}
                                                     {(stream.lossless || stream.codec.toUpperCase().includes('FLAC') || stream.bit_depth > 0 || stream.sample_rate_hz > 0 || stream.channels > 0) && (
                                                         <span className="text-xs text-muted-foreground">
-                                                            {formatStreamAudioDetails(stream)}
+                                                            {formatStreamAudioDetails(stream)} · {formatSampleRateConfidenceLabel(stream)}
                                                         </span>
                                                     )}
                                                     {stream.bitrate > 0 && (

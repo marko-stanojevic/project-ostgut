@@ -93,14 +93,14 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO station_streams (
 				station_id, url, resolved_url, kind, container, transport,
-				mime_type, codec, bitrate, bit_depth, sample_rate_hz, channels,
+				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 				priority, is_active, health_score,
 				last_checked_at, last_error, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
-				$7, $8, $9, $10, $11, $12,
-				$13, $14, $15,
-				$16, $17, NOW()
+				$7, $8, $9, $10, $11, $12, $13,
+				$14, $15, $16,
+				$17, $18, NOW()
 			)`,
 			id,
 			in.URL,
@@ -113,6 +113,7 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 			in.Bitrate,
 			in.BitDepth,
 			in.SampleRateHz,
+			in.SampleRateConfidence,
 			in.Channels,
 			in.Priority,
 			in.IsActive,
