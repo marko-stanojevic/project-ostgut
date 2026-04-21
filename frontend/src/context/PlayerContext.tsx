@@ -58,14 +58,6 @@ interface PlayableVariant {
   source?: StationStream
 }
 
-interface ApiStationDetails extends ApiStation {
-  logo?: string
-  genres?: string[]
-  country?: string
-  city?: string
-  country_code?: string
-}
-
 function detectPlaybackCapabilities(): PlaybackCapabilities {
   if (typeof window === 'undefined') {
     return { flac: false, hls: false }
@@ -304,7 +296,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     fetch(`${API}/stations/${station.id}`, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) return null
-        return (await res.json()) as ApiStationDetails
+        return (await res.json()) as ApiStation
       })
       .then((data) => {
         if (!data) return
