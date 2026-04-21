@@ -20,6 +20,9 @@ RUN npm run build
 # - .next/standalone/server.js
 # - .next/standalone/frontend/server.js
 # Normalize to .next/standalone/server.js for the runtime image.
+# Standalone trace omits @swc/helpers/esm — copy the full package in.
+RUN cp -R node_modules/@swc/helpers .next/standalone/node_modules/@swc/helpers
+
 RUN if [ -f .next/standalone/server.js ]; then \
     true; \
     elif [ -f .next/standalone/frontend/server.js ]; then \
