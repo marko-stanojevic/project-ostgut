@@ -2,13 +2,10 @@
 
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import {
     SignOutIcon,
-    MoonIcon,
-    SunIcon,
     ShieldCheckIcon,
     GearIcon,
     ArrowsLeftRightIcon,
@@ -72,13 +69,10 @@ function Avatar({ name, image, size = 32 }: { name?: string | null; image?: stri
 
 export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
     const router = useRouter()
-    const { resolvedTheme, setTheme } = useTheme()
     const { user, session, signOut } = useAuth()
     const { isAdmin } = useAdminStatus()
     const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.image ?? null)
     const t = useTranslations('account_menu')
-
-    const isDark = resolvedTheme === 'dark'
 
     useEffect(() => {
         if (!session?.accessToken) {
@@ -165,16 +159,6 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
                     <DropdownMenuItem onClick={() => router.push('/settings?section=preferences')} className="gap-2.5 px-3 py-2 text-sm">
                         <PaletteIcon className="h-4 w-4 text-muted-foreground" />
                         {t('preferences')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                        onClick={() => setTheme(isDark ? 'light' : 'dark')}
-                        className="gap-2.5 px-3 py-2 text-sm"
-                    >
-                        {isDark
-                            ? <SunIcon className="h-4 w-4 text-muted-foreground" />
-                            : <MoonIcon className="h-4 w-4 text-muted-foreground" />
-                        }
-                        {t('appearance')}
                     </DropdownMenuItem>
                 </div>
 

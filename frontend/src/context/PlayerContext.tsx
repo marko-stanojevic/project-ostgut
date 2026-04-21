@@ -20,6 +20,8 @@ import {
 } from '@/types/player'
 import { usePlayerStorage } from '@/hooks/usePlayerStorage'
 import { usePlayerSync } from '@/hooks/usePlayerSync'
+import { toStation } from '@/lib/station'
+import type { ApiStation } from '@/types/station'
 
 // Re-export Station so existing consumers don't need to change their imports.
 export type { Station } from '@/types/player'
@@ -54,74 +56,6 @@ interface PlayableVariant {
   mimeType: string
   lossless: boolean
   source?: StationStream
-}
-
-interface ApiStationStream {
-  id: string
-  url: string
-  resolved_url: string
-  kind: string
-  container: string
-  transport: string
-  mime_type: string
-  codec: string
-  lossless: boolean
-  bitrate: number
-  bit_depth: number
-  sample_rate_hz: number
-  sample_rate_confidence: string
-  channels: number
-  priority: number
-  is_active: boolean
-  health_score: number
-  last_checked_at?: string
-  last_error?: string
-}
-
-interface ApiStationDetails {
-  id: string
-  name: string
-  stream_url: string
-  streams?: ApiStationStream[]
-  logo?: string
-  genres?: string[]
-  country?: string
-  city?: string
-  country_code?: string
-}
-
-function toStationFromDetails(s: ApiStationDetails): Station {
-  return {
-    id: s.id,
-    name: s.name,
-    streamUrl: s.stream_url,
-    streams: (s.streams ?? []).map((st) => ({
-      id: st.id,
-      url: st.url,
-      resolvedUrl: st.resolved_url,
-      kind: st.kind,
-      container: st.container,
-      transport: st.transport,
-      mimeType: st.mime_type,
-      codec: st.codec,
-      lossless: st.lossless,
-      bitrate: st.bitrate,
-      bitDepth: st.bit_depth,
-      sampleRateHz: st.sample_rate_hz,
-      sampleRateConfidence: st.sample_rate_confidence,
-      channels: st.channels,
-      priority: st.priority,
-      isActive: st.is_active,
-      healthScore: st.health_score,
-      lastCheckedAt: st.last_checked_at,
-      lastError: st.last_error,
-    })),
-    logo: s.logo,
-    genres: s.genres ?? [],
-    country: s.country ?? '',
-    city: s.city,
-    countryCode: s.country_code ?? '',
-  }
 }
 
 function detectPlaybackCapabilities(): PlaybackCapabilities {
@@ -362,11 +296,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     fetch(`${API}/stations/${station.id}`, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) return null
-        return (await res.json()) as ApiStationDetails
+        return (await res.json()) as ApiStation
       })
       .then((data) => {
         if (!data) return
-        const full = toStationFromDetails(data)
+        const full = toStation(data)
         setStation((prev) => {
           if (!prev || prev.id !== full.id) return prev
           return {

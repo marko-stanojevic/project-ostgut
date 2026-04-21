@@ -44,13 +44,13 @@ type Station struct {
 
 // StationFilter holds optional query parameters for listing stations.
 type StationFilter struct {
-	Genre        string // filter by one genre (matched against any element in Genres)
+	Genres       []string // OR filter across genres array
 	CountryCode  string
 	Language     string
 	MinBitrate   int
-	Style        string
-	Format       string
-	Texture      string
+	Styles       []string // OR filter across style_tags
+	Formats      []string // OR filter across format_tags
+	Textures     []string // OR filter across texture_tags
 	Search       string
 	Sort         string // "popular" = click_count DESC
 	FeaturedOnly bool
@@ -206,9 +206,9 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 	args = append(args, statusFilter)
 	i++
 
-	if f.Genre != "" {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = $%d)", i)
-		args = append(args, f.Genre)
+	if len(f.Genres) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", i)
+		args = append(args, f.Genres)
 		i++
 	}
 	if f.CountryCode != "" {
@@ -226,19 +226,19 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 		args = append(args, f.MinBitrate)
 		i++
 	}
-	if f.Style != "" {
-		where += fmt.Sprintf(" AND $%d = ANY(style_tags)", i)
-		args = append(args, f.Style)
+	if len(f.Styles) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(style_tags) t WHERE lower(t) = ANY($%d))", i)
+		args = append(args, f.Styles)
 		i++
 	}
-	if f.Format != "" {
-		where += fmt.Sprintf(" AND $%d = ANY(format_tags)", i)
-		args = append(args, f.Format)
+	if len(f.Formats) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(format_tags) t WHERE lower(t) = ANY($%d))", i)
+		args = append(args, f.Formats)
 		i++
 	}
-	if f.Texture != "" {
-		where += fmt.Sprintf(" AND $%d = ANY(texture_tags)", i)
-		args = append(args, f.Texture)
+	if len(f.Textures) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(texture_tags) t WHERE lower(t) = ANY($%d))", i)
+		args = append(args, f.Textures)
 		i++
 	}
 	if f.FeaturedOnly {
@@ -476,9 +476,9 @@ func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) 
 	args = append(args, statusFilter)
 	i++
 
-	if f.Genre != "" {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = $%d)", i)
-		args = append(args, f.Genre)
+	if len(f.Genres) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", i)
+		args = append(args, f.Genres)
 		i++
 	}
 	if f.CountryCode != "" {
@@ -496,19 +496,19 @@ func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) 
 		args = append(args, f.MinBitrate)
 		i++
 	}
-	if f.Style != "" {
-		where += fmt.Sprintf(" AND $%d = ANY(style_tags)", i)
-		args = append(args, f.Style)
+	if len(f.Styles) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(style_tags) t WHERE lower(t) = ANY($%d))", i)
+		args = append(args, f.Styles)
 		i++
 	}
-	if f.Format != "" {
-		where += fmt.Sprintf(" AND $%d = ANY(format_tags)", i)
-		args = append(args, f.Format)
+	if len(f.Formats) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(format_tags) t WHERE lower(t) = ANY($%d))", i)
+		args = append(args, f.Formats)
 		i++
 	}
-	if f.Texture != "" {
-		where += fmt.Sprintf(" AND $%d = ANY(texture_tags)", i)
-		args = append(args, f.Texture)
+	if len(f.Textures) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(texture_tags) t WHERE lower(t) = ANY($%d))", i)
+		args = append(args, f.Textures)
 		i++
 	}
 	if f.FeaturedOnly {

@@ -1,51 +1,17 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
-import Image from 'next/image'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, usePathname } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
-import { usePlayer, type Station } from '@/context/PlayerContext'
-import { Skeleton } from '@/components/ui/skeleton'
-import { RadioIcon, PlayIcon, PauseIcon, XIcon, SparkleIcon, TrendUpIcon } from '@phosphor-icons/react'
+import { usePlayer } from '@/context/PlayerContext'
+import { StationCard, StationCardSkeleton } from '@/components/StationCard'
+import { useScrollRestoration } from '@/hooks/useScrollRestoration'
+import { toStation } from '@/lib/station'
+import type { ApiStation } from '@/types/station'
+import { RadioIcon, XIcon, SparkleIcon, TrendUpIcon } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-
-interface ApiStream {
-    id: string
-    url: string
-    resolved_url: string
-    kind: string
-    container: string
-    transport: string
-    mime_type: string
-    codec: string
-    lossless: boolean
-    bitrate: number
-    bit_depth: number
-    sample_rate_hz: number
-    sample_rate_confidence: string
-    channels: number
-    priority: number
-    is_active: boolean
-    health_score: number
-    last_checked_at?: string
-    last_error?: string
-}
-
-interface ApiStation {
-    id: string
-    name: string
-    stream_url: string
-    streams?: ApiStream[]
-    logo?: string
-    genres: string[]
-    country: string
-    city: string
-    country_code: string
-    reliability_score: number
-    featured: boolean
-}
 
 type FeedView = 'for-you' | 'staff-picks' | 'trending'
 
@@ -55,131 +21,6 @@ const LIST_SCROLL_KEY = 'curated:list:scrollY'
 function parseFeedView(value: string | null): FeedView {
     if (value === 'staff-picks' || value === 'trending' || value === 'for-you') return value
     return 'for-you'
-}
-
-function toStation(s: ApiStation): Station {
-    return {
-        id: s.id,
-        name: s.name,
-        streamUrl: s.stream_url,
-        streams: s.streams?.map((st) => ({
-            id: st.id,
-            url: st.url,
-            resolvedUrl: st.resolved_url,
-            kind: st.kind,
-            container: st.container,
-            transport: st.transport,
-            mimeType: st.mime_type,
-            codec: st.codec,
-            lossless: st.lossless,
-            bitrate: st.bitrate,
-            bitDepth: st.bit_depth,
-            sampleRateHz: st.sample_rate_hz,
-            sampleRateConfidence: st.sample_rate_confidence,
-            channels: st.channels,
-            priority: st.priority,
-            isActive: st.is_active,
-            healthScore: st.health_score,
-            lastCheckedAt: st.last_checked_at,
-            lastError: st.last_error,
-        })),
-        logo: s.logo,
-        genres: s.genres ?? [],
-        country: s.country,
-        city: s.city,
-        countryCode: s.country_code,
-    }
-}
-
-function StationCard({
-    s,
-    isActive,
-    isPlaying,
-    imagePriority,
-    onOpen,
-    onPlay,
-}: {
-    s: ApiStation
-    isActive: boolean
-    isPlaying: boolean
-    imagePriority?: boolean
-    onOpen: () => void
-    onPlay?: () => void
-}) {
-    const { play, pause } = usePlayer()
-
-    const handleTogglePlay = () => {
-        if (isActive && isPlaying) { pause(); return }
-        if (onPlay) {
-            onPlay()
-        } else {
-            play(toStation(s))
-        }
-        onOpen()
-    }
-
-    return (
-        <article className="group relative rounded-xl p-1.5 text-left transition-all duration-200 hover:bg-muted/50">
-            <div
-                onClick={onOpen}
-                className="relative block aspect-square w-full overflow-hidden rounded-lg bg-muted cursor-pointer"
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpen() }}
-                aria-label={`Open ${s.name} details`}
-            >
-                {s.logo ? (
-                    <Image
-                        src={s.logo}
-                        alt={s.name}
-                        fill
-                        priority={imagePriority}
-                        sizes="(max-width: 640px) 25vw, (max-width: 1024px) 16vw, 14vw"
-                        className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
-                        unoptimized
-                    />
-                ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                        <RadioIcon className="h-6 w-6 text-muted-foreground/50" />
-                    </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <button
-                        onClick={(e) => { e.stopPropagation(); handleTogglePlay() }}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 opacity-0 shadow-lg shadow-black/30 transition-all duration-200 hover:scale-110 hover:bg-white group-hover:opacity-100"
-                        aria-label={isActive && isPlaying ? `Pause ${s.name}` : `Play ${s.name}`}
-                    >
-                        {isActive && isPlaying
-                            ? <PauseIcon weight="fill" className="h-4 w-4 text-black" />
-                            : <PlayIcon weight="fill" className="ml-0.5 h-4 w-4 text-black" />
-                        }
-                    </button>
-                </div>
-            </div>
-            <div className="mt-1.5 px-0.5">
-                <button onClick={onOpen} className="w-full cursor-pointer text-left" aria-label={`Open ${s.name} details`}>
-                    <p className="ui-card-title">{s.name}</p>
-                    <p className="ui-card-meta">{(s.genres ?? []).join(', ') || 'Unknown genre'}</p>
-                </button>
-            </div>
-            {isActive && isPlaying && (
-                <span className="absolute right-2.5 top-2.5 h-2 w-2 animate-pulse rounded-full bg-brand shadow-[0_0_6px_rgba(200,116,58,0.6)]" />
-            )}
-        </article>
-    )
-}
-
-function StationCardSkeleton() {
-    return (
-        <div className="rounded-xl p-1.5">
-            <Skeleton className="aspect-square w-full rounded-lg" />
-            <div className="mt-1.5 space-y-1">
-                <Skeleton className="h-3 w-4/5" />
-                <Skeleton className="h-2.5 w-2/3" />
-            </div>
-        </div>
-    )
 }
 
 const PAGE_SIZE = 24
@@ -195,107 +36,147 @@ function CuratedContent() {
     const [recommendedTotal, setRecommendedTotal] = useState(0)
     const [loadingRecommended, setLoadingRecommended] = useState(true)
     const [loadingMoreRecommended, setLoadingMoreRecommended] = useState(false)
+    const [recommendedError, setRecommendedError] = useState(false)
 
     const [mostPlayed, setMostPlayed] = useState<ApiStation[]>([])
     const [mostPlayedTotal, setMostPlayedTotal] = useState(0)
     const [loadingMostPlayed, setLoadingMostPlayed] = useState(true)
     const [loadingMoreMostPlayed, setLoadingMoreMostPlayed] = useState(false)
+    const [mostPlayedError, setMostPlayedError] = useState(false)
 
     const [searchResults, setSearchResults] = useState<ApiStation[]>([])
     const [searchTotal, setSearchTotal] = useState(0)
     const [loadingSearch, setLoadingSearch] = useState(false)
     const [loadingMoreSearch, setLoadingMoreSearch] = useState(false)
+    const [searchError, setSearchError] = useState(false)
 
     const feedView = parseFeedView(searchParams.get('view'))
     const search = searchParams.get('q')?.trim() ?? ''
+    const searchQuery = searchParams.toString()
+    const recommendedLoadingRef = useRef(false)
+    const mostPlayedLoadingRef = useRef(false)
+    const searchLoadingRef = useRef(false)
+
+    const recommendedQueue = useMemo(() => recommended.map(toStation), [recommended])
+    const mostPlayedQueue = useMemo(() => mostPlayed.map(toStation), [mostPlayed])
+    const searchQueue = useMemo(() => searchResults.map(toStation), [searchResults])
 
     useEffect(() => {
         setLoadingRecommended(true)
+        setRecommendedError(false)
         setRecommended([])
         fetch(`${API}/stations?featured=true&limit=${PAGE_SIZE}&offset=0`)
             .then((r) => r.json())
             .then((data) => { setRecommended(data.stations ?? []); setRecommendedTotal(data.total ?? data.count ?? 0) })
-            .catch(() => setRecommended([]))
+            .catch(() => {
+                setRecommended([])
+                setRecommendedError(true)
+            })
             .finally(() => setLoadingRecommended(false))
     }, [])
 
     useEffect(() => {
         setLoadingMostPlayed(true)
+        setMostPlayedError(false)
         setMostPlayed([])
         fetch(`${API}/stations?sort=popular&limit=${PAGE_SIZE}&offset=0`)
             .then((r) => r.json())
             .then((data) => { setMostPlayed(data.stations ?? []); setMostPlayedTotal(data.total ?? data.count ?? 0) })
-            .catch(() => setMostPlayed([]))
+            .catch(() => {
+                setMostPlayed([])
+                setMostPlayedError(true)
+            })
             .finally(() => setLoadingMostPlayed(false))
     }, [])
 
     const loadMoreRecommended = async () => {
+        if (recommendedLoadingRef.current) return
+        recommendedLoadingRef.current = true
         setLoadingMoreRecommended(true)
         try {
             const data = await fetch(`${API}/stations?featured=true&limit=${PAGE_SIZE}&offset=${recommended.length}`).then((r) => r.json())
             setRecommended((prev) => [...prev, ...(data.stations ?? [])])
             setRecommendedTotal(data.total ?? data.count ?? 0)
         } finally {
+            recommendedLoadingRef.current = false
             setLoadingMoreRecommended(false)
         }
     }
 
     const loadMoreMostPlayed = async () => {
+        if (mostPlayedLoadingRef.current) return
+        mostPlayedLoadingRef.current = true
         setLoadingMoreMostPlayed(true)
         try {
             const data = await fetch(`${API}/stations?sort=popular&limit=${PAGE_SIZE}&offset=${mostPlayed.length}`).then((r) => r.json())
             setMostPlayed((prev) => [...prev, ...(data.stations ?? [])])
             setMostPlayedTotal(data.total ?? data.count ?? 0)
         } finally {
+            mostPlayedLoadingRef.current = false
             setLoadingMoreMostPlayed(false)
         }
     }
 
-    const fetchSearch = useCallback(() => {
-        if (!search) { setSearchResults([]); setSearchTotal(0); return }
-        setLoadingSearch(true)
-        setSearchResults([])
-        fetch(`${API}/search?q=${encodeURIComponent(search)}&limit=${PAGE_SIZE}&offset=0`)
-            .then((r) => r.json())
-            .then((data) => { setSearchResults(data.stations ?? []); setSearchTotal(data.total ?? data.count ?? 0) })
-            .catch(() => setSearchResults([]))
-            .finally(() => setLoadingSearch(false))
-    }, [search])
-
     const loadMoreSearch = async () => {
-        if (!search) return
+        if (!search || searchLoadingRef.current) return
+        searchLoadingRef.current = true
         setLoadingMoreSearch(true)
         try {
             const data = await fetch(`${API}/search?q=${encodeURIComponent(search)}&limit=${PAGE_SIZE}&offset=${searchResults.length}`).then((r) => r.json())
             setSearchResults((prev) => [...prev, ...(data.stations ?? [])])
             setSearchTotal(data.total ?? data.count ?? 0)
         } finally {
+            searchLoadingRef.current = false
             setLoadingMoreSearch(false)
         }
     }
 
-    useEffect(() => { fetchSearch() }, [fetchSearch])
-
     useEffect(() => {
-        if (typeof window === 'undefined') return
+        if (!search) {
+            setSearchResults([])
+            setSearchTotal(0)
+            setSearchError(false)
+            setLoadingSearch(false)
+            return
+        }
 
-        const savedReturn = sessionStorage.getItem(LIST_RETURN_KEY)
-        const savedScrollY = sessionStorage.getItem(LIST_SCROLL_KEY)
-        const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+        const controller = new AbortController()
 
-        if (!savedReturn || !savedScrollY || savedReturn !== current) return
+        setLoadingSearch(true)
+        setSearchError(false)
+        setSearchResults([])
 
-        const y = Number(savedScrollY)
-        if (!Number.isFinite(y)) return
-
-        const rafID = window.requestAnimationFrame(() => {
-            window.scrollTo({ top: y, behavior: 'auto' })
-            sessionStorage.removeItem(LIST_RETURN_KEY)
-            sessionStorage.removeItem(LIST_SCROLL_KEY)
+        fetch(`${API}/search?q=${encodeURIComponent(search)}&limit=${PAGE_SIZE}&offset=0`, {
+            signal: controller.signal,
         })
+            .then((r) => r.json())
+            .then((data) => {
+                setSearchResults(data.stations ?? [])
+                setSearchTotal(data.total ?? data.count ?? 0)
+            })
+            .catch((error: unknown) => {
+                if (error instanceof DOMException && error.name === 'AbortError') return
+                setSearchResults([])
+                setSearchError(true)
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setLoadingSearch(false)
+                }
+            })
 
-        return () => window.cancelAnimationFrame(rafID)
-    }, [pathname, searchParams, loadingRecommended, loadingMostPlayed, loadingSearch])
+        return () => {
+            controller.abort()
+        }
+    }, [search])
+
+    useScrollRestoration({
+        pathname,
+        search: searchQuery,
+        returnKey: LIST_RETURN_KEY,
+        scrollKey: LIST_SCROLL_KEY,
+        ready: !loadingRecommended && !loadingMostPlayed && !loadingSearch,
+    })
 
     const setFeedView = (next: FeedView) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -344,27 +225,32 @@ function CuratedContent() {
                     {t('description')}
                 </p>
             </div>
-            {!search && (
-                <div className="mb-7 flex items-center gap-3 border-b border-border/50 pb-0">
-                    {([
-                        { id: 'for-you', label: t('feed_for_you') },
-                        { id: 'staff-picks', label: t('feed_staff_picks') },
-                        { id: 'trending', label: t('feed_trending') },
-                    ] as { id: FeedView; label: string }[]).map(({ id, label }) => (
-                        <button
-                            key={id}
-                            type="button"
-                            onClick={() => setFeedView(id)}
-                            className={`relative px-3 py-2 text-[18px] font-medium transition-colors ${feedView === id
+            <div className="mb-7 flex items-center gap-3 border-b border-border/50 pb-0">
+                {([
+                    { id: 'for-you', label: t('feed_for_you') },
+                    { id: 'staff-picks', label: t('feed_staff_picks') },
+                    { id: 'trending', label: t('feed_trending') },
+                ] as { id: FeedView; label: string }[]).map(({ id, label }) => (
+                    <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                            if (search) return
+                            setFeedView(id)
+                        }}
+                        aria-disabled={Boolean(search)}
+                        className={`relative px-3 py-2 text-[18px] font-medium transition-colors ${
+                            feedView === id
                                 ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:bg-brand'
-                                : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-            )}
+                                : search
+                                    ? 'cursor-not-allowed text-muted-foreground/50'
+                                    : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
 
             <section className="min-w-0">
                 {search ? (
@@ -379,6 +265,12 @@ function CuratedContent() {
                             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
                                 {Array.from({ length: 12 }).map((_, i) => <StationCardSkeleton key={i} />)}
                             </div>
+                        ) : searchError ? (
+                            <div className="py-24 text-center">
+                                <RadioIcon className="mx-auto mb-4 h-10 w-10 text-destructive/40" />
+                                <p className="text-sm font-medium text-foreground">{t('search_error')}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{t('search_error_hint')}</p>
+                            </div>
                         ) : searchResults.length === 0 ? (
                             <div className="py-24 text-center">
                                 <RadioIcon className="mx-auto mb-4 h-10 w-10 text-muted-foreground/25" />
@@ -389,7 +281,7 @@ function CuratedContent() {
                             <>
                                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
                                     {searchResults.map((s, index) => (
-                                        <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(searchResults.map(toStation), index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                                        <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(searchQueue, index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                                     ))}
                                     {loadingMoreSearch && Array.from({ length: 8 }).map((_, i) => <StationCardSkeleton key={`more-${i}`} />)}
                                 </div>
@@ -421,13 +313,15 @@ function CuratedContent() {
                                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                                         {Array.from({ length: PAGE_SIZE }).map((_, i) => <StationCardSkeleton key={i} />)}
                                     </div>
+                                ) : recommendedError ? (
+                                    <p className="text-sm text-muted-foreground">{t('section_error')}</p>
                                 ) : recommended.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">{t('no_featured')}</p>
                                 ) : (
                                     <>
                                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                                             {recommended.map((s, index) => (
-                                                <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(recommended.map(toStation), index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                                                <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(recommendedQueue, index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                                             ))}
                                             {loadingMoreRecommended && Array.from({ length: 8 }).map((_, i) => <StationCardSkeleton key={`more-${i}`} />)}
                                         </div>
@@ -458,13 +352,15 @@ function CuratedContent() {
                                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                                         {Array.from({ length: PAGE_SIZE }).map((_, i) => <StationCardSkeleton key={i} />)}
                                     </div>
+                                ) : mostPlayedError ? (
+                                    <p className="text-sm text-muted-foreground">{t('section_error')}</p>
                                 ) : mostPlayed.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">{t('no_stations_yet')}</p>
                                 ) : (
                                     <>
                                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
                                             {mostPlayed.map((s, index) => (
-                                                <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(mostPlayed.map(toStation), index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
+                                                <StationCard key={s.id} s={s} imagePriority={index < 3} onOpen={() => openStation(s.id)} onPlay={() => setQueue(mostPlayedQueue, index)} isActive={activeStation?.id === s.id} isPlaying={activeStation?.id === s.id && state === 'playing'} />
                                             ))}
                                             {loadingMoreMostPlayed && Array.from({ length: 8 }).map((_, i) => <StationCardSkeleton key={`more-${i}`} />)}
                                         </div>
