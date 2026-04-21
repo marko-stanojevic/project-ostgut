@@ -68,11 +68,13 @@ func main() {
 	userStore := store.NewUserStore(pool)
 	subStore := store.NewSubscriptionStore(pool)
 	stationStore := store.NewStationStore(pool)
+	stationStreamStore := store.NewStationStreamStore(pool)
 	mediaAssetStore := store.NewMediaAssetStore(pool)
 	h := handler.New(
 		userStore,
 		subStore,
 		stationStore,
+		stationStreamStore,
 		mediaAssetStore,
 		logger,
 		cfg.PaddleWebhookSecret,
@@ -88,8 +90,12 @@ func main() {
 	// Start background station sync (Radio Browser ingestion).
 	syncCtx, syncCancel := context.WithCancel(context.Background())
 	defer syncCancel()
-	syncer := radio.NewSyncer(stationStore, logger)
+	syncer := radio.NewSyncer(stationStore, stationStreamStore, logger)
 	go syncer.Run(syncCtx)
+
+	// Start background stream re-probe (refreshes resolved_url, codec, health).
+	prober := radio.NewProber(stationStreamStore, logger)
+	go prober.Run(syncCtx)
 
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)

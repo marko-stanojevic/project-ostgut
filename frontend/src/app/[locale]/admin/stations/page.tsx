@@ -9,7 +9,6 @@ import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { AdminSearchForm } from '@/components/admin/admin-search-form'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -52,8 +51,6 @@ interface AdminStation {
   genres: string[]
   country: string
   city: string
-  bitrate: number
-  codec: string
   reliability_score: number
   featured: boolean
   status: string
@@ -68,8 +65,6 @@ interface CreateStationForm {
   city: string
   country_code: string
   language: string
-  bitrate: string
-  codec: string
   logo: string
   homepage: string
   tags: string
@@ -145,8 +140,6 @@ export default function AdminStationsPage() {
     city: '',
     country_code: '',
     language: '',
-    bitrate: '',
-    codec: '',
     logo: '',
     homepage: '',
     tags: '',
@@ -302,8 +295,6 @@ export default function AdminStationsPage() {
             city: createForm.city.trim(),
             country_code: createForm.country_code.trim().toUpperCase(),
             language: createForm.language.trim(),
-            bitrate: createForm.bitrate.trim() ? Number(createForm.bitrate) : 0,
-            codec: createForm.codec.trim(),
             logo: createForm.logo.trim(),
             homepage: createForm.homepage.trim(),
             tags: createForm.tags
@@ -326,8 +317,6 @@ export default function AdminStationsPage() {
         city: '',
         country_code: '',
         language: '',
-        bitrate: '',
-        codec: '',
         logo: '',
         homepage: '',
         tags: '',
@@ -472,12 +461,6 @@ export default function AdminStationsPage() {
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{(s.genres ?? []).join(', ') || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.country || '—'}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      <div className="flex items-center gap-1.5">
-                        <span className="tabular-nums text-muted-foreground">{s.bitrate}k</span>
-                        {s.codec && <Badge variant="outline" className="text-[10px] px-1 py-0">{s.codec}</Badge>}
-                      </div>
-                    </td>
                     <td className="px-4 py-3 hidden xl:table-cell">
                       <ReliabilityBar score={s.reliability_score} />
                     </td>
@@ -577,14 +560,6 @@ export default function AdminStationsPage() {
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">{t('field_country_code')}</label>
                 <Input value={createForm.country_code} onChange={(e) => setCreateForm((p) => ({ ...p, country_code: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">{t('field_bitrate')}</label>
-                <Input type="number" min={0} value={createForm.bitrate} onChange={(e) => setCreateForm((p) => ({ ...p, bitrate: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">{t('field_codec')}</label>
-                <Input value={createForm.codec} onChange={(e) => setCreateForm((p) => ({ ...p, codec: e.target.value }))} />
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">{t('field_logo')}</label>

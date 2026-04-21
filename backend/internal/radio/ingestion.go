@@ -53,17 +53,21 @@ type radioBrowserStation struct {
 
 // Syncer fetches stations from Radio Browser and writes them to the store.
 type Syncer struct {
-	store  *store.StationStore
-	log    *slog.Logger
-	client *http.Client
+	store       *store.StationStore
+	streamStore *store.StationStreamStore
+	log         *slog.Logger
+	client      *http.Client // Radio Browser API requests
+	probeClient *http.Client // stream probing — shorter timeout
 }
 
 // NewSyncer creates a Syncer.
-func NewSyncer(s *store.StationStore, log *slog.Logger) *Syncer {
+func NewSyncer(s *store.StationStore, streamStore *store.StationStreamStore, log *slog.Logger) *Syncer {
 	return &Syncer{
-		store:  s,
-		log:    log,
-		client: &http.Client{Timeout: 30 * time.Second},
+		store:       s,
+		streamStore: streamStore,
+		log:         log,
+		client:      &http.Client{Timeout: 30 * time.Second},
+		probeClient: &http.Client{Timeout: 8 * time.Second},
 	}
 }
 
@@ -97,14 +101,53 @@ func (s *Syncer) sync(ctx context.Context) {
 
 	var saved int
 	for _, st := range curated {
-		if err := s.store.Upsert(ctx, st); err != nil {
+		stationID, err := s.store.Upsert(ctx, st)
+		if err != nil {
 			s.log.Warn("radio: upsert failed", "station", st.Name, "error", err)
 			continue
+		}
+
+		probe := LightClassifyStreamURL(st.StreamURL)
+		// Playlist containers (m3u, pls) must be resolved to find the actual
+		// audio URL. We also probe opaque direct URLs (no known extension/codec)
+		// to classify HLS/audio by content-type instead of filename suffix.
+		if shouldProbeIngestionStream(probe) {
+			probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+			probe = ProbeStream(probeCtx, s.probeClient, st.StreamURL)
+			cancel()
+		}
+		err = s.streamStore.UpsertPrimaryForStation(ctx, stationID, store.StationStreamInput{
+			URL:           probe.URL,
+			ResolvedURL:   probe.ResolvedURL,
+			Kind:          probe.Kind,
+			Container:     probe.Container,
+			Transport:     probe.Transport,
+			MimeType:      probe.MimeType,
+			Codec:         probe.Codec,
+			Bitrate:       probe.Bitrate,
+			BitDepth:      probe.BitDepth,
+			SampleRateHz:  probe.SampleRateHz,
+			Channels:      probe.Channels,
+			Priority:      1,
+			IsActive:      true,
+			HealthScore:   clamp(st.ReliabilityScore, 0, 1),
+			LastCheckedAt: &probe.LastCheckedAt,
+			LastError:     probe.LastError,
+		})
+		if err != nil {
+			s.log.Warn("radio: stream upsert failed", "station", st.Name, "error", err)
 		}
 		saved++
 	}
 
 	s.log.Info("radio: sync done", "saved", saved, "duration", time.Since(start).Round(time.Second))
+}
+
+func shouldProbeIngestionStream(p StreamProbeResult) bool {
+	if p.Kind == "playlist" {
+		return true
+	}
+	return p.Kind == "direct" && p.Container == "none" && strings.TrimSpace(p.Codec) == ""
 }
 
 // fetch retrieves stations from Radio Browser, paginating until exhausted.
@@ -205,8 +248,6 @@ func curate(raw []radioBrowserStation) []*store.Station {
 			City:             strings.TrimSpace(r.State),
 			CountryCode:      strings.ToUpper(r.CountryCode),
 			Tags:             tags,
-			Bitrate:          r.Bitrate,
-			Codec:            strings.ToUpper(r.Codec),
 			Votes:            r.Votes,
 			ClickCount:       r.ClickCount,
 			ReliabilityScore: reliability,
@@ -226,6 +267,25 @@ func parseTags(raw string) []string {
 		}
 	}
 	return tags
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func firstPositive(values ...int) int {
+	for _, v := range values {
+		if v > 0 {
+			return v
+		}
+	}
+	return 0
 }
 
 // genreKeywords maps common radio tags to a canonical genre name.

@@ -49,3 +49,4 @@ backend/bin/api
 
 # Ignore local PSQL exports
 local-export.sql
+.DS_Store

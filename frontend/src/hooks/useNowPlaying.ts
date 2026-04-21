@@ -10,8 +10,10 @@ const FAST_MS = 30_000
 const SLOW_MS = 3 * 60_000
 // Switch to slow after this many consecutive fast-poll misses.
 const MAX_FAST_MISSES = 3
-// Give up entirely after this many consecutive slow-poll misses.
+// After repeated misses, keep a very low-frequency heartbeat to recover when
+// metadata becomes available later in the session.
 const MAX_SLOW_MISSES = 2
+const IDLE_MS = 10 * 60_000
 
 export interface NowPlaying {
   title: string
@@ -29,11 +31,11 @@ export interface NowPlaying {
  * Polling strategy:
  *   - Fast (30 s) while metadata is being received.
  *   - Backs off to slow (3 min) after MAX_FAST_MISSES consecutive empty responses.
- *   - Stops entirely after MAX_SLOW_MISSES consecutive slow-poll misses.
+ *   - Moves to idle heartbeat (10 min) after MAX_SLOW_MISSES slow misses.
  *   - Resets on station change.
  *
  * This means a stream that never returns metadata (e.g. KEXP) will generate
- * ~5 requests over ~7.5 minutes then go silent for the rest of the session.
+ * ~5 requests over ~7.5 minutes then continue on low-frequency heartbeats.
  */
 export function useNowPlaying(
   stationId: string | null | undefined,
@@ -58,6 +60,7 @@ export function useNowPlaying(
     let fastMisses = 0
     let slowMisses = 0
     let slow = false
+    let currentController: AbortController | null = null
 
     const clearTimer = () => {
       if (timerRef.current) clearTimeout(timerRef.current)
@@ -72,8 +75,10 @@ export function useNowPlaying(
     const tick = async () => {
       if (cancelled) return
 
+      const controller = new AbortController()
+      currentController = controller
       try {
-        const res = await fetch(`${API}/stations/${stationId}/now-playing`)
+        const res = await fetch(`${API}/stations/${stationId}/now-playing`, { signal: controller.signal })
         if (cancelled) return
 
         if (!res.ok) {
@@ -111,11 +116,12 @@ export function useNowPlaying(
           slowMisses++
           if (slowMisses < MAX_SLOW_MISSES) {
             schedule(SLOW_MS)
+          } else {
+            schedule(IDLE_MS)
           }
-          // slowMisses >= MAX_SLOW_MISSES: stop scheduling — stream doesn't
-          // support metadata; no more requests until station changes.
         }
-      } catch {
+      } catch (err) {
+        if ((err as { name?: string }).name === 'AbortError') return
         // Network error — keep current cadence.
         if (!cancelled) schedule(slow ? SLOW_MS : FAST_MS)
       }
@@ -126,6 +132,7 @@ export function useNowPlaying(
     return () => {
       cancelled = true
       clearTimer()
+      currentController?.abort()
     }
   }, [stationId, active])
 

@@ -14,10 +14,32 @@ const PAGE_SIZE = 24
 const LIST_RETURN_KEY = 'explore:list:return'
 const LIST_SCROLL_KEY = 'explore:list:scrollY'
 
+interface ApiStream {
+    id: string
+    url: string
+    resolved_url: string
+    kind: string
+    container: string
+    transport: string
+    mime_type: string
+    codec: string
+    lossless: boolean
+    bitrate: number
+    bit_depth: number
+    sample_rate_hz: number
+    channels: number
+    priority: number
+    is_active: boolean
+    health_score: number
+    last_checked_at?: string
+    last_error?: string
+}
+
 interface ApiStation {
     id: string
     name: string
     stream_url: string
+    streams?: ApiStream[]
     logo?: string
     genres: string[]
     language: string
@@ -49,6 +71,26 @@ function toStation(s: ApiStation): Station {
         id: s.id,
         name: s.name,
         streamUrl: s.stream_url,
+        streams: s.streams?.map((st) => ({
+            id: st.id,
+            url: st.url,
+            resolvedUrl: st.resolved_url,
+            kind: st.kind,
+            container: st.container,
+            transport: st.transport,
+            mimeType: st.mime_type,
+            codec: st.codec,
+            lossless: st.lossless,
+            bitrate: st.bitrate,
+            bitDepth: st.bit_depth,
+            sampleRateHz: st.sample_rate_hz,
+            channels: st.channels,
+            priority: st.priority,
+            isActive: st.is_active,
+            healthScore: st.health_score,
+            lastCheckedAt: st.last_checked_at,
+            lastError: st.last_error,
+        })),
         logo: s.logo,
         genres: s.genres ?? [],
         country: s.country,

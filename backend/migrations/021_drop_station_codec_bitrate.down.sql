@@ -1,0 +1,3 @@
+ALTER TABLE stations
+    ADD COLUMN IF NOT EXISTS bitrate integer NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS codec  text    NOT NULL DEFAULT '';

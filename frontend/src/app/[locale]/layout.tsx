@@ -49,13 +49,11 @@ export default async function LocaleLayout({
   const messages = await getMessages()
 
   return (
-    <html
+    <div
       lang={locale}
-      className={cn('font-sans', geistSans.variable, geistMono.variable)}
+      className={cn('font-sans bg-background text-foreground', geistSans.variable, geistMono.variable)}
       data-scroll-behavior="smooth"
-      suppressHydrationWarning
     >
-      <body className="bg-background text-foreground">
         <NextIntlClientProvider messages={messages}>
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
             <SessionProvider>
@@ -72,7 +70,6 @@ export default async function LocaleLayout({
             </SessionProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
-      </body>
-    </html>
+    </div>
   )
 }

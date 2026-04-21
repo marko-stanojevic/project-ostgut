@@ -1,13 +1,19 @@
 package handler
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -100,7 +106,24 @@ type adminStationResponse struct {
 	MetadataLastFetchedAt *string `json:"metadata_last_fetched_at,omitempty"`
 }
 
-func toAdminStationResponse(s *store.Station) adminStationResponse {
+// adminStationWithStreams fetches the stream variants for s and builds the
+// full admin response. Falls back to the station's legacy stream_url on error.
+func (h *Handler) adminStationWithStreams(ctx context.Context, s *store.Station) adminStationResponse {
+	streamMap, err := h.attachStreamsToStations(ctx, []*store.Station{s})
+	if err != nil {
+		return toAdminStationResponse(s, defaultStreamResponseForStation(s))
+	}
+	return toAdminStationResponse(s, streamMap[s.ID])
+}
+
+type adminStreamRequest struct {
+	URL      string `json:"url"`
+	Priority int    `json:"priority"`
+	IsActive *bool  `json:"is_active"`
+	Bitrate  *int   `json:"bitrate"`
+}
+
+func toAdminStationResponse(s *store.Station, streams []streamResponse) adminStationResponse {
 	var metadataLastFetchedAt *string
 	if s.MetadataLastFetchedAt != nil {
 		formatted := s.MetadataLastFetchedAt.UTC().Format(time.RFC3339)
@@ -108,7 +131,7 @@ func toAdminStationResponse(s *store.Station) adminStationResponse {
 	}
 
 	return adminStationResponse{
-		stationResponse:       toStationResponse(s),
+		stationResponse:       toStationResponse(s, streams),
 		Status:                s.Status,
 		MetadataEnabled:       s.MetadataEnabled,
 		MetadataType:          s.MetadataType,
@@ -135,8 +158,6 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		StyleTags        []string `json:"style_tags"`
 		FormatTags       []string `json:"format_tags"`
 		TextureTags      []string `json:"texture_tags"`
-		Bitrate          int      `json:"bitrate"`
-		Codec            string   `json:"codec"`
 		ReliabilityScore float64  `json:"reliability_score"`
 		Status           string   `json:"status"`
 		Featured         bool     `json:"featured"`
@@ -169,12 +190,6 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 	case "approved", "rejected", "pending":
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, approved, or rejected"})
-		return
-	}
-
-	bitrate := req.Bitrate
-	if bitrate < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "bitrate cannot be negative"})
 		return
 	}
 
@@ -217,8 +232,6 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		StyleTags:        req.StyleTags,
 		FormatTags:       req.FormatTags,
 		TextureTags:      req.TextureTags,
-		Bitrate:          bitrate,
-		Codec:            strings.TrimSpace(req.Codec),
 		ReliabilityScore: reliability,
 		Status:           status,
 		Featured:         req.Featured,
@@ -227,6 +240,15 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		MetadataType:     metadataType,
 	}
 
+	probeCtx, probeCancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	probe := radio.ProbeStream(probeCtx, h.streamProbeClient, streamURL)
+	probeCancel()
+	if err := validateProbedStream(probe); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return
+	}
+	probe.Bitrate = resolveStreamBitrate(nil, streamURL, probe)
+
 	created, err := h.stationStore.CreateManual(c.Request.Context(), manual)
 	if err != nil {
 		h.log.Error("admin create station", "error", err)
@@ -234,7 +256,26 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, toAdminStationResponse(created))
+	_ = h.stationStreamStore.UpsertPrimaryForStation(c.Request.Context(), created.ID, store.StationStreamInput{
+		URL:           streamURL,
+		ResolvedURL:   probe.ResolvedURL,
+		Kind:          probe.Kind,
+		Container:     probe.Container,
+		Transport:     probe.Transport,
+		MimeType:      probe.MimeType,
+		Codec:         probe.Codec,
+		Bitrate:       probe.Bitrate,
+		BitDepth:      probe.BitDepth,
+		SampleRateHz:  probe.SampleRateHz,
+		Channels:      probe.Channels,
+		Priority:      1,
+		IsActive:      true,
+		HealthScore:   reliability,
+		LastCheckedAt: &probe.LastCheckedAt,
+		LastError:     probe.LastError,
+	})
+
+	c.JSON(http.StatusCreated, h.adminStationWithStreams(c.Request.Context(), created))
 }
 
 // AdminListStations handles GET /admin/stations?status=pending|approved|rejected
@@ -261,9 +302,16 @@ func (h *Handler) AdminListStations(c *gin.Context) {
 		return
 	}
 
+	streamMap, err := h.attachStreamsToStations(c.Request.Context(), stations)
+	if err != nil {
+		h.log.Error("admin list station streams", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
 	resp := make([]adminStationResponse, len(stations))
 	for i, s := range stations {
-		resp[i] = toAdminStationResponse(s)
+		resp[i] = toAdminStationResponse(s, streamMap[s.ID])
 	}
 	c.JSON(http.StatusOK, gin.H{"stations": resp, "count": total})
 }
@@ -280,7 +328,7 @@ func (h *Handler) AdminGetStation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, toAdminStationResponse(s))
+	c.JSON(http.StatusOK, h.adminStationWithStreams(c.Request.Context(), s))
 }
 
 // AdminGetStationIcon handles GET /admin/stations/:id/icon
@@ -333,28 +381,27 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 
 	var req struct {
-		Name             *string   `json:"name"`
-		StreamURL        *string   `json:"stream_url"`
-		Website          *string   `json:"website"`
-		Logo             *string   `json:"logo"`
-		Genres           *[]string `json:"genres"`
-		Language         *string   `json:"language"`
-		Country          *string   `json:"country"`
-		City             *string   `json:"city"`
-		CountryCode      *string   `json:"country_code"`
-		Tags             *[]string `json:"tags"`
-		StyleTags        *[]string `json:"style_tags"`
-		FormatTags       *[]string `json:"format_tags"`
-		TextureTags      *[]string `json:"texture_tags"`
-		Bitrate          *int      `json:"bitrate"`
-		Codec            *string   `json:"codec"`
-		ReliabilityScore *float64  `json:"reliability_score"`
-		Status           *string   `json:"status"`
-		MetadataEnabled  *bool     `json:"metadata_enabled"`
-		MetadataType     *string   `json:"metadata_type"`
-		Overview         *string   `json:"overview"`
-		EditorNotes      *string   `json:"editor_notes"`
-		Featured         *bool     `json:"featured"`
+		Name             *string               `json:"name"`
+		StreamURL        *string               `json:"stream_url"`
+		Streams          *[]adminStreamRequest `json:"streams"`
+		Website          *string               `json:"website"`
+		Logo             *string               `json:"logo"`
+		Genres           *[]string             `json:"genres"`
+		Language         *string               `json:"language"`
+		Country          *string               `json:"country"`
+		City             *string               `json:"city"`
+		CountryCode      *string               `json:"country_code"`
+		Tags             *[]string             `json:"tags"`
+		StyleTags        *[]string             `json:"style_tags"`
+		FormatTags       *[]string             `json:"format_tags"`
+		TextureTags      *[]string             `json:"texture_tags"`
+		ReliabilityScore *float64              `json:"reliability_score"`
+		Status           *string               `json:"status"`
+		MetadataEnabled  *bool                 `json:"metadata_enabled"`
+		MetadataType     *string               `json:"metadata_type"`
+		Overview         *string               `json:"overview"`
+		EditorNotes      *string               `json:"editor_notes"`
+		Featured         *bool                 `json:"featured"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -376,8 +423,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		StyleTags:        current.StyleTags,
 		FormatTags:       current.FormatTags,
 		TextureTags:      current.TextureTags,
-		Bitrate:          current.Bitrate,
-		Codec:            current.Codec,
 		ReliabilityScore: current.ReliabilityScore,
 		Status:           current.Status,
 		MetadataEnabled:  current.MetadataEnabled,
@@ -439,16 +484,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	if req.TextureTags != nil {
 		u.TextureTags = *req.TextureTags
 	}
-	if req.Bitrate != nil {
-		if *req.Bitrate < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "bitrate cannot be negative"})
-			return
-		}
-		u.Bitrate = *req.Bitrate
-	}
-	if req.Codec != nil {
-		u.Codec = strings.TrimSpace(*req.Codec)
-	}
 	if req.ReliabilityScore != nil {
 		if *req.ReliabilityScore < 0 || *req.ReliabilityScore > 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "reliability_score must be between 0 and 1"})
@@ -487,14 +522,70 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		u.Featured = *req.Featured
 	}
 
-	if err := h.stationStore.UpdateEnrichment(c.Request.Context(), id, u); err != nil {
-		h.log.Error("admin update station", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
+	// Rebuild stream variants when the caller provides an explicit list.
+	// When only stream_url changed (no list), re-probe and upsert the primary.
+	var (
+		rebuiltStreams []store.StationStreamInput
+		primaryProbe   *radio.StreamProbeResult
+	)
+
+	if req.Streams != nil && len(*req.Streams) > 0 {
+		inputs, err := h.buildStationStreams(c, *req.Streams, u.StreamURL, u.ReliabilityScore)
+		if err != nil {
+			h.log.Error("admin update station streams probe", "error", err)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			return
+		}
+		rebuiltStreams = inputs
+	} else if req.StreamURL != nil {
+		probeCtx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		probe := radio.ProbeStream(probeCtx, h.streamProbeClient, u.StreamURL)
+		cancel()
+		if err := validateProbedStream(probe); err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			return
+		}
+		probe.Bitrate = resolveStreamBitrate(nil, u.StreamURL, probe)
+		primaryProbe = &probe
+	}
+
+	if len(rebuiltStreams) > 0 {
+		if err := h.stationStore.UpdateEnrichmentAndStreams(c.Request.Context(), id, u, rebuiltStreams); err != nil {
+			h.log.Error("admin update station+streams", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+	} else {
+		if err := h.stationStore.UpdateEnrichment(c.Request.Context(), id, u); err != nil {
+			h.log.Error("admin update station", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+	}
+
+	if primaryProbe != nil {
+		_ = h.stationStreamStore.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
+			URL:           u.StreamURL,
+			ResolvedURL:   primaryProbe.ResolvedURL,
+			Kind:          primaryProbe.Kind,
+			Container:     primaryProbe.Container,
+			Transport:     primaryProbe.Transport,
+			MimeType:      primaryProbe.MimeType,
+			Codec:         primaryProbe.Codec,
+			Bitrate:       primaryProbe.Bitrate,
+			BitDepth:      primaryProbe.BitDepth,
+			SampleRateHz:  primaryProbe.SampleRateHz,
+			Channels:      primaryProbe.Channels,
+			Priority:      1,
+			IsActive:      true,
+			HealthScore:   u.ReliabilityScore,
+			LastCheckedAt: &primaryProbe.LastCheckedAt,
+			LastError:     primaryProbe.LastError,
+		})
 	}
 
 	updated, _ := h.stationStore.GetByIDAdmin(c.Request.Context(), id)
-	c.JSON(http.StatusOK, toAdminStationResponse(updated))
+	c.JSON(http.StatusOK, h.adminStationWithStreams(c.Request.Context(), updated))
 }
 
 func normalizeOptionalText(raw *string) *string {
@@ -518,6 +609,196 @@ func normalizeMetadataType(raw string) string {
 	default:
 		return ""
 	}
+}
+
+func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []adminStreamRequest {
+	streams := make([]adminStreamRequest, 0, len(raw)+1)
+	for _, stream := range raw {
+		if strings.TrimSpace(stream.URL) == "" {
+			continue
+		}
+		streams = append(streams, adminStreamRequest{
+			URL:      strings.TrimSpace(stream.URL),
+			Priority: stream.Priority,
+			IsActive: stream.IsActive,
+			Bitrate:  stream.Bitrate,
+		})
+	}
+	if len(streams) == 0 && strings.TrimSpace(fallbackURL) != "" {
+		active := true
+		streams = append(streams, adminStreamRequest{
+			URL:      strings.TrimSpace(fallbackURL),
+			Priority: 1,
+			IsActive: &active,
+		})
+	}
+
+	sort.SliceStable(streams, func(i, j int) bool {
+		pi := streams[i].Priority
+		pj := streams[j].Priority
+		if pi <= 0 {
+			pi = i + 1
+		}
+		if pj <= 0 {
+			pj = j + 1
+		}
+		if pi == pj {
+			return i < j
+		}
+		return pi < pj
+	})
+	return streams
+}
+
+func (h *Handler) buildStationStreams(
+	ctx *gin.Context,
+	raw []adminStreamRequest,
+	fallbackURL string,
+	fallbackReliability float64,
+) ([]store.StationStreamInput, error) {
+	streams := normalizeAdminStreams(raw, fallbackURL)
+	if len(streams) == 0 {
+		return nil, errors.New("at least one stream is required")
+	}
+
+	seenURLs := make(map[string]int, len(streams))
+	seenPriorities := make(map[int]int, len(streams))
+
+	inputs := make([]store.StationStreamInput, 0, len(streams))
+	for i, stream := range streams {
+		priority := stream.Priority
+		if priority <= 0 {
+			priority = i + 1
+		}
+		if prev, ok := seenPriorities[priority]; ok {
+			return nil, fmt.Errorf("stream %d duplicates priority %d already used by stream %d", i+1, priority, prev)
+		}
+		seenPriorities[priority] = i + 1
+
+		normalizedURL := strings.ToLower(strings.TrimSpace(stream.URL))
+		if prev, ok := seenURLs[normalizedURL]; ok {
+			return nil, fmt.Errorf("stream %d duplicates URL already used by stream %d", i+1, prev)
+		}
+		seenURLs[normalizedURL] = i + 1
+		if stream.Bitrate != nil && *stream.Bitrate < 0 {
+			return nil, fmt.Errorf("stream %d bitrate must be >= 0", i+1)
+		}
+
+		probeCtx, cancel := context.WithTimeout(ctx.Request.Context(), 12*time.Second)
+		probe := radio.ProbeStream(probeCtx, h.streamProbeClient, stream.URL)
+		cancel()
+		if err := validateProbedStream(probe); err != nil {
+			return nil, fmt.Errorf("stream %d: %w", i+1, err)
+		}
+		probe.Bitrate = resolveStreamBitrate(stream.Bitrate, stream.URL, probe)
+
+		isActive := true
+		if stream.IsActive != nil {
+			isActive = *stream.IsActive
+		}
+
+		health := 0.8
+		if fallbackReliability > 0 {
+			health = fallbackReliability
+		}
+
+		inputs = append(inputs, store.StationStreamInput{
+			URL:           strings.TrimSpace(stream.URL),
+			ResolvedURL:   probe.ResolvedURL,
+			Kind:          probe.Kind,
+			Container:     probe.Container,
+			Transport:     probe.Transport,
+			MimeType:      probe.MimeType,
+			Codec:         probe.Codec,
+			Bitrate:       probe.Bitrate,
+			BitDepth:      probe.BitDepth,
+			SampleRateHz:  probe.SampleRateHz,
+			Channels:      probe.Channels,
+			Priority:      priority,
+			IsActive:      isActive,
+			HealthScore:   health,
+			LastCheckedAt: &probe.LastCheckedAt,
+			LastError:     probe.LastError,
+		})
+	}
+	return inputs, nil
+}
+
+func validateProbedStream(probe radio.StreamProbeResult) error {
+	if probe.LastError != nil && strings.TrimSpace(*probe.LastError) != "" {
+		return fmt.Errorf("stream probe failed: %s", strings.TrimSpace(*probe.LastError))
+	}
+	if strings.TrimSpace(probe.ResolvedURL) == "" {
+		return errors.New("stream probe failed: empty resolved URL")
+	}
+	return nil
+}
+
+func resolveStreamBitrate(override *int, rawURL string, probe radio.StreamProbeResult) int {
+	if isLosslessStreamVariant(rawURL, probe) {
+		// Lossless streams are variable/non-kbps-coded in practice; avoid
+		// inheriting misleading URL tokens like ".../320.flac".
+		if override != nil && *override > 0 {
+			return *override
+		}
+		return 0
+	}
+	if override != nil && *override > 0 {
+		return *override
+	}
+	if inferred := inferBitrateFromURL(rawURL); inferred > 0 {
+		return inferred
+	}
+	if inferred := inferBitrateFromURL(probe.ResolvedURL); inferred > 0 {
+		return inferred
+	}
+	if probe.Bitrate > 0 {
+		return probe.Bitrate
+	}
+	return 0
+}
+
+func isLosslessStreamVariant(rawURL string, probe radio.StreamProbeResult) bool {
+	containsFLAC := func(v string) bool {
+		return strings.Contains(strings.ToLower(strings.TrimSpace(v)), "flac")
+	}
+	return containsFLAC(rawURL) ||
+		containsFLAC(probe.ResolvedURL) ||
+		containsFLAC(probe.Codec) ||
+		containsFLAC(probe.MimeType)
+}
+
+var knownBitrateToken = regexp.MustCompile(`(?i)(^|[^0-9])(32|48|56|64|80|96|112|128|160|192|224|256|320|384|512)([^0-9]|$)`)
+
+func inferBitrateFromURL(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return 0
+	}
+
+	search := strings.ToLower(u.Path)
+	if u.RawQuery != "" {
+		search += "&" + strings.ToLower(u.RawQuery)
+	}
+
+	matches := knownBitrateToken.FindAllStringSubmatch(search, -1)
+	if len(matches) == 0 {
+		return 0
+	}
+
+	// Use the last known bitrate-like token in the URL, which typically maps to
+	// stream variant suffixes like /stream/256.mp3.
+	for i := len(matches) - 1; i >= 0; i-- {
+		v, err := strconv.Atoi(matches[i][2])
+		if err == nil && v > 0 {
+			return v
+		}
+	}
+	return 0
 }
 
 // AdminSetUserAdmin handles PUT /admin/users/:id/admin

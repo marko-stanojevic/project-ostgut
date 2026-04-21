@@ -29,8 +29,6 @@ type Station struct {
 	StyleTags             []string
 	FormatTags            []string
 	TextureTags           []string
-	Bitrate               int
-	Codec                 string
 	Votes                 int
 	ClickCount            int
 	ReliabilityScore      float64
@@ -81,8 +79,6 @@ type EnrichmentUpdate struct {
 	StyleTags        []string
 	FormatTags       []string
 	TextureTags      []string
-	Bitrate          int
-	Codec            string
 	ReliabilityScore float64
 	Status           string
 	MetadataEnabled  bool
@@ -107,8 +103,6 @@ type ManualStationInput struct {
 	StyleTags        []string
 	FormatTags       []string
 	TextureTags      []string
-	Bitrate          int
-	Codec            string
 	ReliabilityScore float64
 	Status           string
 	Featured         bool
@@ -131,7 +125,7 @@ const stationColumns = `
 	id, external_id, name, custom_name, stream_url, homepage, logo,
 	genres, language, country, city, country_code, tags,
 	style_tags, format_tags, texture_tags,
-	bitrate, codec, votes, click_count, reliability_score,
+	votes, click_count, reliability_score,
 	is_active, featured, status,
 	metadata_enabled, metadata_type, metadata_error, metadata_error_code, metadata_last_fetched_at,
 	custom_website, overview, editor_notes,
@@ -143,7 +137,7 @@ func scanStation(row pgx.Row) (*Station, error) {
 		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Logo,
 		&s.Genres, &s.Language, &s.Country, &s.City, &s.CountryCode, &s.Tags,
 		&s.StyleTags, &s.FormatTags, &s.TextureTags,
-		&s.Bitrate, &s.Codec, &s.Votes, &s.ClickCount, &s.ReliabilityScore,
+		&s.Votes, &s.ClickCount, &s.ReliabilityScore,
 		&s.IsActive, &s.Featured, &s.Status,
 		&s.MetadataEnabled, &s.MetadataType, &s.MetadataError, &s.MetadataErrorCode, &s.MetadataLastFetchedAt,
 		&s.CustomWebsite, &s.Overview, &s.EditorNotes,
@@ -240,7 +234,7 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 		i++
 	}
 	if f.MinBitrate > 0 {
-		where += fmt.Sprintf(" AND bitrate >= $%d", i)
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM station_streams WHERE station_id = stations.id AND bitrate >= $%d)", i)
 		args = append(args, f.MinBitrate)
 		i++
 	}
@@ -351,17 +345,18 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 // Upsert inserts or updates a station by external_id.
 // On conflict it updates operational sync fields while preserving core station
 // metadata, so admin edits to original station fields are not overwritten.
-func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
+func (s *StationStore) Upsert(ctx context.Context, st *Station) (string, error) {
 	tags := normalizeTags(st.Tags)
 
-	_, err := s.pool.Exec(ctx, `
+	var id string
+	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, logo,
 			genres, language, country, city, country_code, tags,
-			bitrate, codec, votes, click_count, reliability_score,
+			votes, click_count, reliability_score,
 			is_active, status, last_synced_at, updated_at
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'pending',NOW(),NOW()
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',NOW(),NOW()
 		)
 		ON CONFLICT (external_id) DO UPDATE SET
 			votes             = EXCLUDED.votes,
@@ -371,14 +366,18 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) error {
 			last_synced_at    = NOW(),
 			updated_at        = NOW()
 			-- NOTE: name, stream_url, homepage, logo, genres, language,
-			-- country, country_code, tags, bitrate, codec, status,
-			-- editor_notes, featured are intentionally NOT updated`,
+			-- country, country_code, tags, status,
+			-- editor_notes, featured are intentionally NOT updated
+		RETURNING id`,
 		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Logo,
 		normalizeGenres(st.Genres), st.Language, st.Country, st.City, st.CountryCode, tags,
-		st.Bitrate, st.Codec, st.Votes, st.ClickCount, st.ReliabilityScore,
+		st.Votes, st.ClickCount, st.ReliabilityScore,
 		st.IsActive,
-	)
-	return err
+	).Scan(&id)
+	if err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 // CreateManual inserts a new station from admin input and returns the created row.
@@ -400,7 +399,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 			external_id, name, stream_url, homepage, logo,
 			genres, language, country, city, country_code, tags,
 			style_tags, format_tags, texture_tags,
-			bitrate, codec, votes, click_count, reliability_score,
+			votes, click_count, reliability_score,
 			is_active, featured, status, overview,
 			metadata_enabled, metadata_type,
 			last_editor_action_at, last_synced_at, updated_at
@@ -409,16 +408,16 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 			$1, $2, $3, $4,
 			$5, $6, $7, $8, $9, $10,
 			$11, $12, $13,
-			$14, $15, 0, 0, $16,
-			true, $17, $18, $19,
-			$20, $21,
+			0, 0, $14,
+			true, $15, $16, $17,
+			$18, $19,
 			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
 		in.Name, in.StreamURL, in.Homepage, in.Logo,
 		normalizeGenres(in.Genres), in.Language, in.Country, in.City, in.CountryCode, tags,
 		styleTags, formatTags, textureTags,
-		in.Bitrate, in.Codec, in.ReliabilityScore,
+		in.ReliabilityScore,
 		in.Featured, in.Status, in.Overview,
 		in.MetadataEnabled, in.MetadataType,
 	).Scan(&id)
@@ -455,22 +454,20 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			style_tags            = $11,
 			format_tags           = $12,
 			texture_tags          = $13,
-			bitrate               = $14,
-			codec                 = $15,
-			reliability_score     = $16,
-			status                = $17,
-			metadata_enabled      = $18,
-			metadata_type         = $19,
-			editor_notes          = $20,
-			overview              = $21,
-			featured              = $22,
+			reliability_score     = $14,
+			status                = $15,
+			metadata_enabled      = $16,
+			metadata_type         = $17,
+			editor_notes          = $18,
+			overview              = $19,
+			featured              = $20,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $23`,
+		WHERE id = $21`,
 		u.Name, u.StreamURL, u.Homepage, u.Logo,
 		normalizeGenres(u.Genres), u.Language, u.Country, u.City, u.CountryCode, tags,
 		styleTags, formatTags, textureTags,
-		u.Bitrate, u.Codec, u.ReliabilityScore,
+		u.ReliabilityScore,
 		u.Status, u.MetadataEnabled, u.MetadataType, u.EditorNotes, u.Overview, u.Featured, id,
 	)
 	return err
@@ -546,7 +543,7 @@ func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) 
 		i++
 	}
 	if f.MinBitrate > 0 {
-		where += fmt.Sprintf(" AND bitrate >= $%d", i)
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM station_streams WHERE station_id = stations.id AND bitrate >= $%d)", i)
 		args = append(args, f.MinBitrate)
 		i++
 	}

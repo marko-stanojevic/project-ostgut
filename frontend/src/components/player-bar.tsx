@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
 import { useNowPlaying } from '@/hooks/useNowPlaying'
@@ -14,6 +14,26 @@ import {
   RadioIcon,
   CircleNotchIcon,
 } from '@phosphor-icons/react'
+
+function formatStreamDetails(stream?: {
+  codec?: string
+  lossless?: boolean
+  bitDepth?: number
+  sampleRateHz?: number
+  channels?: number
+} | null): string {
+  if (!stream) return ''
+  const parts: string[] = []
+  if (stream.codec) parts.push(stream.codec)
+  if (stream.lossless) parts.push('Lossless')
+  const hasFormatTuple = (stream.bitDepth ?? 0) > 0 || (stream.sampleRateHz ?? 0) > 0 || (stream.channels ?? 0) > 0
+  if (hasFormatTuple || stream.lossless || (stream.codec || '').toUpperCase().includes('FLAC')) {
+    parts.push(`${(stream.bitDepth ?? 0) > 0 ? `${stream.bitDepth}` : '-'}-bit`)
+    parts.push(`${(stream.sampleRateHz ?? 0) > 0 ? `${stream.sampleRateHz}` : '-'} Hz`)
+    parts.push(`${(stream.channels ?? 0) > 0 ? `${stream.channels}` : '-'}ch`)
+  }
+  return parts.join(' / ')
+}
 
 function WaveformBars() {
   return (
@@ -37,13 +57,27 @@ export function PlayerBar() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  const { station, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
+  const { station, currentStream, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
 
   const isPlaying = state === 'playing'
   const isLoading = state === 'loading'
   const isError = state === 'error'
 
   const nowPlaying = useNowPlaying(station?.id, isPlaying || isLoading)
+  const displayStream = useMemo(() => {
+    if (currentStream) return currentStream
+    if (!station?.streams || station.streams.length === 0) return null
+    const active = station.streams.filter((st) => st.isActive)
+    if (active.length > 0) {
+      return [...active].sort((a, b) => a.priority - b.priority)[0]
+    }
+    return [...station.streams].sort((a, b) => a.priority - b.priority)[0]
+  }, [station, currentStream])
+  const streamDetails = formatStreamDetails(displayStream)
+  const isLosslessLike = Boolean(
+    displayStream?.lossless || (displayStream?.codec || '').toUpperCase().includes('FLAC'),
+  )
+  const bitrateKbps = displayStream ? (displayStream.bitrate ?? 0) : (station?.bitrate || 0)
 
   if (!mounted) return null
   if (!station && state === 'idle') return null
@@ -136,9 +170,14 @@ export function PlayerBar() {
 
         {/* Volume + bitrate — right */}
         <div className="flex items-center justify-end gap-3 sm:gap-4">
-          {station?.bitrate ? (
+          {streamDetails ? (
+            <span className="hidden shrink-0 text-xs text-zinc-600 sm:inline-flex sm:text-sm">
+              {streamDetails}
+            </span>
+          ) : null}
+          {bitrateKbps > 0 && !isLosslessLike ? (
             <span className="hidden shrink-0 text-xs tabular-nums text-zinc-600 sm:inline-flex sm:text-sm">
-              {station.bitrate} kbps
+              {bitrateKbps} kbps
             </span>
           ) : null}
 

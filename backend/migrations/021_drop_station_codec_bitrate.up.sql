@@ -1,0 +1,3 @@
+ALTER TABLE stations
+    DROP COLUMN IF EXISTS bitrate,
+    DROP COLUMN IF EXISTS codec;

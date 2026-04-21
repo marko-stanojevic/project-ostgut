@@ -1,14 +1,36 @@
+export interface StationStream {
+    id: string
+    url: string
+    resolvedUrl: string
+    kind: string
+    container: string
+    transport: string
+    mimeType: string
+    codec?: string
+    lossless?: boolean
+    bitrate?: number
+    bitDepth?: number
+    sampleRateHz?: number
+    channels?: number
+    priority: number
+    isActive: boolean
+    healthScore: number
+    lastCheckedAt?: string
+    lastError?: string
+}
+
 export interface Station {
     id: string
     name: string
     streamUrl: string
+    streams?: StationStream[]
     logo?: string
     genres: string[]
     country: string
     city?: string
     countryCode: string
-    bitrate: number
-    codec: string
+    bitrate?: number
+    codec?: string
 }
 
 export type PlayerState = 'idle' | 'loading' | 'playing' | 'paused' | 'error'
