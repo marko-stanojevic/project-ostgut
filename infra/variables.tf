@@ -143,6 +143,22 @@ variable "paddle_price_id" {
 }
 
 # ──────────────────────────────────────────────
+# New Relic (optional — leave empty to disable)
+# ──────────────────────────────────────────────
+variable "new_relic_license_key" {
+  type        = string
+  description = "New Relic ingest license key for the backend APM agent. Leave empty to disable."
+  sensitive   = true
+  default     = ""
+}
+
+variable "new_relic_app_name" {
+  type        = string
+  description = "Application name shown in New Relic APM."
+  default     = "bouji-backend"
+}
+
+# ──────────────────────────────────────────────
 # Custom domains (optional)
 # ──────────────────────────────────────────────
 variable "backend_custom_domain" {

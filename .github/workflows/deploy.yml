@@ -2,9 +2,9 @@ name: Deploy
 
 on:
   workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: ["main"]
+    workflows: [ "CI" ]
+    types: [ completed ]
+    branches: [ "main" ]
   workflow_dispatch:
     inputs:
       environment:
@@ -16,7 +16,8 @@ on:
           - staging
           - production
       force_frontend_build:
-        description: "Force frontend image rebuild even when no frontend changes are detected"
+        description: "Force frontend image rebuild even when no frontend changes are
+          detected"
         required: false
         default: false
         type: boolean
@@ -83,7 +84,8 @@ jobs:
   # 1. Provision infrastructure
   # ──────────────────────────────────────────────────────────────────────────
   provision:
-    name: Provision infrastructure (${{ github.event.inputs.environment || 'staging' }})
+    name: Provision infrastructure (${{ github.event.inputs.environment || 'staging'
+      }})
     runs-on: ubuntu-latest
     needs: changes
     environment: ${{ github.event.inputs.environment || 'staging' }}
@@ -144,6 +146,8 @@ jobs:
             -var="paddle_price_id=${{ vars.PADDLE_PRICE_ID }}" \
             -var="backend_custom_domain=${{ vars.BACKEND_CUSTOM_DOMAIN }}" \
             -var="frontend_custom_domain=${{ vars.FRONTEND_CUSTOM_DOMAIN }}" \
+            -var="new_relic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
+            -var="new_relic_app_name=${{ vars.NEW_RELIC_APP_NAME || 'ostgut-backend-staging' }}" \
             -target=azurerm_resource_group.main \
             -target=azurerm_postgresql_flexible_server.main \
             -target=azurerm_postgresql_flexible_server_database.main \
@@ -169,7 +173,7 @@ jobs:
   build-push:
     name: Build & push images
     runs-on: ubuntu-latest
-    needs: [changes, provision]
+    needs: [ changes, provision ]
     environment: ${{ github.event.inputs.environment || 'staging' }}
 
     outputs:
@@ -277,6 +281,11 @@ jobs:
             ${{ needs.provision.outputs.acr_login_server }}/frontend:latest
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
+            NEXT_PUBLIC_NEW_RELIC_ACCOUNT_ID=${{ vars.NEXT_PUBLIC_NEW_RELIC_ACCOUNT_ID }}
+            NEXT_PUBLIC_NEW_RELIC_APPLICATION_ID=${{ vars.NEXT_PUBLIC_NEW_RELIC_APPLICATION_ID }}
+            NEXT_PUBLIC_NEW_RELIC_LICENSE_KEY=${{ secrets.NEW_RELIC_LICENSE_KEY }}
+            NEXT_PUBLIC_NEW_RELIC_TRUST_KEY=${{ vars.NEXT_PUBLIC_NEW_RELIC_TRUST_KEY }}
+            NEXT_PUBLIC_NEW_RELIC_AGENT_ID=${{ vars.NEXT_PUBLIC_NEW_RELIC_AGENT_ID }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -343,4 +352,6 @@ jobs:
             -var="paddle_client_token=${{ vars.PADDLE_CLIENT_TOKEN }}" \
             -var="paddle_price_id=${{ vars.PADDLE_PRICE_ID }}" \
             -var="backend_custom_domain=${{ vars.BACKEND_CUSTOM_DOMAIN }}" \
-            -var="frontend_custom_domain=${{ vars.FRONTEND_CUSTOM_DOMAIN }}"
+            -var="frontend_custom_domain=${{ vars.FRONTEND_CUSTOM_DOMAIN }}" \
+            -var="new_relic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
+            -var="new_relic_app_name=${{ vars.NEW_RELIC_APP_NAME || 'bouji-backend' }}"
