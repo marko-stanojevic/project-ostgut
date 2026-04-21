@@ -260,6 +260,14 @@ resource "azurerm_container_app" "backend" {
         name  = "MEDIA_STORAGE_MANAGED_IDENTITY_CLIENT_ID"
         value = azurerm_user_assigned_identity.backend.client_id
       }
+      env {
+        name        = "NEW_RELIC_LICENSE_KEY"
+        secret_name = "new-relic-license-key"
+      }
+      env {
+        name  = "NEW_RELIC_APP_NAME"
+        value = var.new_relic_app_name
+      }
     }
   }
 
@@ -278,6 +286,10 @@ resource "azurerm_container_app" "backend" {
   secret {
     name  = "paddle-webhook-secret"
     value = var.paddle_webhook_secret != "" ? var.paddle_webhook_secret : "placeholder"
+  }
+  secret {
+    name  = "new-relic-license-key"
+    value = var.new_relic_license_key != "" ? var.new_relic_license_key : "placeholder"
   }
 
   ingress {

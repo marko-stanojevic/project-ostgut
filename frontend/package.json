@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
+    "@newrelic/browser-agent": "^1.313.1",
     "@paddle/paddle-js": "^1.6.2",
     "@phosphor-icons/react": "^2.1.10",
     "@tailwindcss/postcss": "^4.2.2",

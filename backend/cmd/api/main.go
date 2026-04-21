@@ -26,6 +26,8 @@ import (
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 	"github.com/marko-stanojevic/project-ostgut/backend/migrations"
+	nrgin "github.com/newrelic/go-agent/v3/integrations/nrgin"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 func main() {
@@ -97,12 +99,26 @@ func main() {
 	prober := radio.NewProber(stationStreamStore, logger)
 	go prober.Run(syncCtx)
 
+	nrApp, err := newrelic.NewApplication(
+		newrelic.ConfigAppName(cfg.NewRelicAppName),
+		newrelic.ConfigLicense(cfg.NewRelicLicenseKey),
+		newrelic.ConfigDistributedTracerEnabled(true),
+		newrelic.ConfigAppLogForwardingEnabled(true),
+	)
+	if err != nil {
+		logger.Warn("New Relic agent disabled", "reason", err)
+		nrApp = nil
+	}
+
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	router := gin.New()
 	router.Use(gin.Recovery())
+	if nrApp != nil {
+		router.Use(nrgin.Middleware(nrApp))
+	}
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
