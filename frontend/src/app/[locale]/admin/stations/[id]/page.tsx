@@ -17,13 +17,6 @@ import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
-import {
     RadioIcon,
     ArrowSquareOutIcon,
     CheckCircleIcon,
@@ -36,7 +29,6 @@ import {
 } from '@phosphor-icons/react'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-type MetadataType = 'auto' | 'icy' | 'icecast' | 'shoutcast'
 
 interface AdminStream {
     id: string
@@ -56,7 +48,8 @@ interface AdminStream {
     priority: number
     is_active: boolean
     metadata_enabled: boolean
-    metadata_type: MetadataType
+    metadata_type: string
+    metadata_source?: string
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string
@@ -93,7 +86,6 @@ interface StreamFormEntry {
     priority: number
     bitrate: string
     metadata_enabled: boolean
-    metadata_type: MetadataType
 }
 
 interface StationForm {
@@ -206,7 +198,6 @@ function createEmptyStream(priority: number): StreamFormEntry {
         priority,
         bitrate: '',
         metadata_enabled: true,
-        metadata_type: 'auto',
     }
 }
 
@@ -216,7 +207,6 @@ function toStreamFormEntry(stream: AdminStream, fallbackPriority: number): Strea
         priority: stream.priority || fallbackPriority,
         bitrate: stream.bitrate > 0 ? String(stream.bitrate) : '',
         metadata_enabled: stream.metadata_enabled ?? true,
-        metadata_type: stream.metadata_type ?? 'auto',
     }
 }
 
@@ -434,7 +424,7 @@ export default function StationEditorPage() {
                         priority: s.priority || i + 1,
                         bitrate: Number.isFinite(parsedBitrate) && parsedBitrate > 0 ? parsedBitrate : undefined,
                         metadata_enabled: s.metadata_enabled,
-                        metadata_type: s.metadata_type,
+                        metadata_type: 'auto',
                     }
                 }),
             logo: logoURL,
@@ -532,163 +522,6 @@ export default function StationEditorPage() {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                            Streams
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            {form.streams.map((stream, i) => (
-                                <div key={i} className="space-y-3 rounded-lg border p-3">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
-                                        <div className="flex-1 space-y-1">
-                                            <Input
-                                                value={stream.url}
-                                                placeholder="https://…"
-                                                className="flex-1"
-                                                onChange={(e) => setForm((prev) => ({
-                                                    ...prev,
-                                                    streams: prev.streams.map((s, idx) =>
-                                                        idx === i ? { ...s, url: e.target.value } : s
-                                                    ),
-                                                }))}
-                                            />
-                                            {streamValidationMessages[i] && (
-                                                <p className="text-xs text-destructive">{streamValidationMessages[i]}</p>
-                                            )}
-                                        </div>
-                                        <Input
-                                            value={stream.bitrate}
-                                            type="number"
-                                            min={0}
-                                            placeholder="kbps"
-                                            className="w-24 shrink-0"
-                                            onChange={(e) => setForm((prev) => ({
-                                                ...prev,
-                                                streams: prev.streams.map((s, idx) =>
-                                                    idx === i ? { ...s, bitrate: e.target.value } : s
-                                                ),
-                                            }))}
-                                        />
-                                        {form.streams.length > 1 && (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="ghost"
-                                                className="shrink-0 text-muted-foreground hover:text-destructive"
-                                                onClick={() => setForm((prev) => ({
-                                                    ...prev,
-                                                    streams: prev.streams
-                                                        .filter((_, idx) => idx !== i)
-                                                        .map((s, idx) => ({ ...s, priority: idx + 1 })),
-                                                }))}
-                                            >
-                                                <TrashIcon className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-
-                                    <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
-                                        <div className="flex items-center justify-between rounded-lg border p-3">
-                                            <div>
-                                                <p className="text-sm font-medium">Metadata polling</p>
-                                                <p className="text-xs text-muted-foreground">Disable for streams that do not expose now-playing metadata</p>
-                                            </div>
-                                            <Switch
-                                                checked={stream.metadata_enabled}
-                                                onCheckedChange={(checked) => setForm((prev) => ({
-                                                    ...prev,
-                                                    streams: prev.streams.map((s, idx) =>
-                                                        idx === i ? { ...s, metadata_enabled: !!checked } : s
-                                                    ),
-                                                }))}
-                                            />
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                            <Label>Metadata type</Label>
-                                            <Select
-                                                value={stream.metadata_type}
-                                                onValueChange={(value) => value && setForm((prev) => ({
-                                                    ...prev,
-                                                    streams: prev.streams.map((s, idx) =>
-                                                        idx === i ? { ...s, metadata_type: value as MetadataType } : s
-                                                    ),
-                                                }))}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="auto">Auto-detect</SelectItem>
-                                                    <SelectItem value="icy">ICY (in-stream)</SelectItem>
-                                                    <SelectItem value="icecast">Icecast status-json</SelectItem>
-                                                    <SelectItem value="shoutcast">Shoutcast endpoints</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-
-                                    {streamDetails[i] && (
-                                        <div className="rounded-lg border p-3">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <p className="text-xs text-muted-foreground">Latest metadata status</p>
-                                                    <p className="mt-1 break-all text-sm">{streamDetails[i].url}</p>
-                                                </div>
-                                                <Badge variant={streamDetails[i].metadata_enabled ? 'default' : 'secondary'} className="text-[10px] uppercase tracking-wide">
-                                                    {streamDetails[i].metadata_enabled ? (streamDetails[i].metadata_type || 'auto') : 'disabled'}
-                                                </Badge>
-                                            </div>
-                                            <div className="mt-3 space-y-1">
-                                                {streamDetails[i].metadata_error_code && (
-                                                    <Badge variant="default" className="text-[10px] uppercase tracking-wide">
-                                                        {streamDetails[i].metadata_error_code}
-                                                    </Badge>
-                                                )}
-                                                <p className="text-sm">
-                                                    {streamDetails[i].metadata_error ? streamDetails[i].metadata_error : 'No metadata errors recorded'}
-                                                </p>
-                                                {streamDetails[i].metadata_last_fetched_at && (
-                                                    <p className="text-xs text-muted-foreground">
-                                                        Last checked: {new Date(streamDetails[i].metadata_last_fetched_at!).toLocaleString()}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="mt-1 gap-1.5"
-                            onClick={() => setForm((prev) => ({
-                                ...prev,
-                                streams: [...prev.streams, createEmptyStream(prev.streams.length + 1)],
-                            }))}
-                        >
-                            <PlusIcon className="h-3.5 w-3.5" />
-                            Add stream URL
-                        </Button>
-                        {!hasValidStreams && (
-                            <p className="text-xs text-destructive">
-                                {hasAtLeastOneStreamURL
-                                    ? 'Fix invalid stream URLs before saving'
-                                    : 'At least one stream URL is required'}
-                            </p>
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                            URLs are probed on save. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
-                        </p>
-                    </CardContent>
-                </Card>
-
                 <div className="space-y-4">
                     <Card>
                         <CardHeader>
@@ -813,6 +646,148 @@ export default function StationEditorPage() {
                             )}
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                                Streams
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                                {form.streams.map((stream, i) => (
+                                    <div key={i} className="space-y-3 rounded-lg border p-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                                            <div className="flex-1 space-y-1">
+                                                <Input
+                                                    value={stream.url}
+                                                    placeholder="https://…"
+                                                    className="flex-1"
+                                                    onChange={(e) => setForm((prev) => ({
+                                                        ...prev,
+                                                        streams: prev.streams.map((s, idx) =>
+                                                            idx === i ? { ...s, url: e.target.value } : s
+                                                        ),
+                                                    }))}
+                                                />
+                                                {streamValidationMessages[i] && (
+                                                    <p className="text-xs text-destructive">{streamValidationMessages[i]}</p>
+                                                )}
+                                            </div>
+                                            <Input
+                                                value={stream.bitrate}
+                                                type="number"
+                                                min={0}
+                                                placeholder="kbps"
+                                                className="w-24 shrink-0"
+                                                onChange={(e) => setForm((prev) => ({
+                                                    ...prev,
+                                                    streams: prev.streams.map((s, idx) =>
+                                                        idx === i ? { ...s, bitrate: e.target.value } : s
+                                                    ),
+                                                }))}
+                                            />
+                                            {form.streams.length > 1 && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                    onClick={() => setForm((prev) => ({
+                                                        ...prev,
+                                                        streams: prev.streams
+                                                            .filter((_, idx) => idx !== i)
+                                                            .map((s, idx) => ({ ...s, priority: idx + 1 })),
+                                                    }))}
+                                                >
+                                                    <TrashIcon className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        <div className="rounded-lg border p-3">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-medium">Metadata polling</p>
+                                                    <p className="text-xs text-muted-foreground">Metadata type is auto-detected for every stream</p>
+                                                </div>
+                                                <Switch
+                                                    checked={stream.metadata_enabled}
+                                                    onCheckedChange={(checked) => setForm((prev) => ({
+                                                        ...prev,
+                                                        streams: prev.streams.map((s, idx) =>
+                                                            idx === i ? { ...s, metadata_enabled: !!checked } : s
+                                                        ),
+                                                    }))}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {streamDetails[i] && (
+                                            <div className="rounded-lg border p-3">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs text-muted-foreground">Latest metadata status</p>
+                                                        <p className="mt-1 break-all text-sm">{streamDetails[i].url}</p>
+                                                    </div>
+                                                    <Badge variant={streamDetails[i].metadata_enabled ? 'default' : 'secondary'} className="text-[10px] uppercase tracking-wide">
+                                                        {streamDetails[i].metadata_enabled ? (streamDetails[i].metadata_type || 'auto') : 'disabled'}
+                                                    </Badge>
+                                                    {streamDetails[i].metadata_source && (
+                                                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                                            {streamDetails[i].metadata_source}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <div className="mt-3 space-y-1">
+                                                    {streamDetails[i].metadata_error_code && (
+                                                        <Badge variant="default" className="text-[10px] uppercase tracking-wide">
+                                                            {streamDetails[i].metadata_error_code}
+                                                        </Badge>
+                                                    )}
+                                                    <p className="text-sm">
+                                                        {streamDetails[i].metadata_error ? streamDetails[i].metadata_error : 'No metadata errors recorded'}
+                                                    </p>
+                                                    {streamDetails[i].metadata_last_fetched_at && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Last checked: {new Date(streamDetails[i].metadata_last_fetched_at!).toLocaleString()}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="mt-1 gap-1.5"
+                                onClick={() => setForm((prev) => ({
+                                    ...prev,
+                                    streams: [...prev.streams, createEmptyStream(prev.streams.length + 1)],
+                                }))}
+                            >
+                                <PlusIcon className="h-3.5 w-3.5" />
+                                Add stream URL
+                            </Button>
+                            {!hasValidStreams && (
+                                <p className="text-xs text-destructive">
+                                    {hasAtLeastOneStreamURL
+                                        ? 'Fix invalid stream URLs before saving'
+                                        : 'At least one stream URL is required'}
+                                </p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                                URLs are probed on save. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <div className="space-y-4">
 
                     <Card>
                         <CardHeader>

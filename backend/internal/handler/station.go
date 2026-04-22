@@ -55,6 +55,7 @@ type streamResponse struct {
 	IsActive              bool    `json:"is_active"`
 	MetadataEnabled       bool    `json:"metadata_enabled"`
 	MetadataType          string  `json:"metadata_type"`
+	MetadataSource        *string `json:"metadata_source,omitempty"`
 	MetadataError         *string `json:"metadata_error,omitempty"`
 	MetadataErrorCode     *string `json:"metadata_error_code,omitempty"`
 	MetadataLastFetchedAt *string `json:"metadata_last_fetched_at,omitempty"`
@@ -93,6 +94,7 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 		IsActive:              s.IsActive,
 		MetadataEnabled:       s.MetadataEnabled,
 		MetadataType:          s.MetadataType,
+		MetadataSource:        s.MetadataSource,
 		MetadataError:         s.MetadataError,
 		MetadataErrorCode:     s.MetadataErrorCode,
 		MetadataLastFetchedAt: metadataLastFetchedAt,
@@ -126,6 +128,7 @@ func defaultStreamResponseForStation(s *store.Station) []streamResponse {
 		IsActive:             true,
 		MetadataEnabled:      true,
 		MetadataType:         "auto",
+		MetadataSource:       nil,
 		HealthScore:          s.ReliabilityScore,
 	}}
 }

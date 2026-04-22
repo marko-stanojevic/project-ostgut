@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
@@ -222,6 +223,10 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
+	metadataSource, metadataError, metadataErrorCode, metadataFetchedAt := detectMetadataSnapshot(
+		h.admin.metaFetcher.Fetch(c.Request.Context(), probe.ResolvedURL, metadata.Config{Enabled: true, Type: metadata.TypeAuto}),
+	)
+
 	_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), created.ID, store.StationStreamInput{
 		URL:                  streamURL,
 		ResolvedURL:          probe.ResolvedURL,
@@ -239,6 +244,10 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		IsActive:             true,
 		MetadataEnabled:      true,
 		MetadataType:         "auto",
+		MetadataSource:       metadataSource,
+		MetadataError:        metadataError,
+		MetadataErrorCode:    metadataErrorCode,
+		MetadataLastFetchedAt: metadataFetchedAt,
 		HealthScore:          reliability,
 		LastCheckedAt:        &probe.LastCheckedAt,
 		LastError:            probe.LastError,
@@ -526,16 +535,23 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 
 	if primaryProbe != nil {
 		metadataEnabled := true
-		metadataType := "auto"
 		for _, stream := range currentStreams {
 			if stream.Priority != 1 {
 				continue
 			}
 			metadataEnabled = stream.MetadataEnabled
-			if stream.MetadataType != "" {
-				metadataType = stream.MetadataType
-			}
 			break
+		}
+		var metadataSource *string
+		var metadataError *string
+		var metadataErrorCode *string
+		var metadataFetchedAt *time.Time
+		if metadataEnabled {
+			np := h.admin.metaFetcher.Fetch(c.Request.Context(), primaryProbe.ResolvedURL, metadata.Config{
+				Enabled: true,
+				Type:    metadata.TypeAuto,
+			})
+			metadataSource, metadataError, metadataErrorCode, metadataFetchedAt = detectMetadataSnapshot(np)
 		}
 		_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
 			URL:                  u.StreamURL,
@@ -553,7 +569,11 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			Priority:             1,
 			IsActive:             true,
 			MetadataEnabled:      metadataEnabled,
-			MetadataType:         metadataType,
+			MetadataType:         metadata.TypeAuto,
+			MetadataSource:       metadataSource,
+			MetadataError:        metadataError,
+			MetadataErrorCode:    metadataErrorCode,
+			MetadataLastFetchedAt: metadataFetchedAt,
 			HealthScore:          u.ReliabilityScore,
 			LastCheckedAt:        &primaryProbe.LastCheckedAt,
 			LastError:            primaryProbe.LastError,
@@ -590,6 +610,33 @@ func normalizeMetadataType(raw string) string {
 	default:
 		return ""
 	}
+}
+
+func detectMetadataSnapshot(np *metadata.NowPlaying) (*string, *string, *string, *time.Time) {
+	if np == nil {
+		return nil, nil, nil, nil
+	}
+
+	var source *string
+	if v := strings.TrimSpace(np.Source); v != "" {
+		source = &v
+	}
+
+	var errMsg *string
+	if v := strings.TrimSpace(np.Error); v != "" {
+		errMsg = &v
+	}
+
+	var errCode *string
+	if v := strings.TrimSpace(np.ErrorCode); v != "" {
+		errCode = &v
+	}
+
+	fetchedAt := np.FetchedAt
+	if fetchedAt.IsZero() {
+		return source, errMsg, errCode, nil
+	}
+	return source, errMsg, errCode, &fetchedAt
 }
 
 func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []adminStreamRequest {
@@ -685,12 +732,17 @@ func (h *Handler) buildStationStreams(
 			metadataEnabled = *stream.MetadataEnabled
 		}
 		metadataType := "auto"
-		if stream.MetadataType != nil {
-			normalized := normalizeMetadataType(*stream.MetadataType)
-			if normalized == "" {
-				return nil, fmt.Errorf("stream %d metadata_type must be one of auto, icy, icecast, shoutcast", i+1)
-			}
-			metadataType = normalized
+
+		var metadataSource *string
+		var metadataError *string
+		var metadataErrorCode *string
+		var metadataLastFetchedAt *time.Time
+		if metadataEnabled {
+			np := h.admin.metaFetcher.Fetch(ctx.Request.Context(), probe.ResolvedURL, metadata.Config{
+				Enabled: true,
+				Type:    metadata.TypeAuto,
+			})
+			metadataSource, metadataError, metadataErrorCode, metadataLastFetchedAt = detectMetadataSnapshot(np)
 		}
 
 		health := 0.8
@@ -715,6 +767,10 @@ func (h *Handler) buildStationStreams(
 			IsActive:             isActive,
 			MetadataEnabled:      metadataEnabled,
 			MetadataType:         metadataType,
+			MetadataSource:       metadataSource,
+			MetadataError:        metadataError,
+			MetadataErrorCode:    metadataErrorCode,
+			MetadataLastFetchedAt: metadataLastFetchedAt,
 			HealthScore:          health,
 			LastCheckedAt:        &probe.LastCheckedAt,
 			LastError:            probe.LastError,

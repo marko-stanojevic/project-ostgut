@@ -89,6 +89,7 @@ type adminHandlers struct {
 	stations          *store.StationStore
 	streams           *store.StationStreamStore
 	media             *store.MediaAssetStore
+	metaFetcher       *metadata.Fetcher
 	streamProbeClient *http.Client
 }
 
@@ -109,6 +110,7 @@ type Handler struct {
 // New creates a Handler with grouped dependencies and runtime options.
 func New(deps Dependencies, opts Options) *Handler {
 	streamProbeClient := &http.Client{Timeout: 8 * time.Second}
+	metaFetcher := metadata.NewFetcher(opts.Log)
 	return &Handler{
 		auth: authHandlers{
 			users:     deps.UserStore,
@@ -130,7 +132,7 @@ func New(deps Dependencies, opts Options) *Handler {
 		station: stationHandlers{
 			stations:          deps.StationStore,
 			streams:           deps.StationStreamStore,
-			metaFetcher:       metadata.NewFetcher(opts.Log),
+			metaFetcher:       metaFetcher,
 			streamProbeClient: streamProbeClient,
 		},
 		media: mediaHandlers{
@@ -150,6 +152,7 @@ func New(deps Dependencies, opts Options) *Handler {
 			stations:          deps.StationStore,
 			streams:           deps.StationStreamStore,
 			media:             deps.MediaAssetStore,
+			metaFetcher:       metaFetcher,
 			streamProbeClient: streamProbeClient,
 		},
 		log: opts.Log,
