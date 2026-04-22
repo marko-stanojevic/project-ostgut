@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 
 # ──────────────────────────────────────────────
 # Stage 1 – build
@@ -12,11 +12,15 @@ WORKDIR /src
 
 # Cache dependency downloads before copying source code.
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
 
 # Copy application source and build a fully-static binary.
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w" \
     -o /app/server ./cmd/api
 
