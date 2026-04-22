@@ -1,15 +1,26 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:20-alpine3.22 AS deps
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+
 # Build stage
 FROM node:20-alpine3.22 AS builder
 
 WORKDIR /app
 
-RUN apk upgrade --no-cache
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
 
 # NEXT_PUBLIC_* vars must be available at build time (baked into the JS bundle).
 # AUTH_SECRET is NOT a build arg — it is injected at runtime via the container environment.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-
 ARG NEXT_PUBLIC_NEW_RELIC_ACCOUNT_ID
 ARG NEXT_PUBLIC_NEW_RELIC_APPLICATION_ID
 ARG NEXT_PUBLIC_NEW_RELIC_LICENSE_KEY
@@ -20,9 +31,6 @@ ENV NEXT_PUBLIC_NEW_RELIC_APPLICATION_ID=$NEXT_PUBLIC_NEW_RELIC_APPLICATION_ID
 ENV NEXT_PUBLIC_NEW_RELIC_LICENSE_KEY=$NEXT_PUBLIC_NEW_RELIC_LICENSE_KEY
 ENV NEXT_PUBLIC_NEW_RELIC_TRUST_KEY=$NEXT_PUBLIC_NEW_RELIC_TRUST_KEY
 ENV NEXT_PUBLIC_NEW_RELIC_AGENT_ID=$NEXT_PUBLIC_NEW_RELIC_AGENT_ID
-
-COPY package*.json ./
-RUN npm ci
 
 COPY . .
 RUN npm run build
@@ -46,6 +54,7 @@ FROM gcr.io/distroless/nodejs20-debian12:nonroot
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
