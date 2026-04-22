@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import {
-  SparkleIcon,
   SpeakerHighIcon,
   SpeakerXIcon,
+  WaveSineIcon,
 } from '@phosphor-icons/react'
 
 interface PlayerVolumeControlProps {
@@ -46,21 +46,21 @@ export function PlayerVolumeControl({
               type="button"
               aria-expanded={levelingExpanded}
               aria-label={levelingExpanded ? 'Hide leveling details' : 'Show leveling details'}
-              onClick={() => {
-                if (!normalizationEnabled) {
-                  onToggleNormalization(true)
-                  setLevelingExpanded(true)
-                  return
-                }
-                setLevelingExpanded((prev) => !prev)
-              }}
-              className={`flex h-9 items-center justify-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors ${
-                levelingExpanded || normalizationEnabled ? 'text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <SparkleIcon className="h-3.5 w-3.5" weight={normalizationEnabled ? 'fill' : 'regular'} />
-              <span>Leveling</span>
-            </button>
+            onClick={() => {
+              if (!normalizationEnabled) {
+                onToggleNormalization(true)
+                setLevelingExpanded(true)
+                return
+              }
+              setLevelingExpanded((prev) => !prev)
+            }}
+            title={levelingExpanded ? 'Hide leveling details' : 'Show leveling details'}
+            className={`flex h-9 items-center justify-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] transition-colors ${
+              levelingExpanded || normalizationEnabled ? 'text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            <WaveSineIcon className="h-5.5 w-5.5" weight="regular" />
+          </button>
 
             <div
               className={`overflow-hidden transition-all duration-300 ease-out ${
