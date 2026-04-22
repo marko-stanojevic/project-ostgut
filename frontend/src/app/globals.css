@@ -230,6 +230,23 @@
   }
 }
 
+@keyframes player-marquee-swing {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+
+  88%,
+  100% {
+    transform: translateX(calc(-1 * var(--player-marquee-shift, 0px)));
+  }
+}
+
+.animate-player-marquee-swing {
+  animation: player-marquee-swing var(--player-marquee-duration, 8s) ease-in-out infinite alternate;
+  will-change: transform;
+}
+
 @layer components {
   .volume-slider::-webkit-slider-runnable-track {
     height: 0.375rem;

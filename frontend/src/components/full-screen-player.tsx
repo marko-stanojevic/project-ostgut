@@ -277,7 +277,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
 
         {/* Volume control */}
         <PlayerVolumeControl
-          className="flex w-full max-w-sm items-center gap-3"
+          className="flex w-full max-w-md flex-col"
           labelClassName="w-11 text-right text-sm tabular-nums text-zinc-500"
           normalizationEnabled={normalizationEnabled}
           normalizationOffsetDb={normalizationOffsetDb}

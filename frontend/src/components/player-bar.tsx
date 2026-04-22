@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
 import { useNowPlaying } from '@/hooks/useNowPlaying'
@@ -34,6 +34,57 @@ function getStreamDetailBadges(stream?: {
   if ((stream.sampleRateHz ?? 0) > 0) secondary.push(`${stream.sampleRateHz} Hz`)
   if ((stream.channels ?? 0) > 0) secondary.push(`${stream.channels}ch`)
   return { primary, secondary }
+}
+
+function PlayerMetadataTicker({ text, className }: { text: string; className?: string }) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const textRef = useRef<HTMLSpanElement | null>(null)
+  const measureRef = useRef<HTMLSpanElement | null>(null)
+  const [shouldScroll, setShouldScroll] = useState(false)
+  const [scrollDistance, setScrollDistance] = useState(0)
+
+  useEffect(() => {
+    const measure = () => {
+      const container = containerRef.current
+      const content = measureRef.current
+      if (!container || !content) return
+      const distance = Math.max(0, content.scrollWidth - container.clientWidth)
+      setShouldScroll(distance > 8)
+      setScrollDistance(distance)
+    }
+
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [text])
+
+  return (
+    <div ref={containerRef} className={`overflow-hidden whitespace-nowrap ${className ?? ''}`}>
+      <span
+        ref={measureRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute invisible inline-block whitespace-nowrap"
+      >
+        {text}
+      </span>
+      {shouldScroll ? (
+        <span
+          ref={textRef}
+          className="inline-block animate-player-marquee-swing will-change-transform"
+          style={{
+            ['--player-marquee-shift' as string]: `${scrollDistance}px`,
+            ['--player-marquee-duration' as string]: `${Math.max(6, scrollDistance / 18)}s`,
+          }}
+        >
+          {text}
+        </span>
+      ) : (
+        <span ref={textRef} className="block truncate">
+          {text}
+        </span>
+      )}
+    </div>
+  )
 }
 
 
@@ -116,7 +167,7 @@ export function PlayerBar() {
       >
 
         {/* Station identity — left */}
-        <div className="flex min-w-0 items-center justify-self-start gap-3 overflow-visible sm:gap-3.5">
+        <div className="flex min-w-0 max-w-[calc(50vw-5.5rem)] items-center justify-self-start gap-3 overflow-hidden sm:max-w-[calc(50vw-7.5rem)] sm:gap-3.5">
           <div
             className={`absolute bottom-[0.4rem] left-4 flex h-[6.8rem] w-[6.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.68rem] bg-zinc-800 shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-500 sm:bottom-[0.5rem] sm:left-5 sm:h-[8.4rem] sm:w-[8.4rem] sm:rounded-[0.82rem] ${isPlaying
               ? 'shadow-[0_0_20px_rgba(200,116,58,0.22),0_14px_34px_rgba(0,0,0,0.32)]'
@@ -129,12 +180,14 @@ export function PlayerBar() {
               <RadioIcon className="h-5 w-5 text-zinc-600 sm:h-6 sm:w-6" />
             )}
           </div>
-          <div className="flex h-12 flex-col justify-center min-w-0 pl-[7.55rem] sm:h-14 sm:pl-[9.25rem]">
+          <div className="flex h-12 min-w-0 flex-1 flex-col justify-center pl-[7.55rem] sm:h-14 sm:pl-[9.25rem]">
             <p className="truncate text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
               {station?.name ?? '—'}
             </p>
-            <div className={`flex h-4 items-center sm:h-5 ${isError ? 'text-red-200/80' : 'text-zinc-300'}`}>
-              {!isReconnecting && <p className="truncate text-xs sm:text-sm">{secondaryLine}</p>}
+            <div className={`flex h-4 min-w-0 items-center sm:h-5 ${isError ? 'text-red-200/80' : 'text-zinc-300'}`}>
+              {!isReconnecting && secondaryLine ? (
+                <PlayerMetadataTicker className="w-full min-w-0 text-xs sm:text-sm" text={secondaryLine} />
+              ) : null}
             </div>
           </div>
         </div>
@@ -233,7 +286,7 @@ export function PlayerBar() {
           ) : null}
 
           <PlayerVolumeControl
-            className="hidden w-44 shrink-0 items-center gap-3 md:flex"
+            className="hidden w-64 shrink-0 flex-col md:flex"
             iconClassName="h-5.5 w-5.5"
             normalizationEnabled={normalizationEnabled}
             normalizationOffsetDb={normalizationOffsetDb}
