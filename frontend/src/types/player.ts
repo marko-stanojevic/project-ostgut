@@ -29,7 +29,6 @@ export interface Station {
     genres: string[]
     country: string
     city?: string
-    countryCode: string
     bitrate?: number
     codec?: string
 }

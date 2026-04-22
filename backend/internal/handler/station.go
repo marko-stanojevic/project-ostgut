@@ -26,7 +26,6 @@ type stationResponse struct {
 	Language         string           `json:"language"`
 	Country          string           `json:"country"`
 	City             string           `json:"city"`
-	CountryCode      string           `json:"country_code"`
 	Tags             []string         `json:"tags"`
 	StyleTags        []string         `json:"style_tags"`
 	FormatTags       []string         `json:"format_tags"`
@@ -55,6 +54,7 @@ type streamResponse struct {
 	IsActive              bool    `json:"is_active"`
 	MetadataEnabled       bool    `json:"metadata_enabled"`
 	MetadataType          string  `json:"metadata_type"`
+	MetadataSource        *string `json:"metadata_source,omitempty"`
 	MetadataError         *string `json:"metadata_error,omitempty"`
 	MetadataErrorCode     *string `json:"metadata_error_code,omitempty"`
 	MetadataLastFetchedAt *string `json:"metadata_last_fetched_at,omitempty"`
@@ -93,6 +93,7 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 		IsActive:              s.IsActive,
 		MetadataEnabled:       s.MetadataEnabled,
 		MetadataType:          s.MetadataType,
+		MetadataSource:        s.MetadataSource,
 		MetadataError:         s.MetadataError,
 		MetadataErrorCode:     s.MetadataErrorCode,
 		MetadataLastFetchedAt: metadataLastFetchedAt,
@@ -126,6 +127,7 @@ func defaultStreamResponseForStation(s *store.Station) []streamResponse {
 		IsActive:             true,
 		MetadataEnabled:      true,
 		MetadataType:         "auto",
+		MetadataSource:       nil,
 		HealthScore:          s.ReliabilityScore,
 	}}
 }
@@ -201,7 +203,6 @@ func toStationResponse(s *store.Station, streams []streamResponse) stationRespon
 		Language:         s.Language,
 		Country:          s.Country,
 		City:             s.City,
-		CountryCode:      s.CountryCode,
 		Tags:             combined,
 		StyleTags:        styleTags,
 		FormatTags:       formatTags,
@@ -245,7 +246,7 @@ func (h *Handler) ListStations(c *gin.Context) {
 	f := store.StationFilter{
 		Search:       strings.TrimSpace(c.Query("q")),
 		Genres:       lowerAll(c.QueryArray("genre")),
-		CountryCode:  strings.ToUpper(c.Query("country")),
+		Country:      strings.ToLower(strings.TrimSpace(c.Query("country"))),
 		Language:     strings.ToLower(c.Query("language")),
 		MinBitrate:   queryInt(c, "min_bitrate", 0),
 		Styles:       lowerAll(c.QueryArray("style")),

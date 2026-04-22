@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
@@ -131,23 +132,21 @@ func toAdminStationResponse(s *store.Station, streams []streamResponse) adminSta
 // Creates a station manually from admin input.
 func (h *Handler) AdminCreateStation(c *gin.Context) {
 	var req struct {
-		Name             string   `json:"name" binding:"required"`
-		StreamURL        string   `json:"stream_url" binding:"required"`
-		Homepage         string   `json:"homepage"`
-		Logo             string   `json:"logo"`
-		Genres           []string `json:"genres"`
-		Language         string   `json:"language"`
-		Country          string   `json:"country"`
-		City             string   `json:"city"`
-		CountryCode      string   `json:"country_code"`
-		Tags             []string `json:"tags"`
-		StyleTags        []string `json:"style_tags"`
-		FormatTags       []string `json:"format_tags"`
-		TextureTags      []string `json:"texture_tags"`
-		ReliabilityScore float64  `json:"reliability_score"`
-		Status           string   `json:"status"`
-		Featured         bool     `json:"featured"`
-		Overview         *string  `json:"overview"`
+		Name        string   `json:"name" binding:"required"`
+		StreamURL   string   `json:"stream_url" binding:"required"`
+		Homepage    string   `json:"homepage"`
+		Logo        string   `json:"logo"`
+		Genres      []string `json:"genres"`
+		Language    string   `json:"language"`
+		Country     string   `json:"country"`
+		City        string   `json:"city"`
+		Tags        []string `json:"tags"`
+		StyleTags   []string `json:"style_tags"`
+		FormatTags  []string `json:"format_tags"`
+		TextureTags []string `json:"texture_tags"`
+		Status      string   `json:"status"`
+		Featured    bool     `json:"featured"`
+		Overview    *string  `json:"overview"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
@@ -177,33 +176,22 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
-	reliability := req.ReliabilityScore
-	if reliability == 0 {
-		reliability = 0.8
-	}
-	if reliability < 0 || reliability > 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "reliability_score must be between 0 and 1"})
-		return
-	}
-
 	manual := store.ManualStationInput{
-		Name:             name,
-		StreamURL:        streamURL,
-		Homepage:         strings.TrimSpace(req.Homepage),
-		Logo:             strings.TrimSpace(req.Logo),
-		Genres:           req.Genres,
-		Language:         strings.TrimSpace(req.Language),
-		Country:          strings.TrimSpace(req.Country),
-		City:             strings.TrimSpace(req.City),
-		CountryCode:      strings.ToUpper(strings.TrimSpace(req.CountryCode)),
-		Tags:             req.Tags,
-		StyleTags:        req.StyleTags,
-		FormatTags:       req.FormatTags,
-		TextureTags:      req.TextureTags,
-		ReliabilityScore: reliability,
-		Status:           status,
-		Featured:         req.Featured,
-		Overview:         normalizeOptionalText(req.Overview),
+		Name:        name,
+		StreamURL:   streamURL,
+		Homepage:    strings.TrimSpace(req.Homepage),
+		Logo:        strings.TrimSpace(req.Logo),
+		Genres:      req.Genres,
+		Language:    strings.TrimSpace(req.Language),
+		Country:     strings.TrimSpace(req.Country),
+		City:        strings.TrimSpace(req.City),
+		Tags:        req.Tags,
+		StyleTags:   req.StyleTags,
+		FormatTags:  req.FormatTags,
+		TextureTags: req.TextureTags,
+		Status:      status,
+		Featured:    req.Featured,
+		Overview:    normalizeOptionalText(req.Overview),
 	}
 
 	probeCtx, probeCancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -222,27 +210,42 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
+	metadataSource, metadataError, metadataErrorCode, metadataFetchedAt := detectMetadataSnapshot(
+		h.admin.metaFetcher.Fetch(c.Request.Context(), probe.ResolvedURL, metadata.Config{Enabled: true, Type: metadata.TypeAuto}),
+	)
+
 	_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), created.ID, store.StationStreamInput{
-		URL:                  streamURL,
-		ResolvedURL:          probe.ResolvedURL,
-		Kind:                 probe.Kind,
-		Container:            probe.Container,
-		Transport:            probe.Transport,
-		MimeType:             probe.MimeType,
-		Codec:                probe.Codec,
-		Bitrate:              probe.Bitrate,
-		BitDepth:             probe.BitDepth,
-		SampleRateHz:         probe.SampleRateHz,
-		SampleRateConfidence: probe.SampleRateConfidence,
-		Channels:             probe.Channels,
-		Priority:             1,
-		IsActive:             true,
-		MetadataEnabled:      true,
-		MetadataType:         "auto",
-		HealthScore:          reliability,
-		LastCheckedAt:        &probe.LastCheckedAt,
-		LastError:            probe.LastError,
+		URL:                   streamURL,
+		ResolvedURL:           probe.ResolvedURL,
+		Kind:                  probe.Kind,
+		Container:             probe.Container,
+		Transport:             probe.Transport,
+		MimeType:              probe.MimeType,
+		Codec:                 probe.Codec,
+		Bitrate:               probe.Bitrate,
+		BitDepth:              probe.BitDepth,
+		SampleRateHz:          probe.SampleRateHz,
+		SampleRateConfidence:  probe.SampleRateConfidence,
+		Channels:              probe.Channels,
+		Priority:              1,
+		IsActive:              true,
+		MetadataEnabled:       true,
+		MetadataType:          "auto",
+		MetadataSource:        metadataSource,
+		MetadataError:         metadataError,
+		MetadataErrorCode:     metadataErrorCode,
+		MetadataLastFetchedAt: metadataFetchedAt,
+		HealthScore:           initialProbeHealthScore(probe),
+		LastCheckedAt:         &probe.LastCheckedAt,
+		LastError:             probe.LastError,
 	})
+
+	created, err = h.admin.stations.GetByIDAdmin(c.Request.Context(), created.ID)
+	if err != nil {
+		h.log.Error("admin create station reload", "station_id", created.ID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
 
 	c.JSON(http.StatusCreated, h.adminStationWithStreams(c.Request.Context(), created))
 }
@@ -357,25 +360,23 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 
 	var req struct {
-		Name             *string               `json:"name"`
-		StreamURL        *string               `json:"stream_url"`
-		Streams          *[]adminStreamRequest `json:"streams"`
-		Website          *string               `json:"website"`
-		Logo             *string               `json:"logo"`
-		Genres           *[]string             `json:"genres"`
-		Language         *string               `json:"language"`
-		Country          *string               `json:"country"`
-		City             *string               `json:"city"`
-		CountryCode      *string               `json:"country_code"`
-		Tags             *[]string             `json:"tags"`
-		StyleTags        *[]string             `json:"style_tags"`
-		FormatTags       *[]string             `json:"format_tags"`
-		TextureTags      *[]string             `json:"texture_tags"`
-		ReliabilityScore *float64              `json:"reliability_score"`
-		Status           *string               `json:"status"`
-		Overview         *string               `json:"overview"`
-		EditorNotes      *string               `json:"editor_notes"`
-		Featured         *bool                 `json:"featured"`
+		Name        *string               `json:"name"`
+		StreamURL   *string               `json:"stream_url"`
+		Streams     *[]adminStreamRequest `json:"streams"`
+		Website     *string               `json:"website"`
+		Logo        *string               `json:"logo"`
+		Genres      *[]string             `json:"genres"`
+		Language    *string               `json:"language"`
+		Country     *string               `json:"country"`
+		City        *string               `json:"city"`
+		Tags        *[]string             `json:"tags"`
+		StyleTags   *[]string             `json:"style_tags"`
+		FormatTags  *[]string             `json:"format_tags"`
+		TextureTags *[]string             `json:"texture_tags"`
+		Status      *string               `json:"status"`
+		Overview    *string               `json:"overview"`
+		EditorNotes *string               `json:"editor_notes"`
+		Featured    *bool                 `json:"featured"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -384,23 +385,21 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 
 	// Merge: use incoming value if provided, else keep current.
 	u := store.EnrichmentUpdate{
-		Name:             current.Name,
-		StreamURL:        current.StreamURL,
-		Homepage:         current.Homepage,
-		Logo:             current.Logo,
-		Genres:           current.Genres,
-		Language:         current.Language,
-		Country:          current.Country,
-		City:             current.City,
-		CountryCode:      current.CountryCode,
-		Tags:             current.Tags,
-		StyleTags:        current.StyleTags,
-		FormatTags:       current.FormatTags,
-		TextureTags:      current.TextureTags,
-		ReliabilityScore: current.ReliabilityScore,
-		Status:           current.Status,
-		EditorNotes:      current.EditorNotes,
-		Featured:         current.Featured,
+		Name:        current.Name,
+		StreamURL:   current.StreamURL,
+		Homepage:    current.Homepage,
+		Logo:        current.Logo,
+		Genres:      current.Genres,
+		Language:    current.Language,
+		Country:     current.Country,
+		City:        current.City,
+		Tags:        current.Tags,
+		StyleTags:   current.StyleTags,
+		FormatTags:  current.FormatTags,
+		TextureTags: current.TextureTags,
+		Status:      current.Status,
+		EditorNotes: current.EditorNotes,
+		Featured:    current.Featured,
 	}
 	if req.Name != nil {
 		trimmed := strings.TrimSpace(*req.Name)
@@ -441,9 +440,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	if req.City != nil {
 		u.City = strings.TrimSpace(*req.City)
 	}
-	if req.CountryCode != nil {
-		u.CountryCode = strings.ToUpper(strings.TrimSpace(*req.CountryCode))
-	}
 	if req.Tags != nil {
 		u.Tags = *req.Tags
 	}
@@ -455,13 +451,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 	if req.TextureTags != nil {
 		u.TextureTags = *req.TextureTags
-	}
-	if req.ReliabilityScore != nil {
-		if *req.ReliabilityScore < 0 || *req.ReliabilityScore > 1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "reliability_score must be between 0 and 1"})
-			return
-		}
-		u.ReliabilityScore = *req.ReliabilityScore
 	}
 	u.Overview = current.Overview
 	if req.Status != nil {
@@ -491,7 +480,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	)
 
 	if req.Streams != nil && len(*req.Streams) > 0 {
-		inputs, err := h.buildStationStreams(c, *req.Streams, u.StreamURL, u.ReliabilityScore)
+		inputs, err := h.buildStationStreams(c, *req.Streams, u.StreamURL)
 		if err != nil {
 			h.log.Error("admin update station streams probe", "error", err)
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
@@ -526,37 +515,48 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 
 	if primaryProbe != nil {
 		metadataEnabled := true
-		metadataType := "auto"
 		for _, stream := range currentStreams {
 			if stream.Priority != 1 {
 				continue
 			}
 			metadataEnabled = stream.MetadataEnabled
-			if stream.MetadataType != "" {
-				metadataType = stream.MetadataType
-			}
 			break
 		}
+		var metadataSource *string
+		var metadataError *string
+		var metadataErrorCode *string
+		var metadataFetchedAt *time.Time
+		if metadataEnabled {
+			np := h.admin.metaFetcher.Fetch(c.Request.Context(), primaryProbe.ResolvedURL, metadata.Config{
+				Enabled: true,
+				Type:    metadata.TypeAuto,
+			})
+			metadataSource, metadataError, metadataErrorCode, metadataFetchedAt = detectMetadataSnapshot(np)
+		}
 		_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
-			URL:                  u.StreamURL,
-			ResolvedURL:          primaryProbe.ResolvedURL,
-			Kind:                 primaryProbe.Kind,
-			Container:            primaryProbe.Container,
-			Transport:            primaryProbe.Transport,
-			MimeType:             primaryProbe.MimeType,
-			Codec:                primaryProbe.Codec,
-			Bitrate:              primaryProbe.Bitrate,
-			BitDepth:             primaryProbe.BitDepth,
-			SampleRateHz:         primaryProbe.SampleRateHz,
-			SampleRateConfidence: primaryProbe.SampleRateConfidence,
-			Channels:             primaryProbe.Channels,
-			Priority:             1,
-			IsActive:             true,
-			MetadataEnabled:      metadataEnabled,
-			MetadataType:         metadataType,
-			HealthScore:          u.ReliabilityScore,
-			LastCheckedAt:        &primaryProbe.LastCheckedAt,
-			LastError:            primaryProbe.LastError,
+			URL:                   u.StreamURL,
+			ResolvedURL:           primaryProbe.ResolvedURL,
+			Kind:                  primaryProbe.Kind,
+			Container:             primaryProbe.Container,
+			Transport:             primaryProbe.Transport,
+			MimeType:              primaryProbe.MimeType,
+			Codec:                 primaryProbe.Codec,
+			Bitrate:               primaryProbe.Bitrate,
+			BitDepth:              primaryProbe.BitDepth,
+			SampleRateHz:          primaryProbe.SampleRateHz,
+			SampleRateConfidence:  primaryProbe.SampleRateConfidence,
+			Channels:              primaryProbe.Channels,
+			Priority:              1,
+			IsActive:              true,
+			MetadataEnabled:       metadataEnabled,
+			MetadataType:          metadata.TypeAuto,
+			MetadataSource:        metadataSource,
+			MetadataError:         metadataError,
+			MetadataErrorCode:     metadataErrorCode,
+			MetadataLastFetchedAt: metadataFetchedAt,
+			HealthScore:           initialProbeHealthScore(*primaryProbe),
+			LastCheckedAt:         &primaryProbe.LastCheckedAt,
+			LastError:             primaryProbe.LastError,
 		})
 	}
 
@@ -590,6 +590,33 @@ func normalizeMetadataType(raw string) string {
 	default:
 		return ""
 	}
+}
+
+func detectMetadataSnapshot(np *metadata.NowPlaying) (*string, *string, *string, *time.Time) {
+	if np == nil {
+		return nil, nil, nil, nil
+	}
+
+	var source *string
+	if v := strings.TrimSpace(np.Source); v != "" {
+		source = &v
+	}
+
+	var errMsg *string
+	if v := strings.TrimSpace(np.Error); v != "" {
+		errMsg = &v
+	}
+
+	var errCode *string
+	if v := strings.TrimSpace(np.ErrorCode); v != "" {
+		errCode = &v
+	}
+
+	fetchedAt := np.FetchedAt
+	if fetchedAt.IsZero() {
+		return source, errMsg, errCode, nil
+	}
+	return source, errMsg, errCode, &fetchedAt
 }
 
 func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []adminStreamRequest {
@@ -638,7 +665,6 @@ func (h *Handler) buildStationStreams(
 	ctx *gin.Context,
 	raw []adminStreamRequest,
 	fallbackURL string,
-	fallbackReliability float64,
 ) ([]store.StationStreamInput, error) {
 	streams := normalizeAdminStreams(raw, fallbackURL)
 	if len(streams) == 0 {
@@ -685,39 +711,43 @@ func (h *Handler) buildStationStreams(
 			metadataEnabled = *stream.MetadataEnabled
 		}
 		metadataType := "auto"
-		if stream.MetadataType != nil {
-			normalized := normalizeMetadataType(*stream.MetadataType)
-			if normalized == "" {
-				return nil, fmt.Errorf("stream %d metadata_type must be one of auto, icy, icecast, shoutcast", i+1)
-			}
-			metadataType = normalized
-		}
 
-		health := 0.8
-		if fallbackReliability > 0 {
-			health = fallbackReliability
+		var metadataSource *string
+		var metadataError *string
+		var metadataErrorCode *string
+		var metadataLastFetchedAt *time.Time
+		if metadataEnabled {
+			np := h.admin.metaFetcher.Fetch(ctx.Request.Context(), probe.ResolvedURL, metadata.Config{
+				Enabled: true,
+				Type:    metadata.TypeAuto,
+			})
+			metadataSource, metadataError, metadataErrorCode, metadataLastFetchedAt = detectMetadataSnapshot(np)
 		}
 
 		inputs = append(inputs, store.StationStreamInput{
-			URL:                  strings.TrimSpace(stream.URL),
-			ResolvedURL:          probe.ResolvedURL,
-			Kind:                 probe.Kind,
-			Container:            probe.Container,
-			Transport:            probe.Transport,
-			MimeType:             probe.MimeType,
-			Codec:                probe.Codec,
-			Bitrate:              probe.Bitrate,
-			BitDepth:             probe.BitDepth,
-			SampleRateHz:         probe.SampleRateHz,
-			SampleRateConfidence: probe.SampleRateConfidence,
-			Channels:             probe.Channels,
-			Priority:             priority,
-			IsActive:             isActive,
-			MetadataEnabled:      metadataEnabled,
-			MetadataType:         metadataType,
-			HealthScore:          health,
-			LastCheckedAt:        &probe.LastCheckedAt,
-			LastError:            probe.LastError,
+			URL:                   strings.TrimSpace(stream.URL),
+			ResolvedURL:           probe.ResolvedURL,
+			Kind:                  probe.Kind,
+			Container:             probe.Container,
+			Transport:             probe.Transport,
+			MimeType:              probe.MimeType,
+			Codec:                 probe.Codec,
+			Bitrate:               probe.Bitrate,
+			BitDepth:              probe.BitDepth,
+			SampleRateHz:          probe.SampleRateHz,
+			SampleRateConfidence:  probe.SampleRateConfidence,
+			Channels:              probe.Channels,
+			Priority:              priority,
+			IsActive:              isActive,
+			MetadataEnabled:       metadataEnabled,
+			MetadataType:          metadataType,
+			MetadataSource:        metadataSource,
+			MetadataError:         metadataError,
+			MetadataErrorCode:     metadataErrorCode,
+			MetadataLastFetchedAt: metadataLastFetchedAt,
+			HealthScore:           initialProbeHealthScore(probe),
+			LastCheckedAt:         &probe.LastCheckedAt,
+			LastError:             probe.LastError,
 		})
 	}
 	return inputs, nil
@@ -731,6 +761,13 @@ func validateProbedStream(probe radio.StreamProbeResult) error {
 		return errors.New("stream probe failed: empty resolved URL")
 	}
 	return nil
+}
+
+func initialProbeHealthScore(probe radio.StreamProbeResult) float64 {
+	if probe.LastError == nil && strings.TrimSpace(probe.ResolvedURL) != "" {
+		return 1
+	}
+	return 0
 }
 
 func resolveStreamBitrate(override *int, rawURL string, probe radio.StreamProbeResult) int {

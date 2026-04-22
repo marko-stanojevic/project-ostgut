@@ -121,7 +121,12 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 	}
 
 	if selectedStreamID != "" {
-		if err := h.station.streams.UpdateMetadataHealth(c.Request.Context(), selectedStreamID, resultMetadataError, resultMetadataErrorCode, &np.FetchedAt); err != nil {
+		var metadataSource *string
+		if strings.TrimSpace(np.Source) != "" {
+			source := strings.TrimSpace(np.Source)
+			metadataSource = &source
+		}
+		if err := h.station.streams.UpdateMetadataHealth(c.Request.Context(), selectedStreamID, metadataSource, resultMetadataError, resultMetadataErrorCode, &np.FetchedAt); err != nil {
 			h.log.Warn("update metadata health", "station_id", station.ID, "stream_id", selectedStreamID, "error", err)
 		}
 	}

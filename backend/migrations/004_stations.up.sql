@@ -8,7 +8,6 @@ CREATE TABLE stations (
   genre             TEXT        NOT NULL DEFAULT '',
   language          TEXT        NOT NULL DEFAULT '',
   country           TEXT        NOT NULL DEFAULT '',
-  country_code      TEXT        NOT NULL DEFAULT '',
   tags              TEXT[]      NOT NULL DEFAULT '{}',
   bitrate           INT         NOT NULL DEFAULT 0,       -- kbps
   codec             TEXT        NOT NULL DEFAULT '',
@@ -24,7 +23,6 @@ CREATE TABLE stations (
 );
 
 CREATE INDEX stations_genre_idx       ON stations (genre);
-CREATE INDEX stations_country_idx     ON stations (country_code);
 CREATE INDEX stations_active_idx      ON stations (is_active);
 CREATE INDEX stations_featured_idx    ON stations (featured);
 CREATE INDEX stations_reliability_idx ON stations (reliability_score DESC);

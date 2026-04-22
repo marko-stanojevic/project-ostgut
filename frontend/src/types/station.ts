@@ -15,6 +15,12 @@ export interface ApiStream {
     channels: number
     priority: number
     is_active: boolean
+    metadata_enabled: boolean
+    metadata_type: string
+    metadata_source?: string
+    metadata_error?: string
+    metadata_error_code?: string
+    metadata_last_fetched_at?: string
     health_score: number
     last_checked_at?: string
     last_error?: string
@@ -30,7 +36,6 @@ export interface ApiStation {
     language?: string
     country: string
     city: string
-    country_code: string
     bitrate?: number
     codec?: string
     reliability_score?: number

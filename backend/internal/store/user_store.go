@@ -43,7 +43,6 @@ type PlayerStation struct {
 	Genres      []string `json:"genres"`
 	Country     string   `json:"country"`
 	City        string   `json:"city,omitempty"`
-	CountryCode string   `json:"countryCode"`
 	Bitrate     int      `json:"bitrate"`
 	Codec       string   `json:"codec"`
 }
