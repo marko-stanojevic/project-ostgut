@@ -12,58 +12,68 @@ import (
 
 // StationStream represents one playable variant for a station.
 type StationStream struct {
-	ID                    string
-	StationID             string
-	URL                   string
-	ResolvedURL           string
-	Kind                  string // direct | playlist | hls
-	Container             string // none | m3u | m3u8 | pls
-	Transport             string // http | https | icy | shoutcast | icecast
-	MimeType              string
-	Codec                 string
-	Bitrate               int
-	BitDepth              int
-	SampleRateHz          int
-	SampleRateConfidence  string
-	Channels              int
-	Priority              int
-	IsActive              bool
-	MetadataEnabled       bool
-	MetadataType          string
-	MetadataSource        *string
-	MetadataError         *string
-	MetadataErrorCode     *string
-	MetadataLastFetchedAt *time.Time
-	HealthScore           float64
-	LastCheckedAt         *time.Time
-	LastError             *string
+	ID                     string
+	StationID              string
+	URL                    string
+	ResolvedURL            string
+	Kind                   string // direct | playlist | hls
+	Container              string // none | m3u | m3u8 | pls
+	Transport              string // http | https | icy | shoutcast | icecast
+	MimeType               string
+	Codec                  string
+	Bitrate                int
+	BitDepth               int
+	SampleRateHz           int
+	SampleRateConfidence   string
+	Channels               int
+	Priority               int
+	IsActive               bool
+	LoudnessIntegratedLUFS *float64
+	LoudnessPeakDBFS       *float64
+	LoudnessSampleDuration float64
+	LoudnessMeasuredAt     *time.Time
+	LoudnessStatus         string
+	MetadataEnabled        bool
+	MetadataType           string
+	MetadataSource         *string
+	MetadataError          *string
+	MetadataErrorCode      *string
+	MetadataLastFetchedAt  *time.Time
+	HealthScore            float64
+	LastCheckedAt          *time.Time
+	LastError              *string
 }
 
 // StationStreamInput is the write payload for station stream variants.
 type StationStreamInput struct {
-	URL                   string
-	ResolvedURL           string
-	Kind                  string
-	Container             string
-	Transport             string
-	MimeType              string
-	Codec                 string
-	Bitrate               int
-	BitDepth              int
-	SampleRateHz          int
-	SampleRateConfidence  string
-	Channels              int
-	Priority              int
-	IsActive              bool
-	MetadataEnabled       bool
-	MetadataType          string
-	MetadataSource        *string
-	MetadataError         *string
-	MetadataErrorCode     *string
-	MetadataLastFetchedAt *time.Time
-	HealthScore           float64
-	LastCheckedAt         *time.Time
-	LastError             *string
+	URL                    string
+	ResolvedURL            string
+	Kind                   string
+	Container              string
+	Transport              string
+	MimeType               string
+	Codec                  string
+	Bitrate                int
+	BitDepth               int
+	SampleRateHz           int
+	SampleRateConfidence   string
+	Channels               int
+	Priority               int
+	IsActive               bool
+	LoudnessIntegratedLUFS *float64
+	LoudnessPeakDBFS       *float64
+	LoudnessSampleDuration float64
+	LoudnessMeasuredAt     *time.Time
+	LoudnessStatus         string
+	MetadataEnabled        bool
+	MetadataType           string
+	MetadataSource         *string
+	MetadataError          *string
+	MetadataErrorCode      *string
+	MetadataLastFetchedAt  *time.Time
+	HealthScore            float64
+	LastCheckedAt          *time.Time
+	LastError              *string
 }
 
 // StationStreamStore executes queries against station_streams.
@@ -94,6 +104,11 @@ func scanStationStreamRow(row Scanner) (*StationStream, error) {
 		&s.Channels,
 		&s.Priority,
 		&s.IsActive,
+		&s.LoudnessIntegratedLUFS,
+		&s.LoudnessPeakDBFS,
+		&s.LoudnessSampleDuration,
+		&s.LoudnessMeasuredAt,
+		&s.LoudnessStatus,
 		&s.MetadataEnabled,
 		&s.MetadataType,
 		&s.MetadataSource,
@@ -169,29 +184,34 @@ func sanitizeStreamInput(in StationStreamInput, fallbackPriority int) StationStr
 	}
 
 	return StationStreamInput{
-		URL:                   url,
-		ResolvedURL:           resolved,
-		Kind:                  kind,
-		Container:             container,
-		Transport:             transport,
-		MimeType:              strings.TrimSpace(in.MimeType),
-		Codec:                 strings.ToUpper(strings.TrimSpace(in.Codec)),
-		Bitrate:               in.Bitrate,
-		BitDepth:              in.BitDepth,
-		SampleRateHz:          in.SampleRateHz,
-		SampleRateConfidence:  normalizeSampleRateConfidence(in.SampleRateConfidence),
-		Channels:              in.Channels,
-		Priority:              priority,
-		IsActive:              in.IsActive,
-		MetadataEnabled:       in.MetadataEnabled,
-		MetadataType:          metadataType,
-		MetadataSource:        metadataSource,
-		MetadataError:         in.MetadataError,
-		MetadataErrorCode:     in.MetadataErrorCode,
-		MetadataLastFetchedAt: in.MetadataLastFetchedAt,
-		HealthScore:           health,
-		LastCheckedAt:         in.LastCheckedAt,
-		LastError:             in.LastError,
+		URL:                    url,
+		ResolvedURL:            resolved,
+		Kind:                   kind,
+		Container:              container,
+		Transport:              transport,
+		MimeType:               strings.TrimSpace(in.MimeType),
+		Codec:                  strings.ToUpper(strings.TrimSpace(in.Codec)),
+		Bitrate:                in.Bitrate,
+		BitDepth:               in.BitDepth,
+		SampleRateHz:           in.SampleRateHz,
+		SampleRateConfidence:   normalizeSampleRateConfidence(in.SampleRateConfidence),
+		Channels:               in.Channels,
+		Priority:               priority,
+		IsActive:               in.IsActive,
+		LoudnessIntegratedLUFS: in.LoudnessIntegratedLUFS,
+		LoudnessPeakDBFS:       in.LoudnessPeakDBFS,
+		LoudnessSampleDuration: maxFloat64(in.LoudnessSampleDuration, 0),
+		LoudnessMeasuredAt:     in.LoudnessMeasuredAt,
+		LoudnessStatus:         normalizeLoudnessStatus(in.LoudnessStatus),
+		MetadataEnabled:        in.MetadataEnabled,
+		MetadataType:           metadataType,
+		MetadataSource:         metadataSource,
+		MetadataError:          in.MetadataError,
+		MetadataErrorCode:      in.MetadataErrorCode,
+		MetadataLastFetchedAt:  in.MetadataLastFetchedAt,
+		HealthScore:            health,
+		LastCheckedAt:          in.LastCheckedAt,
+		LastError:              in.LastError,
 	}
 }
 
@@ -259,13 +279,29 @@ func normalizeSampleRateConfidence(v string) string {
 	}
 }
 
+func normalizeLoudnessStatus(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "measured", "insufficient_sample", "unavailable", "failed":
+		return strings.ToLower(strings.TrimSpace(v))
+	default:
+		return "unknown"
+	}
+}
+
+func maxFloat64(value, fallback float64) float64 {
+	if value < fallback {
+		return fallback
+	}
+	return value
+}
+
 // ListByStationID returns stream variants ordered by priority ascending.
 func (s *StationStreamStore) ListByStationID(ctx context.Context, stationID string) ([]*StationStream, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE station_id = $1
@@ -297,7 +333,7 @@ func (s *StationStreamStore) ListByStationIDs(ctx context.Context, stationIDs []
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE station_id = ANY($1::uuid[])
@@ -353,13 +389,15 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			INSERT INTO station_streams (
 				station_id, url, resolved_url, kind, container, transport,
 				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-				priority, is_active, metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
+				priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
+				metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 				last_checked_at, last_error, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
 				$7, $8, $9, $10, $11, $12, $13,
-				$14, $15, $16, $17, $18, $19, $20, $21, $22,
-				$23, $24, NOW()
+				$14, $15, $16, $17, $18, $19, $20,
+				$21, $22, $23, $24, $25, $26, $27,
+				$28, $29, NOW()
 			)`,
 			stationID,
 			in.URL,
@@ -376,6 +414,11 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			in.Channels,
 			in.Priority,
 			in.IsActive,
+			in.LoudnessIntegratedLUFS,
+			in.LoudnessPeakDBFS,
+			in.LoudnessSampleDuration,
+			in.LoudnessMeasuredAt,
+			in.LoudnessStatus,
 			in.MetadataEnabled,
 			in.MetadataType,
 			in.MetadataSource,
@@ -427,13 +470,15 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		INSERT INTO station_streams (
 			station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
+			metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 			last_checked_at, last_error, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12, $13,
-			1, true, $14, $15, $16, $17, $18, $19, $20,
-			$21, $22, NOW()
+			1, true, $14, $15, $16, $17, $18,
+			$19, $20, $21, $22, $23, $24, $25,
+			$26, $27, NOW()
 		)
 		ON CONFLICT (station_id, priority) DO UPDATE SET
 			url = EXCLUDED.url,
@@ -449,6 +494,11 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			sample_rate_confidence = EXCLUDED.sample_rate_confidence,
 			channels = EXCLUDED.channels,
 			is_active = EXCLUDED.is_active,
+			loudness_integrated_lufs = EXCLUDED.loudness_integrated_lufs,
+			loudness_peak_dbfs = EXCLUDED.loudness_peak_dbfs,
+			loudness_sample_duration_seconds = EXCLUDED.loudness_sample_duration_seconds,
+			loudness_measured_at = EXCLUDED.loudness_measured_at,
+			loudness_measurement_status = EXCLUDED.loudness_measurement_status,
 			metadata_enabled = EXCLUDED.metadata_enabled,
 			metadata_type = EXCLUDED.metadata_type,
 			metadata_source = EXCLUDED.metadata_source,
@@ -472,6 +522,11 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		n.SampleRateHz,
 		n.SampleRateConfidence,
 		n.Channels,
+		n.LoudnessIntegratedLUFS,
+		n.LoudnessPeakDBFS,
+		n.LoudnessSampleDuration,
+		n.LoudnessMeasuredAt,
+		n.LoudnessStatus,
 		n.MetadataEnabled,
 		n.MetadataType,
 		n.MetadataSource,
@@ -493,20 +548,25 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 
 // ProbeUpdate carries the fields written back after a live HTTP probe.
 type ProbeUpdate struct {
-	ResolvedURL          string
-	Kind                 string
-	Container            string
-	Transport            string
-	MimeType             string
-	Codec                string
-	Bitrate              int
-	BitDepth             int
-	SampleRateHz         int
-	SampleRateConfidence string
-	Channels             int
-	HealthScore          *float64
-	LastCheckedAt        time.Time
-	LastError            *string
+	ResolvedURL            string
+	Kind                   string
+	Container              string
+	Transport              string
+	MimeType               string
+	Codec                  string
+	Bitrate                int
+	BitDepth               int
+	SampleRateHz           int
+	SampleRateConfidence   string
+	Channels               int
+	LoudnessIntegratedLUFS *float64
+	LoudnessPeakDBFS       *float64
+	LoudnessSampleDuration float64
+	LoudnessMeasuredAt     *time.Time
+	LoudnessStatus         string
+	HealthScore            *float64
+	LastCheckedAt          time.Time
+	LastError              *string
 }
 
 // ListAllActive returns every active stream ordered by last_checked_at ascending
@@ -516,7 +576,7 @@ func (s *StationStreamStore) ListAllActive(ctx context.Context) ([]*StationStrea
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_error, metadata_error_code, metadata_last_fetched_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE is_active = true
@@ -556,16 +616,24 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 				ELSE $9
 			END,
 			channels       = CASE WHEN $10 > 0       THEN $10 ELSE channels END,
-			last_checked_at = $11,
-			last_error     = $12,
-			health_score   = CASE
-				WHEN $13::double precision IS NULL THEN health_score
+			loudness_integrated_lufs = $11,
+			loudness_peak_dbfs = $12,
+			loudness_sample_duration_seconds = CASE
 				WHEN $13::double precision < 0 THEN 0
-				WHEN $13::double precision > 1 THEN 1
 				ELSE $13::double precision
 			END,
+			loudness_measured_at = $14,
+			loudness_measurement_status = $15,
+			last_checked_at = $16,
+			last_error     = $17,
+			health_score   = CASE
+				WHEN $18::double precision IS NULL THEN health_score
+				WHEN $18::double precision < 0 THEN 0
+				WHEN $18::double precision > 1 THEN 1
+				ELSE $18::double precision
+			END,
 			updated_at     = NOW()
-		WHERE id = $14`,
+		WHERE id = $19`,
 		u.ResolvedURL,
 		u.Kind,
 		u.Container,
@@ -576,6 +644,11 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 		u.SampleRateHz,
 		normalizeSampleRateConfidence(u.SampleRateConfidence),
 		u.Channels,
+		u.LoudnessIntegratedLUFS,
+		u.LoudnessPeakDBFS,
+		maxFloat64(u.LoudnessSampleDuration, 0),
+		u.LoudnessMeasuredAt,
+		normalizeLoudnessStatus(u.LoudnessStatus),
 		u.LastCheckedAt,
 		u.LastError,
 		u.HealthScore,

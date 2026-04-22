@@ -43,7 +43,22 @@ export function PlayerBar() {
   const [statsExpanded, setStatsExpanded] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  const { station, currentStream, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
+  const {
+    station,
+    currentStream,
+    state,
+    volume,
+    normalizationEnabled,
+    normalizationOffsetDb,
+    queue,
+    queueIndex,
+    pause,
+    resume,
+    playNext,
+    playPrev,
+    setVolume,
+    setNormalizationEnabled,
+  } = usePlayer()
 
   const isPlaying = state === 'playing'
   const isLoading = state === 'loading'
@@ -220,6 +235,9 @@ export function PlayerBar() {
           <PlayerVolumeControl
             className="hidden w-44 shrink-0 items-center gap-3 md:flex"
             iconClassName="h-5.5 w-5.5"
+            normalizationEnabled={normalizationEnabled}
+            normalizationOffsetDb={normalizationOffsetDb}
+            onToggleNormalization={setNormalizationEnabled}
             volume={volume}
             setVolume={setVolume}
           />

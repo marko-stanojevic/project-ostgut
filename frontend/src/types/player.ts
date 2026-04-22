@@ -16,6 +16,11 @@ export interface StationStream {
     priority: number
     isActive: boolean
     healthScore: number
+    loudnessIntegratedLufs?: number
+    loudnessPeakDbfs?: number
+    loudnessSampleDurationSeconds?: number
+    loudnessMeasuredAt?: string
+    loudnessMeasurementStatus?: string
     lastCheckedAt?: string
     lastError?: string
 }
@@ -38,18 +43,25 @@ export type PlayerState = 'idle' | 'loading' | 'playing' | 'paused' | 'error'
 export interface PersistedPlayerState {
     volume: number
     station: Station | null
+    normalizationEnabled: boolean
     updatedAt: string
 }
 
 export interface PlayerPreferencesPayload {
     volume: number
     station: Station | null
+    normalizationEnabled: boolean
     updatedAt: string
 }
 
 export function clampVolume(value: number): number {
     if (!Number.isFinite(value)) return 0.8
     return Math.max(0, Math.min(1, value))
+}
+
+export function normalizeNormalizationEnabled(value: unknown): boolean {
+    if (typeof value !== 'boolean') return true
+    return value
 }
 
 export function normalizeUpdatedAt(value: unknown): string {
@@ -70,11 +82,13 @@ export function isTimestampNewer(next: string, current: string): boolean {
 export function toPersistedSnapshot(
     volume: number,
     station: Station | null,
+    normalizationEnabled: boolean,
     updatedAt: string,
 ): PersistedPlayerState {
     return {
         volume: clampVolume(volume),
         station,
+        normalizationEnabled: normalizeNormalizationEnabled(normalizationEnabled),
         updatedAt,
     }
 }
@@ -91,6 +105,7 @@ export function readPersistedPlayerState(): PersistedPlayerState | null {
         return {
             volume: clampVolume(parsed?.volume ?? 0.8),
             station: parsed?.station ?? null,
+            normalizationEnabled: normalizeNormalizationEnabled(parsed?.normalizationEnabled),
             updatedAt: normalizeUpdatedAt(parsed?.updatedAt),
         }
     } catch {

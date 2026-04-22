@@ -218,11 +218,25 @@ brew install azure-cli
 # Terraform / OpenTofu (for infrastructure as code)
 brew install opentofu
 
+# FFmpeg (required for stream loudness probing in the backend)
+brew install ffmpeg
+
 # jq (for JSON parsing in scripts)
 brew install jq
 
 # curl & wget (usually pre-installed, but ensure)
 brew install curl wget
+```
+
+**Why `ffmpeg` is required:**
+
+- The backend stream probe uses `ffmpeg` to measure loudness on sampled radio audio
+- Admin "Probe now" loudness checks will show `Unavailable` if `ffmpeg` is not installed
+
+**Verify installation:**
+
+```bash
+ffmpeg -version
 ```
 
 ---

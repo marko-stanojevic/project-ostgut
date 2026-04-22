@@ -5,6 +5,7 @@ import {
     type Station,
     type PlayerPreferencesPayload,
     clampVolume,
+    normalizeNormalizationEnabled,
     normalizeUpdatedAt,
     isTimestampNewer,
 } from '@/types/player'
@@ -14,12 +15,14 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 interface RemoteUpdate {
     volume: number
     station: Station | null
+    normalizationEnabled: boolean
     updatedAt: string
 }
 
 interface UsePlayerSyncOptions {
     volume: number
     station: Station | null
+    normalizationEnabled: boolean
     updatedAt: string
     accessToken: string | null | undefined
     onRemoteUpdate: (update: RemoteUpdate) => void
@@ -32,6 +35,7 @@ interface UsePlayerSyncOptions {
 export function usePlayerSync({
     volume,
     station,
+    normalizationEnabled,
     updatedAt,
     accessToken,
     onRemoteUpdate,
@@ -68,6 +72,7 @@ export function usePlayerSync({
                 onRemoteUpdate({
                     volume: clampVolume(payload.volume ?? 0.8),
                     station: payload.station ?? null,
+                    normalizationEnabled: normalizeNormalizationEnabled(payload.normalizationEnabled),
                     updatedAt: remoteUpdatedAt,
                 })
             } catch {
@@ -92,7 +97,7 @@ export function usePlayerSync({
 
         const controller = new AbortController()
         const timeoutID = window.setTimeout(() => {
-            const payload: PlayerPreferencesPayload = { volume, station, updatedAt }
+            const payload: PlayerPreferencesPayload = { volume, station, normalizationEnabled, updatedAt }
 
             fetch(`${API}/users/me/player-preferences`, {
                 method: 'PUT',
@@ -111,5 +116,5 @@ export function usePlayerSync({
             controller.abort()
             window.clearTimeout(timeoutID)
         }
-    }, [accessToken, volume, station, updatedAt])
+    }, [accessToken, volume, station, normalizationEnabled, updatedAt])
 }

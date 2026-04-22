@@ -6,6 +6,7 @@ import {
     type PersistedPlayerState,
     PLAYER_STORAGE_KEY,
     clampVolume,
+    normalizeNormalizationEnabled,
     isTimestampNewer,
     readPersistedPlayerState,
     toPersistedSnapshot,
@@ -14,12 +15,14 @@ import {
 interface ExternalUpdate {
     volume: number
     station: Station | null
+    normalizationEnabled: boolean
     updatedAt: string
 }
 
 interface UsePlayerStorageOptions {
     volume: number
     station: Station | null
+    normalizationEnabled: boolean
     updatedAt: string
     onExternalUpdate: (update: ExternalUpdate) => void
 }
@@ -31,15 +34,16 @@ interface UsePlayerStorageOptions {
 export function usePlayerStorage({
     volume,
     station,
+    normalizationEnabled,
     updatedAt,
     onExternalUpdate,
 }: UsePlayerStorageOptions): void {
     // Write to localStorage whenever preferences change.
     useEffect(() => {
         if (typeof window === 'undefined') return
-        const snapshot = toPersistedSnapshot(volume, station, updatedAt)
+        const snapshot = toPersistedSnapshot(volume, station, normalizationEnabled, updatedAt)
         window.localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(snapshot))
-    }, [volume, station, updatedAt])
+    }, [volume, station, normalizationEnabled, updatedAt])
 
     // Listen for updates from other tabs.
     useEffect(() => {
@@ -54,6 +58,7 @@ export function usePlayerStorage({
             onExternalUpdate({
                 volume: clampVolume(nextState.volume),
                 station: nextState.station,
+                normalizationEnabled: normalizeNormalizationEnabled(nextState.normalizationEnabled),
                 updatedAt: nextState.updatedAt,
             })
         }

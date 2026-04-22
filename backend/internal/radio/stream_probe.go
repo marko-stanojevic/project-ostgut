@@ -22,20 +22,25 @@ const maxProbeRedirects = 5
 const maxProbeHostChanges = 2
 
 type StreamProbeResult struct {
-	URL                  string
-	ResolvedURL          string
-	Kind                 string
-	Container            string
-	Transport            string
-	MimeType             string
-	Codec                string
-	Bitrate              int
-	BitDepth             int
-	SampleRateHz         int
-	SampleRateConfidence string
-	Channels             int
-	LastError            *string
-	LastCheckedAt        time.Time
+	URL                    string
+	ResolvedURL            string
+	Kind                   string
+	Container              string
+	Transport              string
+	MimeType               string
+	Codec                  string
+	Bitrate                int
+	BitDepth               int
+	SampleRateHz           int
+	SampleRateConfidence   string
+	Channels               int
+	LoudnessIntegratedLUFS *float64
+	LoudnessPeakDBFS       *float64
+	LoudnessSampleDuration float64
+	LoudnessMeasuredAt     *time.Time
+	LoudnessStatus         string
+	LastError              *string
+	LastCheckedAt          time.Time
 }
 
 func LightClassifyStreamURL(rawURL string) StreamProbeResult {
@@ -44,13 +49,14 @@ func LightClassifyStreamURL(rawURL string) StreamProbeResult {
 	if err != nil {
 		msg := err.Error()
 		return StreamProbeResult{
-			URL:           strings.TrimSpace(rawURL),
-			ResolvedURL:   strings.TrimSpace(rawURL),
-			Kind:          "direct",
-			Container:     "none",
-			Transport:     "http",
-			LastError:     &msg,
-			LastCheckedAt: now,
+			URL:            strings.TrimSpace(rawURL),
+			ResolvedURL:    strings.TrimSpace(rawURL),
+			Kind:           "direct",
+			Container:      "none",
+			Transport:      "http",
+			LoudnessStatus: "unknown",
+			LastError:      &msg,
+			LastCheckedAt:  now,
 		}
 	}
 
@@ -61,13 +67,14 @@ func LightClassifyStreamURL(rawURL string) StreamProbeResult {
 	}
 
 	return StreamProbeResult{
-		URL:           strings.TrimSpace(rawURL),
-		ResolvedURL:   strings.TrimSpace(rawURL),
-		Kind:          kind,
-		Container:     container,
-		Transport:     transport,
-		Codec:         codecFromPath(u.Path),
-		LastCheckedAt: now,
+		URL:            strings.TrimSpace(rawURL),
+		ResolvedURL:    strings.TrimSpace(rawURL),
+		Kind:           kind,
+		Container:      container,
+		Transport:      transport,
+		Codec:          codecFromPath(u.Path),
+		LoudnessStatus: "unknown",
+		LastCheckedAt:  now,
 	}
 }
 
@@ -208,6 +215,7 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 		Codec:                codec,
 		Bitrate:              bitrate,
 		SampleRateConfidence: "unknown",
+		LoudnessStatus:       "unknown",
 		LastCheckedAt:        time.Now().UTC(),
 	}
 
@@ -237,6 +245,12 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 					result.Channels = ch
 				}
 			}
+			loudness := MeasureSampleLoudness(ctx, probeBytes, result.Bitrate)
+			result.LoudnessIntegratedLUFS = loudness.IntegratedLUFS
+			result.LoudnessPeakDBFS = loudness.PeakDBFS
+			result.LoudnessSampleDuration = loudness.SampleDuration
+			result.LoudnessMeasuredAt = loudness.MeasuredAt
+			result.LoudnessStatus = loudness.Status
 		}
 		return result, nil
 	}

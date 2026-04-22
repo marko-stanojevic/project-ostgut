@@ -39,7 +39,22 @@ interface FullScreenPlayerProps {
 }
 
 export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps) {
-  const { station, currentStream, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
+  const {
+    station,
+    currentStream,
+    state,
+    volume,
+    normalizationEnabled,
+    normalizationOffsetDb,
+    queue,
+    queueIndex,
+    pause,
+    resume,
+    playNext,
+    playPrev,
+    setVolume,
+    setNormalizationEnabled,
+  } = usePlayer()
 
   const isPlaying = state === 'playing'
   const isLoading = state === 'loading'
@@ -264,6 +279,9 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
         <PlayerVolumeControl
           className="flex w-full max-w-sm items-center gap-3"
           labelClassName="w-11 text-right text-sm tabular-nums text-zinc-500"
+          normalizationEnabled={normalizationEnabled}
+          normalizationOffsetDb={normalizationOffsetDb}
+          onToggleNormalization={setNormalizationEnabled}
           showPercentage
           volume={volume}
           setVolume={setVolume}

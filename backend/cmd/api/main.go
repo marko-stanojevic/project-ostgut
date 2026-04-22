@@ -179,6 +179,7 @@ func main() {
 		admin.POST("/stations", h.AdminCreateStation)
 		admin.POST("/stations/bulk", h.AdminBulkAction)
 		admin.GET("/stations/:id", h.AdminGetStation)
+		admin.POST("/stations/:id/streams/:streamID/probe", h.AdminProbeStationStream)
 		admin.GET("/stations/:id/icon", h.AdminGetStationIcon)
 		admin.PUT("/stations/:id", h.AdminUpdateStation)
 		admin.GET("/users", h.AdminListUsers)

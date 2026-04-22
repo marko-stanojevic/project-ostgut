@@ -25,12 +25,16 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -o /app/server ./cmd/api
 
 # ──────────────────────────────────────────────
-# Stage 2 – runtime (distroless, no shell)
+# Stage 2 – runtime
 # ──────────────────────────────────────────────
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+FROM alpine:3.22 AS runtime
 
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+RUN apk add --no-cache ca-certificates ffmpeg \
+    && adduser -D -u 65532 nonroot
+
 COPY --from=builder /app/server /server
+
+USER nonroot
 
 # Gin / net/http listen on this port; override with the PORT env var if needed.
 EXPOSE 8080

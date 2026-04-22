@@ -23,11 +23,14 @@ import {
     CheckCircleIcon,
     ClockIcon,
     ArrowLeftIcon,
+    ArrowsClockwiseIcon,
     FloppyDiskIcon,
     UploadSimpleIcon,
     PlayIcon,
     PauseIcon,
     PlusIcon,
+    CircleNotchIcon,
+    WaveformIcon,
     TrashIcon,
 } from '@phosphor-icons/react'
 
@@ -50,8 +53,12 @@ interface AdminStream {
     channels: number
     priority: number
     is_active: boolean
+    loudness_integrated_lufs?: number
+    loudness_peak_dbfs?: number
+    loudness_sample_duration_seconds?: number
+    loudness_measured_at?: string
+    loudness_measurement_status?: string
     metadata_enabled: boolean
-    metadata_type: string
     metadata_source?: string
     metadata_error?: string
     metadata_error_code?: string
@@ -185,6 +192,21 @@ function formatSampleRateConfidenceLabel(stream: AdminStream): string {
     }
 }
 
+function formatLoudnessStatusLabel(status?: string): string {
+    switch ((status || '').toLowerCase()) {
+        case 'measured':
+            return 'Measured'
+        case 'insufficient_sample':
+            return 'Short sample'
+        case 'unavailable':
+            return 'Unavailable'
+        case 'failed':
+            return 'Failed'
+        default:
+            return 'Unknown'
+    }
+}
+
 function createEmptyStream(priority: number): StreamFormEntry {
     return {
         url: '',
@@ -237,9 +259,11 @@ export default function StationEditorPage() {
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [error, setError] = useState('')
+    const [probeError, setProbeError] = useState('')
     const [stationIcon, setStationIcon] = useState<MediaAssetResponse | null>(null)
     const [uploadingIcon, setUploadingIcon] = useState(false)
     const [iconError, setIconError] = useState('')
+    const [probingAction, setProbingAction] = useState('')
 
     const [form, setForm] = useState<StationForm>({
         name: '',
@@ -284,6 +308,7 @@ export default function StationEditorPage() {
         const loadStation = async () => {
             setLoading(true)
             setError('')
+            setProbeError('')
 
             try {
                 const s = await fetchJSONWithAuth<AdminStation>(
@@ -412,7 +437,6 @@ export default function StationEditorPage() {
                         priority: s.priority || i + 1,
                         bitrate: Number.isFinite(parsedBitrate) && parsedBitrate > 0 ? parsedBitrate : undefined,
                         metadata_enabled: s.metadata_enabled,
-                        metadata_type: 'auto',
                     }
                 }),
             logo: logoURL,
@@ -444,6 +468,29 @@ export default function StationEditorPage() {
             setError(err instanceof Error ? err.message : 'Failed to save')
         } finally {
             setSaving(false)
+        }
+    }
+
+    const handleProbeStream = async (streamID: string, scope: 'quality' | 'metadata' | 'loudness' | 'full') => {
+        if (!accessToken) return
+
+        setProbingAction(`${streamID}:${scope}`)
+        setProbeError('')
+
+        try {
+            const updated = await fetchJSONWithAuth<AdminStation>(
+                `${API}/admin/stations/${id}/streams/${streamID}/probe?scope=${scope}`,
+                accessToken,
+                { method: 'POST' },
+            )
+
+            setStation(updated)
+            setSaved(true)
+            setTimeout(() => setSaved(false), 3000)
+        } catch (err) {
+            setProbeError(err instanceof Error ? err.message : 'Failed to run stream probe')
+        } finally {
+            setProbingAction('')
         }
     }
 
@@ -493,6 +540,11 @@ export default function StationEditorPage() {
             priority: stream.priority,
             isActive: stream.is_active,
             healthScore: stream.health_score,
+            loudnessIntegratedLufs: stream.loudness_integrated_lufs,
+            loudnessPeakDbfs: stream.loudness_peak_dbfs,
+            loudnessSampleDurationSeconds: stream.loudness_sample_duration_seconds,
+            loudnessMeasuredAt: stream.loudness_measured_at,
+            loudnessMeasurementStatus: stream.loudness_measurement_status,
             lastCheckedAt: stream.last_checked_at,
             lastError: stream.last_error,
         })),
@@ -507,7 +559,7 @@ export default function StationEditorPage() {
     const isPreviewPlaying = isPreviewActive && playerState === 'playing'
 
     return (
-        <div className="max-w-6xl space-y-6">
+        <div className="w-full space-y-6">
             <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
                     <button
@@ -532,6 +584,7 @@ export default function StationEditorPage() {
 
                 <div className="flex shrink-0 items-center gap-2">
                     {error && <p className="text-sm text-destructive">{error}</p>}
+                    {probeError && <p className="text-sm text-destructive">{probeError}</p>}
                     {saved && <p className="text-sm text-green-600 dark:text-green-400">Saved</p>}
                     <Button onClick={handleSave} disabled={saving || !canSave} className="gap-2">
                         <FloppyDiskIcon className="h-4 w-4" />
@@ -540,7 +593,7 @@ export default function StationEditorPage() {
                 </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 xl:grid-cols-2">
                 <div className="space-y-4">
                     <Card>
                         <CardHeader>
@@ -736,8 +789,8 @@ export default function StationEditorPage() {
                                         </div>
 
                                         {streamDetails[i] && (
-                                            <div className="grid gap-3 lg:grid-cols-2">
-                                                <div className="rounded-lg border p-3">
+                                            <div className="grid gap-3 xl:grid-cols-3">
+                                                <div className="flex h-full flex-col rounded-lg border p-3">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0">
                                                             <p className="text-xs text-muted-foreground">Stream status</p>
@@ -801,16 +854,30 @@ export default function StationEditorPage() {
                                                             {streamDetails[i].last_error ? streamDetails[i].last_error : 'No stream errors recorded'}
                                                         </p>
                                                     </div>
+                                                    <div className="mt-auto pt-4">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 w-full gap-1.5 px-2.5 text-xs"
+                                                            disabled={probingAction === `${streamDetails[i].id}:quality`}
+                                                            onClick={() => handleProbeStream(streamDetails[i].id, 'quality')}
+                                                        >
+                                                            {probingAction === `${streamDetails[i].id}:quality` ? (
+                                                                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
+                                                            ) : (
+                                                                <WaveformIcon className="h-4 w-4" weight="fill" />
+                                                            )}
+                                                            Probe quality
+                                                        </Button>
+                                                    </div>
                                                 </div>
 
-                                                <div className="rounded-lg border p-3">
+                                                <div className="flex h-full flex-col rounded-lg border p-3">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0">
                                                             <p className="text-xs text-muted-foreground">Metadata status</p>
                                                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                                <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
-                                                                    {streamDetails[i].metadata_enabled ? (streamDetails[i].metadata_type || 'auto') : 'disabled'}
-                                                                </Badge>
                                                                 {streamDetails[i].metadata_source && (
                                                                     <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
                                                                         {streamDetails[i].metadata_source}
@@ -835,9 +902,9 @@ export default function StationEditorPage() {
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Metadata polling</p>
-                                                        <p className="text-sm">
-                                                            {stream.metadata_enabled ? 'Enabled with auto-detection' : 'Disabled'}
-                                                        </p>
+                                                        <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                            {stream.metadata_enabled ? 'Enabled' : 'Disabled'}
+                                                        </Badge>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Latest metadata check</p>
@@ -852,6 +919,87 @@ export default function StationEditorPage() {
                                                                 ? new Date(streamDetails[i].metadata_last_fetched_at!).toLocaleString()
                                                                 : 'Not checked yet'}
                                                         </p>
+                                                    </div>
+                                                    <div className="mt-auto pt-4">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 w-full gap-1.5 px-2.5 text-xs"
+                                                            disabled={probingAction === `${streamDetails[i].id}:metadata`}
+                                                            onClick={() => handleProbeStream(streamDetails[i].id, 'metadata')}
+                                                        >
+                                                            {probingAction === `${streamDetails[i].id}:metadata` ? (
+                                                                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
+                                                            ) : (
+                                                                <ArrowsClockwiseIcon className="h-4 w-4" weight="bold" />
+                                                            )}
+                                                            Probe metadata
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex h-full flex-col rounded-lg border p-3">
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs text-muted-foreground">Loudness status</p>
+                                                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                            <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                {formatLoudnessStatusLabel(streamDetails[i].loudness_measurement_status)}
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Measured loudness</p>
+                                                        {typeof streamDetails[i].loudness_integrated_lufs === 'number' ? (
+                                                            <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                {(streamDetails[i].loudness_integrated_lufs ?? 0).toFixed(1)} LUFS
+                                                            </Badge>
+                                                        ) : (
+                                                            <p className="text-sm">No loudness measurement recorded</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">True peak</p>
+                                                        {typeof streamDetails[i].loudness_peak_dbfs === 'number' ? (
+                                                            <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                {(streamDetails[i].loudness_peak_dbfs ?? 0).toFixed(1)} dBFS
+                                                            </Badge>
+                                                        ) : (
+                                                            <p className="text-sm">Peak not measured</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Sample window</p>
+                                                        <p className="text-sm">
+                                                            {typeof streamDetails[i].loudness_sample_duration_seconds === 'number' && (streamDetails[i].loudness_sample_duration_seconds ?? 0) > 0
+                                                                ? `${(streamDetails[i].loudness_sample_duration_seconds ?? 0).toFixed(1)} seconds`
+                                                                : 'No sample duration recorded'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Last measured</p>
+                                                        <p className="text-sm">
+                                                            {streamDetails[i].loudness_measured_at
+                                                                ? new Date(streamDetails[i].loudness_measured_at ?? '').toLocaleString()
+                                                                : 'Not measured yet'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="mt-auto pt-4">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 w-full gap-1.5 px-2.5 text-xs"
+                                                            disabled={probingAction === `${streamDetails[i].id}:loudness`}
+                                                            onClick={() => handleProbeStream(streamDetails[i].id, 'loudness')}
+                                                        >
+                                                            {probingAction === `${streamDetails[i].id}:loudness` ? (
+                                                                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
+                                                            ) : (
+                                                                <WaveformIcon className="h-4 w-4" weight="fill" />
+                                                            )}
+                                                            Probe loudness
+                                                        </Button>
                                                     </div>
                                                 </div>
                                             </div>

@@ -215,29 +215,34 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 	)
 
 	_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), created.ID, store.StationStreamInput{
-		URL:                   streamURL,
-		ResolvedURL:           probe.ResolvedURL,
-		Kind:                  probe.Kind,
-		Container:             probe.Container,
-		Transport:             probe.Transport,
-		MimeType:              probe.MimeType,
-		Codec:                 probe.Codec,
-		Bitrate:               probe.Bitrate,
-		BitDepth:              probe.BitDepth,
-		SampleRateHz:          probe.SampleRateHz,
-		SampleRateConfidence:  probe.SampleRateConfidence,
-		Channels:              probe.Channels,
-		Priority:              1,
-		IsActive:              true,
-		MetadataEnabled:       true,
-		MetadataType:          "auto",
-		MetadataSource:        metadataSource,
-		MetadataError:         metadataError,
-		MetadataErrorCode:     metadataErrorCode,
-		MetadataLastFetchedAt: metadataFetchedAt,
-		HealthScore:           initialProbeHealthScore(probe),
-		LastCheckedAt:         &probe.LastCheckedAt,
-		LastError:             probe.LastError,
+		URL:                    streamURL,
+		ResolvedURL:            probe.ResolvedURL,
+		Kind:                   probe.Kind,
+		Container:              probe.Container,
+		Transport:              probe.Transport,
+		MimeType:               probe.MimeType,
+		Codec:                  probe.Codec,
+		Bitrate:                probe.Bitrate,
+		BitDepth:               probe.BitDepth,
+		SampleRateHz:           probe.SampleRateHz,
+		SampleRateConfidence:   probe.SampleRateConfidence,
+		Channels:               probe.Channels,
+		Priority:               1,
+		IsActive:               true,
+		LoudnessIntegratedLUFS: probe.LoudnessIntegratedLUFS,
+		LoudnessPeakDBFS:       probe.LoudnessPeakDBFS,
+		LoudnessSampleDuration: probe.LoudnessSampleDuration,
+		LoudnessMeasuredAt:     probe.LoudnessMeasuredAt,
+		LoudnessStatus:         probe.LoudnessStatus,
+		MetadataEnabled:        true,
+		MetadataType:           "auto",
+		MetadataSource:         metadataSource,
+		MetadataError:          metadataError,
+		MetadataErrorCode:      metadataErrorCode,
+		MetadataLastFetchedAt:  metadataFetchedAt,
+		HealthScore:            initialProbeHealthScore(probe),
+		LastCheckedAt:          &probe.LastCheckedAt,
+		LastError:              probe.LastError,
 	})
 
 	created, err = h.admin.stations.GetByIDAdmin(c.Request.Context(), created.ID)
@@ -248,6 +253,137 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, h.adminStationWithStreams(c.Request.Context(), created))
+}
+
+// AdminProbeStationStream handles POST /admin/stations/:id/streams/:streamID/probe.
+// Query param `scope` can be `quality`, `metadata`, `loudness`, or `full`.
+func (h *Handler) AdminProbeStationStream(c *gin.Context) {
+	stationID := strings.TrimSpace(c.Param("id"))
+	streamID := strings.TrimSpace(c.Param("streamID"))
+	if stationID == "" || streamID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "station id and stream id are required"})
+		return
+	}
+
+	_, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), stationID)
+	if errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "station not found"})
+		return
+	}
+	if err != nil {
+		h.log.Error("admin probe stream load station", "station_id", stationID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	streams, err := h.admin.streams.ListByStationID(c.Request.Context(), stationID)
+	if err != nil {
+		h.log.Error("admin probe stream list streams", "station_id", stationID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	var target *store.StationStream
+	for _, stream := range streams {
+		if stream.ID == streamID {
+			target = stream
+			break
+		}
+	}
+	if target == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "stream not found"})
+		return
+	}
+
+	scope := strings.ToLower(strings.TrimSpace(c.Query("scope")))
+	if scope == "" {
+		scope = "full"
+	}
+	if scope != "full" && scope != "quality" && scope != "metadata" && scope != "loudness" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "scope must be quality, metadata, loudness, or full"})
+		return
+	}
+
+	resolvedURL := strings.TrimSpace(target.ResolvedURL)
+
+	if scope == "full" || scope == "quality" || scope == "loudness" {
+		probeCtx, cancel := context.WithTimeout(c.Request.Context(), 12*time.Second)
+		probe := radio.ProbeStream(probeCtx, h.admin.streamProbeClient, target.URL)
+		cancel()
+
+		nextHealth := target.HealthScore
+		if probe.LastError == nil {
+			nextHealth = 1
+		}
+
+		update := store.ProbeUpdate{
+			ResolvedURL:          probe.ResolvedURL,
+			Kind:                 probe.Kind,
+			Container:            probe.Container,
+			Transport:            probe.Transport,
+			MimeType:             probe.MimeType,
+			Codec:                probe.Codec,
+			Bitrate:              probe.Bitrate,
+			BitDepth:             probe.BitDepth,
+			SampleRateHz:         probe.SampleRateHz,
+			SampleRateConfidence: probe.SampleRateConfidence,
+			Channels:             probe.Channels,
+			HealthScore:          &nextHealth,
+			LastCheckedAt:        probe.LastCheckedAt,
+			LastError:            probe.LastError,
+		}
+		if scope == "full" || scope == "loudness" {
+			update.LoudnessIntegratedLUFS = probe.LoudnessIntegratedLUFS
+			update.LoudnessPeakDBFS = probe.LoudnessPeakDBFS
+			update.LoudnessSampleDuration = probe.LoudnessSampleDuration
+			update.LoudnessMeasuredAt = probe.LoudnessMeasuredAt
+			update.LoudnessStatus = probe.LoudnessStatus
+		}
+
+		if err := h.admin.streams.UpdateProbeResult(c.Request.Context(), target.ID, update); err != nil {
+			h.log.Error("admin probe stream update probe", "stream_id", target.ID, "scope", scope, "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+
+		if strings.TrimSpace(probe.ResolvedURL) != "" {
+			resolvedURL = strings.TrimSpace(probe.ResolvedURL)
+		}
+	}
+
+	if scope == "full" || scope == "metadata" {
+		metadataURL := resolvedURL
+		if metadataURL == "" {
+			metadataURL = target.URL
+		}
+		metadataSource, metadataError, metadataErrorCode, metadataFetchedAt := detectMetadataSnapshot(
+			h.admin.metaFetcher.Fetch(c.Request.Context(), metadataURL, metadata.Config{
+				Enabled: target.MetadataEnabled,
+				Type:    target.MetadataType,
+			}),
+		)
+		if err := h.admin.streams.UpdateMetadataHealth(
+			c.Request.Context(),
+			target.ID,
+			metadataSource,
+			metadataError,
+			metadataErrorCode,
+			metadataFetchedAt,
+		); err != nil {
+			h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+	}
+
+	reloaded, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), stationID)
+	if err != nil {
+		h.log.Error("admin probe stream reload station", "station_id", stationID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, h.adminStationWithStreams(c.Request.Context(), reloaded))
 }
 
 // AdminListStations handles GET /admin/stations?status=pending|approved|rejected
@@ -534,29 +670,34 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			metadataSource, metadataError, metadataErrorCode, metadataFetchedAt = detectMetadataSnapshot(np)
 		}
 		_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
-			URL:                   u.StreamURL,
-			ResolvedURL:           primaryProbe.ResolvedURL,
-			Kind:                  primaryProbe.Kind,
-			Container:             primaryProbe.Container,
-			Transport:             primaryProbe.Transport,
-			MimeType:              primaryProbe.MimeType,
-			Codec:                 primaryProbe.Codec,
-			Bitrate:               primaryProbe.Bitrate,
-			BitDepth:              primaryProbe.BitDepth,
-			SampleRateHz:          primaryProbe.SampleRateHz,
-			SampleRateConfidence:  primaryProbe.SampleRateConfidence,
-			Channels:              primaryProbe.Channels,
-			Priority:              1,
-			IsActive:              true,
-			MetadataEnabled:       metadataEnabled,
-			MetadataType:          metadata.TypeAuto,
-			MetadataSource:        metadataSource,
-			MetadataError:         metadataError,
-			MetadataErrorCode:     metadataErrorCode,
-			MetadataLastFetchedAt: metadataFetchedAt,
-			HealthScore:           initialProbeHealthScore(*primaryProbe),
-			LastCheckedAt:         &primaryProbe.LastCheckedAt,
-			LastError:             primaryProbe.LastError,
+			URL:                    u.StreamURL,
+			ResolvedURL:            primaryProbe.ResolvedURL,
+			Kind:                   primaryProbe.Kind,
+			Container:              primaryProbe.Container,
+			Transport:              primaryProbe.Transport,
+			MimeType:               primaryProbe.MimeType,
+			Codec:                  primaryProbe.Codec,
+			Bitrate:                primaryProbe.Bitrate,
+			BitDepth:               primaryProbe.BitDepth,
+			SampleRateHz:           primaryProbe.SampleRateHz,
+			SampleRateConfidence:   primaryProbe.SampleRateConfidence,
+			Channels:               primaryProbe.Channels,
+			Priority:               1,
+			IsActive:               true,
+			LoudnessIntegratedLUFS: primaryProbe.LoudnessIntegratedLUFS,
+			LoudnessPeakDBFS:       primaryProbe.LoudnessPeakDBFS,
+			LoudnessSampleDuration: primaryProbe.LoudnessSampleDuration,
+			LoudnessMeasuredAt:     primaryProbe.LoudnessMeasuredAt,
+			LoudnessStatus:         primaryProbe.LoudnessStatus,
+			MetadataEnabled:        metadataEnabled,
+			MetadataType:           metadata.TypeAuto,
+			MetadataSource:         metadataSource,
+			MetadataError:          metadataError,
+			MetadataErrorCode:      metadataErrorCode,
+			MetadataLastFetchedAt:  metadataFetchedAt,
+			HealthScore:            initialProbeHealthScore(*primaryProbe),
+			LastCheckedAt:          &primaryProbe.LastCheckedAt,
+			LastError:              primaryProbe.LastError,
 		})
 	}
 
@@ -725,29 +866,34 @@ func (h *Handler) buildStationStreams(
 		}
 
 		inputs = append(inputs, store.StationStreamInput{
-			URL:                   strings.TrimSpace(stream.URL),
-			ResolvedURL:           probe.ResolvedURL,
-			Kind:                  probe.Kind,
-			Container:             probe.Container,
-			Transport:             probe.Transport,
-			MimeType:              probe.MimeType,
-			Codec:                 probe.Codec,
-			Bitrate:               probe.Bitrate,
-			BitDepth:              probe.BitDepth,
-			SampleRateHz:          probe.SampleRateHz,
-			SampleRateConfidence:  probe.SampleRateConfidence,
-			Channels:              probe.Channels,
-			Priority:              priority,
-			IsActive:              isActive,
-			MetadataEnabled:       metadataEnabled,
-			MetadataType:          metadataType,
-			MetadataSource:        metadataSource,
-			MetadataError:         metadataError,
-			MetadataErrorCode:     metadataErrorCode,
-			MetadataLastFetchedAt: metadataLastFetchedAt,
-			HealthScore:           initialProbeHealthScore(probe),
-			LastCheckedAt:         &probe.LastCheckedAt,
-			LastError:             probe.LastError,
+			URL:                    strings.TrimSpace(stream.URL),
+			ResolvedURL:            probe.ResolvedURL,
+			Kind:                   probe.Kind,
+			Container:              probe.Container,
+			Transport:              probe.Transport,
+			MimeType:               probe.MimeType,
+			Codec:                  probe.Codec,
+			Bitrate:                probe.Bitrate,
+			BitDepth:               probe.BitDepth,
+			SampleRateHz:           probe.SampleRateHz,
+			SampleRateConfidence:   probe.SampleRateConfidence,
+			Channels:               probe.Channels,
+			Priority:               priority,
+			IsActive:               isActive,
+			LoudnessIntegratedLUFS: probe.LoudnessIntegratedLUFS,
+			LoudnessPeakDBFS:       probe.LoudnessPeakDBFS,
+			LoudnessSampleDuration: probe.LoudnessSampleDuration,
+			LoudnessMeasuredAt:     probe.LoudnessMeasuredAt,
+			LoudnessStatus:         probe.LoudnessStatus,
+			MetadataEnabled:        metadataEnabled,
+			MetadataType:           metadataType,
+			MetadataSource:         metadataSource,
+			MetadataError:          metadataError,
+			MetadataErrorCode:      metadataErrorCode,
+			MetadataLastFetchedAt:  metadataLastFetchedAt,
+			HealthScore:            initialProbeHealthScore(probe),
+			LastCheckedAt:          &probe.LastCheckedAt,
+			LastError:              probe.LastError,
 		})
 	}
 	return inputs, nil
