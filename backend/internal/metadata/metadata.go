@@ -521,6 +521,9 @@ func (f *Fetcher) readICYBlock(r io.Reader, metaint int, streamURL string) (*Now
 	raw := strings.TrimRight(string(metaBuf), "\x00")
 	title := extractICYField(raw, "StreamTitle")
 	f.log.Debug("metadata: icy block content", "url", streamURL, "raw", raw, "title", title)
+	if isPlaceholderTitle(title) {
+		title = ""
+	}
 
 	np := &NowPlaying{
 		Title:     title,
@@ -608,7 +611,7 @@ func (f *Fetcher) fetchIcecastJSON(ctx context.Context, streamURL string) (*NowP
 			break
 		}
 	}
-	if best.Title == "" {
+	if isPlaceholderTitle(best.Title) {
 		return nil, fmt.Errorf("no title in icecast source")
 	}
 
@@ -663,7 +666,7 @@ func (f *Fetcher) fetchShoutcastCurrentSong(ctx context.Context, endpoint string
 		return nil, err
 	}
 	title := strings.TrimSpace(string(b))
-	if title == "" {
+	if isPlaceholderTitle(title) {
 		return nil, fmt.Errorf("empty shoutcast /currentsong body")
 	}
 
@@ -704,7 +707,7 @@ func (f *Fetcher) fetchShoutcast7HTML(ctx context.Context, endpoint string) (*No
 		return nil, fmt.Errorf("unexpected /7.html format: %q", text)
 	}
 	title := strings.TrimSpace(parts[6])
-	if title == "" {
+	if isPlaceholderTitle(title) {
 		return nil, fmt.Errorf("empty title in /7.html")
 	}
 
@@ -862,6 +865,17 @@ func parseM3U(text string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// isPlaceholderTitle reports whether a title string is a known placeholder
+// value that should be treated as no metadata (e.g. "-", ".", "N/A").
+func isPlaceholderTitle(s string) bool {
+	s = strings.TrimSpace(s)
+	switch s {
+	case "", "-", "--", "---", ".", "..", "N/A", "n/a", "NA", "null", "undefined", "unknown":
+		return true
+	}
+	return false
 }
 
 // isICYProtocolError reports whether err stems from a server that sent an
