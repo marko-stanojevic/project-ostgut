@@ -31,7 +31,6 @@ export function toStation(s: ApiStation): Station {
         genres: s.genres ?? [],
         country: s.country,
         city: s.city,
-        countryCode: s.country_code,
         bitrate: s.bitrate,
         codec: s.codec,
     }

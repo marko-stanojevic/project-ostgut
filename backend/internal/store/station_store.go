@@ -24,7 +24,6 @@ type Station struct {
 	Language         string
 	Country          string
 	City             string
-	CountryCode      string
 	Tags             []string
 	StyleTags        []string
 	FormatTags       []string
@@ -45,7 +44,7 @@ type Station struct {
 // StationFilter holds optional query parameters for listing stations.
 type StationFilter struct {
 	Genres       []string // OR filter across genres array
-	CountryCode  string
+	Country      string
 	Language     string
 	MinBitrate   int
 	Styles       []string // OR filter across style_tags
@@ -61,45 +60,41 @@ type StationFilter struct {
 
 // EnrichmentUpdate carries editable station fields for admin updates.
 type EnrichmentUpdate struct {
-	Name             string
-	StreamURL        string
-	Homepage         string
-	Logo             string
-	Genres           []string
-	Language         string
-	Country          string
-	City             string
-	CountryCode      string
-	Tags             []string
-	StyleTags        []string
-	FormatTags       []string
-	TextureTags      []string
-	ReliabilityScore float64
-	Status           string
-	Overview         *string
-	EditorNotes      *string
-	Featured         bool
+	Name        string
+	StreamURL   string
+	Homepage    string
+	Logo        string
+	Genres      []string
+	Language    string
+	Country     string
+	City        string
+	Tags        []string
+	StyleTags   []string
+	FormatTags  []string
+	TextureTags []string
+	Status      string
+	Overview    *string
+	EditorNotes *string
+	Featured    bool
 }
 
 // ManualStationInput carries fields for creating a station directly from admin.
 type ManualStationInput struct {
-	Name             string
-	StreamURL        string
-	Homepage         string
-	Logo             string
-	Genres           []string
-	Language         string
-	Country          string
-	City             string
-	CountryCode      string
-	Tags             []string
-	StyleTags        []string
-	FormatTags       []string
-	TextureTags      []string
-	ReliabilityScore float64
-	Status           string
-	Featured         bool
-	Overview         *string
+	Name        string
+	StreamURL   string
+	Homepage    string
+	Logo        string
+	Genres      []string
+	Language    string
+	Country     string
+	City        string
+	Tags        []string
+	StyleTags   []string
+	FormatTags  []string
+	TextureTags []string
+	Status      string
+	Featured    bool
+	Overview    *string
 }
 
 // StationStore executes queries against the stations table.
@@ -114,7 +109,7 @@ func NewStationStore(pool *pgxpool.Pool) *StationStore {
 
 const stationColumns = `
 	id, external_id, name, custom_name, stream_url, homepage, logo,
-	genres, language, country, city, country_code, tags,
+	genres, language, country, city, tags,
 	style_tags, format_tags, texture_tags,
 	votes, click_count, reliability_score,
 	is_active, featured, status,
@@ -125,7 +120,7 @@ func scanStation(row pgx.Row) (*Station, error) {
 	var s Station
 	err := row.Scan(
 		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Logo,
-		&s.Genres, &s.Language, &s.Country, &s.City, &s.CountryCode, &s.Tags,
+		&s.Genres, &s.Language, &s.Country, &s.City, &s.Tags,
 		&s.StyleTags, &s.FormatTags, &s.TextureTags,
 		&s.Votes, &s.ClickCount, &s.ReliabilityScore,
 		&s.IsActive, &s.Featured, &s.Status,
@@ -213,8 +208,8 @@ func buildStationFilterClause(f StationFilter, builder *stationQueryBuilder) (st
 	if len(f.Genres) > 0 {
 		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", builder.addArg(f.Genres))
 	}
-	if f.CountryCode != "" {
-		where += fmt.Sprintf(" AND upper(country_code) = $%d", builder.addArg(f.CountryCode))
+	if f.Country != "" {
+		where += fmt.Sprintf(" AND lower(country) = $%d", builder.addArg(f.Country))
 	}
 	if f.Language != "" {
 		where += fmt.Sprintf(" AND lower(language) = $%d", builder.addArg(f.Language))
@@ -245,7 +240,6 @@ func buildStationFilterClause(f StationFilter, builder *stationQueryBuilder) (st
 			languagePlaceholder := builder.addArg(pattern)
 			countryPlaceholder := builder.addArg(pattern)
 			cityPlaceholder := builder.addArg(pattern)
-			countryCodePlaceholder := builder.addArg(pattern)
 			tagPlaceholder := builder.addArg(pattern)
 
 			searchClauses = append(searchClauses, fmt.Sprintf(`
@@ -255,13 +249,12 @@ func buildStationFilterClause(f StationFilter, builder *stationQueryBuilder) (st
 					language ILIKE $%[3]d OR
 					country ILIKE $%[4]d OR
 					city ILIKE $%[5]d OR
-					country_code ILIKE $%[6]d OR
 					EXISTS (
 						SELECT 1
 						FROM unnest(tags) AS tag
-						WHERE tag ILIKE $%[7]d
+						WHERE tag ILIKE $%[6]d
 					)
-				)`, namePlaceholder, genrePlaceholder, languagePlaceholder, countryPlaceholder, cityPlaceholder, countryCodePlaceholder, tagPlaceholder))
+				)`, namePlaceholder, genrePlaceholder, languagePlaceholder, countryPlaceholder, cityPlaceholder, tagPlaceholder))
 		}
 	}
 
@@ -380,11 +373,11 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) (string, error) 
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, logo,
-			genres, language, country, city, country_code, tags,
+			genres, language, country, city, tags,
 			votes, click_count, reliability_score,
 			is_active, status, last_synced_at, updated_at
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',NOW(),NOW()
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending',NOW(),NOW()
 		)
 		ON CONFLICT (external_id) DO UPDATE SET
 			votes             = EXCLUDED.votes,
@@ -394,11 +387,11 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) (string, error) 
 			last_synced_at    = NOW(),
 			updated_at        = NOW()
 			-- NOTE: name, stream_url, homepage, logo, genres, language,
-			-- country, country_code, tags, status,
+			-- country, tags, status,
 			-- editor_notes, featured are intentionally NOT updated
 		RETURNING id`,
 		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Logo,
-		normalizeGenres(st.Genres), st.Language, st.Country, st.City, st.CountryCode, tags,
+		normalizeGenres(st.Genres), st.Language, st.Country, st.City, tags,
 		st.Votes, st.ClickCount, st.ReliabilityScore,
 		st.IsActive,
 	).Scan(&id)
@@ -422,7 +415,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, logo,
-			genres, language, country, city, country_code, tags,
+			genres, language, country, city, tags,
 			style_tags, format_tags, texture_tags,
 			votes, click_count, reliability_score,
 			is_active, featured, status, overview,
@@ -430,17 +423,16 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 		) VALUES (
 			'manual:' || gen_random_uuid()::text,
 			$1, $2, $3, $4,
-			$5, $6, $7, $8, $9, $10,
-			$11, $12, $13,
-			0, 0, $14,
-			true, $15, $16, $17,
+			$5, $6, $7, $8, $9,
+			$10, $11, $12,
+			0, 0, 0,
+			true, $13, $14, $15,
 			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
 		in.Name, in.StreamURL, in.Homepage, in.Logo,
-		normalizeGenres(in.Genres), in.Language, in.Country, in.City, in.CountryCode, tags,
+		normalizeGenres(in.Genres), in.Language, in.Country, in.City, tags,
 		styleTags, formatTags, textureTags,
-		in.ReliabilityScore,
 		in.Featured, in.Status, in.Overview,
 	).Scan(&id)
 	if err != nil {
@@ -471,23 +463,20 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			language          = $6,
 			country           = $7,
 			city              = $8,
-			country_code      = $9,
-			tags              = $10,
-			style_tags            = $11,
-			format_tags           = $12,
-			texture_tags          = $13,
-			reliability_score     = $14,
-			status                = $15,
-			editor_notes          = $16,
-			overview              = $17,
-			featured              = $18,
+			tags              = $9,
+			style_tags        = $10,
+			format_tags       = $11,
+			texture_tags      = $12,
+			status            = $13,
+			editor_notes      = $14,
+			overview          = $15,
+			featured          = $16,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $19`,
+		WHERE id = $17`,
 		u.Name, u.StreamURL, u.Homepage, u.Logo,
-		normalizeGenres(u.Genres), u.Language, u.Country, u.City, u.CountryCode, tags,
+		normalizeGenres(u.Genres), u.Language, u.Country, u.City, tags,
 		styleTags, formatTags, textureTags,
-		u.ReliabilityScore,
 		u.Status, u.EditorNotes, u.Overview, u.Featured, id,
 	)
 	return err
@@ -567,27 +556,6 @@ func (s *StationStore) Genres(ctx context.Context) ([]string, error) {
 		genres = append(genres, g)
 	}
 	return genres, rows.Err()
-}
-
-// Countries returns distinct country codes + names present in approved stations.
-func (s *StationStore) Countries(ctx context.Context) ([][2]string, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT upper(country_code), country FROM stations
-		WHERE is_active = true AND status = 'approved' AND country_code != ''
-		ORDER BY 2`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var result [][2]string
-	for rows.Next() {
-		var code, name string
-		if err := rows.Scan(&code, &name); err != nil {
-			return nil, err
-		}
-		result = append(result, [2]string{code, name})
-	}
-	return result, rows.Err()
 }
 
 // Languages returns distinct non-empty languages present in approved stations.

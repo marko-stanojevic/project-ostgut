@@ -26,7 +26,6 @@ type stationResponse struct {
 	Language         string           `json:"language"`
 	Country          string           `json:"country"`
 	City             string           `json:"city"`
-	CountryCode      string           `json:"country_code"`
 	Tags             []string         `json:"tags"`
 	StyleTags        []string         `json:"style_tags"`
 	FormatTags       []string         `json:"format_tags"`
@@ -204,7 +203,6 @@ func toStationResponse(s *store.Station, streams []streamResponse) stationRespon
 		Language:         s.Language,
 		Country:          s.Country,
 		City:             s.City,
-		CountryCode:      s.CountryCode,
 		Tags:             combined,
 		StyleTags:        styleTags,
 		FormatTags:       formatTags,
@@ -248,7 +246,7 @@ func (h *Handler) ListStations(c *gin.Context) {
 	f := store.StationFilter{
 		Search:       strings.TrimSpace(c.Query("q")),
 		Genres:       lowerAll(c.QueryArray("genre")),
-		CountryCode:  strings.ToUpper(c.Query("country")),
+		Country:      strings.ToLower(strings.TrimSpace(c.Query("country"))),
 		Language:     strings.ToLower(c.Query("language")),
 		MinBitrate:   queryInt(c, "min_bitrate", 0),
 		Styles:       lowerAll(c.QueryArray("style")),

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -194,6 +195,48 @@ func sanitizeStreamInput(in StationStreamInput, fallbackPriority int) StationStr
 	}
 }
 
+func deriveStationReliabilityFromStreams(streams []StationStreamInput) float64 {
+	best := 0.0
+	for _, stream := range streams {
+		if !stream.IsActive {
+			continue
+		}
+		health := stream.HealthScore
+		if health < 0 {
+			health = 0
+		}
+		if health > 1 {
+			health = 1
+		}
+		if health > best {
+			best = health
+		}
+	}
+	return best
+}
+
+func (s *StationStreamStore) syncStationReliability(ctx context.Context, q interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, stationID string) error {
+	_, err := q.Exec(ctx, `
+		UPDATE stations
+		SET
+			reliability_score = coalesce((
+				SELECT max(health_score)
+				FROM station_streams
+				WHERE station_id = $1
+				  AND is_active = true
+			), 0),
+			updated_at = NOW()
+		WHERE id = $1`,
+		stationID,
+	)
+	if err != nil {
+		return fmt.Errorf("sync station reliability: %w", err)
+	}
+	return nil
+}
+
 func normalizeMetadataSource(v *string) *string {
 	if v == nil {
 		return nil
@@ -362,6 +405,10 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 		return nil, fmt.Errorf("mirror primary stream into station: %w", err)
 	}
 
+	if err := s.syncStationReliability(ctx, tx, stationID); err != nil {
+		return nil, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit station stream replace: %w", err)
 	}
@@ -437,6 +484,9 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 	)
 	if err != nil {
 		return fmt.Errorf("upsert primary station stream: %w", err)
+	}
+	if err := s.syncStationReliability(ctx, s.pool, stationID); err != nil {
+		return err
 	}
 	return nil
 }
@@ -533,6 +583,13 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 	)
 	if err != nil {
 		return fmt.Errorf("update probe result: %w", err)
+	}
+	var stationID string
+	if err := s.pool.QueryRow(ctx, `SELECT station_id FROM station_streams WHERE id = $1`, id).Scan(&stationID); err != nil {
+		return fmt.Errorf("load stream station: %w", err)
+	}
+	if err := s.syncStationReliability(ctx, s.pool, stationID); err != nil {
+		return err
 	}
 	return nil
 }

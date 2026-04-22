@@ -41,7 +41,6 @@ type radioBrowserStation struct {
 	Tags          string `json:"tags"` // comma-separated
 	Country       string `json:"country"`
 	State         string `json:"state"`
-	CountryCode   string `json:"countrycode"`
 	Language      string `json:"language"`
 	LanguageCodes string `json:"languagecodes"`
 	Codec         string `json:"codec"`
@@ -249,7 +248,6 @@ func curate(raw []radioBrowserStation) []*store.Station {
 			Language:         primaryLanguage(r.Language, r.LanguageCodes),
 			Country:          r.Country,
 			City:             strings.TrimSpace(r.State),
-			CountryCode:      strings.ToUpper(r.CountryCode),
 			Tags:             tags,
 			Votes:            r.Votes,
 			ClickCount:       r.ClickCount,

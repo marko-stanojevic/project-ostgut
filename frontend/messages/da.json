@@ -304,7 +304,6 @@
     "field_language": "Sprog",
     "field_country": "Land",
     "field_city": "By",
-    "field_country_code": "Landekode",
     "field_bitrate": "Bitrate (kbps)",
     "field_codec": "Codec",
     "field_logo": "Logo-URL",

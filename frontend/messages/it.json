@@ -304,7 +304,6 @@
     "field_language": "Lingua",
     "field_country": "Paese",
     "field_city": "Città",
-    "field_country_code": "Codice paese",
     "field_bitrate": "Bitrate (kbps)",
     "field_codec": "Codec",
     "field_logo": "URL logo",

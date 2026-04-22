@@ -63,7 +63,6 @@ interface CreateStationForm {
   genre: string
   country: string
   city: string
-  country_code: string
   language: string
   logo: string
   homepage: string
@@ -138,7 +137,6 @@ export default function AdminStationsPage() {
     genre: '',
     country: '',
     city: '',
-    country_code: '',
     language: '',
     logo: '',
     homepage: '',
@@ -293,7 +291,6 @@ export default function AdminStationsPage() {
             genres: createForm.genre.split(',').map((g) => g.trim()).filter(Boolean),
             country: createForm.country.trim(),
             city: createForm.city.trim(),
-            country_code: createForm.country_code.trim().toUpperCase(),
             language: createForm.language.trim(),
             logo: createForm.logo.trim(),
             homepage: createForm.homepage.trim(),
@@ -315,7 +312,6 @@ export default function AdminStationsPage() {
         genre: '',
         country: '',
         city: '',
-        country_code: '',
         language: '',
         logo: '',
         homepage: '',
@@ -556,10 +552,6 @@ export default function AdminStationsPage() {
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">{t('field_city')}</label>
                 <Input value={createForm.city} onChange={(e) => setCreateForm((p) => ({ ...p, city: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">{t('field_country_code')}</label>
-                <Input value={createForm.country_code} onChange={(e) => setCreateForm((p) => ({ ...p, country_code: e.target.value }))} />
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">{t('field_logo')}</label>

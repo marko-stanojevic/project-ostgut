@@ -304,7 +304,6 @@
     "field_language": "Taal",
     "field_country": "Land",
     "field_city": "Stad",
-    "field_country_code": "Landcode",
     "field_bitrate": "Bitrate (kbps)",
     "field_codec": "Codec",
     "field_logo": "Logo-URL",

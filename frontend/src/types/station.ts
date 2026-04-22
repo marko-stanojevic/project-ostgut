@@ -36,7 +36,6 @@ export interface ApiStation {
     language?: string
     country: string
     city: string
-    country_code: string
     bitrate?: number
     codec?: string
     reliability_score?: number

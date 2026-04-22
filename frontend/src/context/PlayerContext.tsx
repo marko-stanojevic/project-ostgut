@@ -310,7 +310,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             genres: prev.genres?.length ? prev.genres : full.genres,
             country: prev.country || full.country,
             city: prev.city || full.city,
-            countryCode: prev.countryCode || full.countryCode,
           }
         })
         setCurrentStream((prev) => {
