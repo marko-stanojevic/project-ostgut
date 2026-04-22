@@ -13,31 +13,27 @@ import {
   SkipForwardIcon,
   RadioIcon,
   CircleNotchIcon,
-  ArrowsOutIcon,
+  CornersOutIcon,
+  WaveformIcon,
 } from '@phosphor-icons/react'
 
-function formatStreamDetails(stream?: {
+function getStreamDetailBadges(stream?: {
   codec?: string
   lossless?: boolean
   bitDepth?: number
   sampleRateHz?: number
   sampleRateConfidence?: string
   channels?: number
-} | null): string {
-  if (!stream) return ''
-  const parts: string[] = []
-  if (stream.codec) parts.push(stream.codec)
-  if (stream.lossless) parts.push('Lossless')
-  const hasFormatTuple = (stream.bitDepth ?? 0) > 0 || (stream.sampleRateHz ?? 0) > 0 || (stream.channels ?? 0) > 0
-  if (hasFormatTuple || stream.lossless || (stream.codec || '').toUpperCase().includes('FLAC')) {
-    parts.push(`${(stream.bitDepth ?? 0) > 0 ? `${stream.bitDepth}` : '-'}-bit`)
-    parts.push(`${(stream.sampleRateHz ?? 0) > 0 ? `${stream.sampleRateHz}` : '-'} Hz`)
-    parts.push(`${(stream.channels ?? 0) > 0 ? `${stream.channels}` : '-'}ch`)
-    const confidence = (stream.sampleRateConfidence || '').toLowerCase()
-    if (confidence === 'parsed_streaminfo') parts.push('Verified')
-    if (confidence === 'parsed_frame') parts.push('Frame-verified')
-  }
-  return parts.join(' / ')
+} | null): { primary: string[]; secondary: string[] } {
+  if (!stream) return { primary: [], secondary: [] }
+  const primary: string[] = []
+  const secondary: string[] = []
+  if (stream.codec) primary.push(stream.codec)
+  if (stream.lossless) primary.push('Lossless')
+  if ((stream.bitDepth ?? 0) > 0) secondary.push(`${stream.bitDepth}-bit`)
+  if ((stream.sampleRateHz ?? 0) > 0) secondary.push(`${stream.sampleRateHz} Hz`)
+  if ((stream.channels ?? 0) > 0) secondary.push(`${stream.channels}ch`)
+  return { primary, secondary }
 }
 
 function WaveformBars() {
@@ -61,6 +57,7 @@ function WaveformBars() {
 export function PlayerBar() {
   const [mounted, setMounted] = useState(false)
   const [fullScreen, setFullScreen] = useState(false)
+  const [statsExpanded, setStatsExpanded] = useState(false)
   useEffect(() => setMounted(true), [])
 
   const { station, currentStream, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
@@ -83,11 +80,12 @@ export function PlayerBar() {
     }
     return [...station.streams].sort((a, b) => a.priority - b.priority)[0]
   }, [station, currentStream])
-  const streamDetails = formatStreamDetails(displayStream)
+  const streamDetailBadges = getStreamDetailBadges(displayStream)
   const isLosslessLike = Boolean(
     displayStream?.lossless || (displayStream?.codec || '').toUpperCase().includes('FLAC'),
   )
   const bitrateKbps = displayStream ? (displayStream.bitrate ?? 0) : (station?.bitrate || 0)
+  const hasQualityDetails = streamDetailBadges.primary.length > 0 || streamDetailBadges.secondary.length > 0 || (bitrateKbps > 0 && !isLosslessLike)
   const cityLine = station?.city ?? ''
   const hasNowPlaying = Boolean(nowPlaying?.title)
   const secondaryLine = isError
@@ -190,26 +188,55 @@ export function PlayerBar() {
 
         {/* Volume + bitrate — right */}
         <div className="flex items-center justify-end gap-3 sm:gap-4">
-          <div className="hidden items-center gap-2 sm:flex">
-            {streamDetails ? (
-              <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs text-zinc-400 sm:text-sm">
-                {streamDetails}
-              </span>
-            ) : null}
-            {bitrateKbps > 0 && !isLosslessLike ? (
-              <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs tabular-nums text-zinc-500 sm:text-sm">
-                {bitrateKbps} kbps
-              </span>
-            ) : null}
-          </div>
+          {hasQualityDetails ? (
+            <div className="hidden items-center md:flex">
+              <div
+                className={`overflow-hidden transition-all duration-300 ease-out ${
+                  statsExpanded ? 'max-w-[24rem] opacity-100' : 'max-w-0 opacity-0'
+                }`}
+              >
+                <div className="flex flex-col items-end gap-1 pr-3">
+                  <div className="flex items-center gap-2">
+                    {streamDetailBadges.primary.map((detail) => (
+                      <span
+                        key={detail}
+                        className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-100"
+                      >
+                        {detail}
+                      </span>
+                    ))}
+                    {bitrateKbps > 0 && !isLosslessLike ? (
+                      <span className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium tabular-nums uppercase tracking-[0.12em] text-zinc-100">
+                        {bitrateKbps} kbps
+                      </span>
+                    ) : null}
+                  </div>
+                  {streamDetailBadges.secondary.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      {streamDetailBadges.secondary.map((detail) => (
+                        <span
+                          key={detail}
+                          className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-100"
+                        >
+                          {detail}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
 
-          <button
-            onClick={() => setFullScreen(true)}
-            title="Full screen"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.08] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-          >
-            <ArrowsOutIcon className="h-4.5 w-4.5" />
-          </button>
+              <button
+                type="button"
+                aria-expanded={statsExpanded}
+                aria-label={statsExpanded ? 'Hide audio stats' : 'Show audio stats'}
+                onClick={() => setStatsExpanded((prev) => !prev)}
+                className="flex h-10 w-14 shrink-0 items-center justify-center rounded-[0.7rem] text-zinc-400 transition-colors hover:text-zinc-200"
+              >
+                <WaveformIcon className="h-5.5 w-5.5" weight="regular" />
+              </button>
+            </div>
+          ) : null}
 
           <PlayerVolumeControl
             className="hidden w-44 shrink-0 items-center gap-3 md:flex"
@@ -217,6 +244,14 @@ export function PlayerBar() {
             volume={volume}
             setVolume={setVolume}
           />
+
+          <button
+            onClick={() => setFullScreen(true)}
+            title="Full screen"
+            className="flex h-12 w-12 shrink-0 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-200"
+          >
+            <CornersOutIcon className="h-9 w-9" weight="light" />
+          </button>
         </div>
 
       </div>

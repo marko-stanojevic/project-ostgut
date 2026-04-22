@@ -31,7 +31,7 @@ export function PlayerVolumeControl({
         onClick={() => setVolume(volume === 0 ? 0.8 : 0)}
         title={volume === 0 ? 'Unmute' : 'Mute'}
         aria-label={volume === 0 ? 'Unmute' : 'Mute'}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-zinc-200"
       >
         {volume === 0
           ? <SpeakerXIcon className={iconClassName ?? 'h-5 w-5'} />
