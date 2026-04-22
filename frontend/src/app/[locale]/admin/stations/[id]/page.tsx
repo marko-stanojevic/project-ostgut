@@ -165,6 +165,23 @@ function isValidAbsoluteURL(value: string) {
     }
 }
 
+function getStreamURLValidationMessage(value: string) {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    if (!isValidAbsoluteURL(trimmed)) return 'Enter a valid absolute URL'
+
+    try {
+        const u = new URL(trimmed)
+        if (u.protocol !== 'https:') {
+            return 'Stream URLs must use HTTPS for web playback on staging and production'
+        }
+    } catch {
+        return 'Enter a valid absolute URL'
+    }
+
+    return ''
+}
+
 function formatStreamAudioDetails(stream: AdminStream): string {
     const bitDepth = stream.bit_depth > 0 ? `${stream.bit_depth}-bit` : '-bit'
     const sampleRate = stream.sample_rate_hz > 0 ? `${stream.sample_rate_hz} Hz` : '- Hz'
@@ -270,11 +287,13 @@ export default function StationEditorPage() {
     const logoURL = form.logo.trim()
     const websiteURL = form.website.trim()
     const reliabilityNum = form.reliability_score.trim() === '' ? 0 : Number(form.reliability_score)
+    const streamValidationMessages = form.streams.map((s) => getStreamURLValidationMessage(s.url))
+    const hasAtLeastOneStreamURL = form.streams.some((s) => s.url.trim() !== '')
 
     const hasValidName = trimmedName.length > 0
     const hasValidStreams = form.streams.length > 0 &&
-        form.streams.every(s => s.url.trim() === '' || isValidAbsoluteURL(s.url.trim())) &&
-        form.streams.some(s => isValidAbsoluteURL(s.url.trim()))
+        streamValidationMessages.every((msg) => msg === '') &&
+        hasAtLeastOneStreamURL
     const hasValidLogoURL = logoURL === '' || isValidAbsoluteURL(logoURL)
     const hasValidWebsiteURL = websiteURL === '' || isValidAbsoluteURL(websiteURL)
     const hasValidReliability = Number.isFinite(reliabilityNum) && reliabilityNum >= 0 && reliabilityNum <= 1
@@ -525,17 +544,22 @@ export default function StationEditorPage() {
                                 <div key={i} className="space-y-3 rounded-lg border p-3">
                                     <div className="flex items-center gap-2">
                                         <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
-                                        <Input
-                                            value={stream.url}
-                                            placeholder="https://…"
-                                            className="flex-1"
-                                            onChange={(e) => setForm((prev) => ({
-                                                ...prev,
-                                                streams: prev.streams.map((s, idx) =>
-                                                    idx === i ? { ...s, url: e.target.value } : s
-                                                ),
-                                            }))}
-                                        />
+                                        <div className="flex-1 space-y-1">
+                                            <Input
+                                                value={stream.url}
+                                                placeholder="https://…"
+                                                className="flex-1"
+                                                onChange={(e) => setForm((prev) => ({
+                                                    ...prev,
+                                                    streams: prev.streams.map((s, idx) =>
+                                                        idx === i ? { ...s, url: e.target.value } : s
+                                                    ),
+                                                }))}
+                                            />
+                                            {streamValidationMessages[i] && (
+                                                <p className="text-xs text-destructive">{streamValidationMessages[i]}</p>
+                                            )}
+                                        </div>
                                         <Input
                                             value={stream.bitrate}
                                             type="number"
@@ -653,10 +677,14 @@ export default function StationEditorPage() {
                             Add stream URL
                         </Button>
                         {!hasValidStreams && (
-                            <p className="text-xs text-destructive">At least one valid absolute URL is required</p>
+                            <p className="text-xs text-destructive">
+                                {hasAtLeastOneStreamURL
+                                    ? 'Fix invalid stream URLs before saving'
+                                    : 'At least one stream URL is required'}
+                            </p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                            URLs are probed on save. The first entry is primary and determines the station&apos;s canonical stream URL.
+                            URLs are probed on save. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
                         </p>
                     </CardContent>
                 </Card>

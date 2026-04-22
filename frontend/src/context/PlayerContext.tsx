@@ -285,12 +285,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     onRemoteUpdate: applyPreferenceUpdate,
   })
 
-  // Older local/remote preference payloads may only contain legacy station
-  // fields without stream variants. Hydrate the current station from API so
-  // player UI can display codec/bit-depth/sample-rate/channels reliably.
+  // Refresh the active station from API so player UI reflects latest stream
+  // metadata after editorial edits and older local/remote preference payloads.
   useEffect(() => {
     if (!station?.id) return
-    if ((station.streams?.length ?? 0) > 0) return
 
     const controller = new AbortController()
     fetch(`${API}/stations/${station.id}`, { signal: controller.signal })
@@ -315,13 +313,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             countryCode: prev.countryCode || full.countryCode,
           }
         })
+        setCurrentStream((prev) => {
+          if (!prev) return prev
+
+          const latest = (full.streams ?? []).find((stream) => {
+            if (prev.id && stream.id === prev.id) return true
+            if (stream.resolvedUrl && stream.resolvedUrl === streamVariantURLRef.current) return true
+            if (stream.url && stream.url === streamVariantURLRef.current) return true
+            if (prev.resolvedUrl && stream.resolvedUrl === prev.resolvedUrl) return true
+            if (prev.url && stream.url === prev.url) return true
+            return stream.priority === prev.priority
+          })
+
+          return latest ?? prev
+        })
       })
       .catch(() => {
         // Keep current station snapshot when detail fetch fails.
       })
 
     return () => controller.abort()
-  }, [station?.id, station?.streams])
+  }, [station?.id])
 
   const touchPreferences = () => {
     setPrefsUpdatedAt(new Date().toISOString())
