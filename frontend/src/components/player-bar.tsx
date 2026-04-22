@@ -200,13 +200,13 @@ export function PlayerBar() {
                     {streamDetailBadges.primary.map((detail) => (
                       <span
                         key={detail}
-                        className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-100"
+                        className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400"
                       >
                         {detail}
                       </span>
                     ))}
                     {bitrateKbps > 0 && !isLosslessLike ? (
-                      <span className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium tabular-nums uppercase tracking-[0.12em] text-zinc-100">
+                      <span className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium tabular-nums uppercase tracking-[0.12em] text-zinc-400">
                         {bitrateKbps} kbps
                       </span>
                     ) : null}
@@ -216,7 +216,7 @@ export function PlayerBar() {
                       {streamDetailBadges.secondary.map((detail) => (
                         <span
                           key={detail}
-                          className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-100"
+                          className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400"
                         >
                           {detail}
                         </span>
