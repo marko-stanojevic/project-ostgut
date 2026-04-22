@@ -49,7 +49,7 @@ export function PlayerBar() {
   const isLoading = state === 'loading'
   const isError = state === 'error'
 
-  const nowPlaying = useNowPlaying(
+  const { nowPlaying, settled } = useNowPlaying(
     station?.id,
     currentStream?.id,
     (isPlaying || isLoading) && !fullScreen,
@@ -69,7 +69,7 @@ export function PlayerBar() {
   )
   const bitrateKbps = displayStream ? (displayStream.bitrate ?? 0) : (station?.bitrate || 0)
   const hasQualityDetails = streamDetailBadges.primary.length > 0 || streamDetailBadges.secondary.length > 0 || (bitrateKbps > 0 && !isLosslessLike)
-  const cityLine = station?.city ?? ''
+  const cityLine = (station?.city && station.city !== '-') ? station.city : ''
   const hasNowPlaying = Boolean(nowPlaying?.title)
   const secondaryLine = isError
     ? 'Tap play to reconnect'
@@ -79,7 +79,7 @@ export function PlayerBar() {
         ? nowPlaying?.artist
           ? `${nowPlaying.artist} · ${nowPlaying.song}`
           : nowPlaying?.title ?? ''
-        : cityLine
+        : settled ? cityLine : ''
 
   if (!mounted) return null
   if (!station && state === 'idle') return null
@@ -113,13 +113,11 @@ export function PlayerBar() {
               <RadioIcon className="h-5 w-5 text-zinc-600 sm:h-6 sm:w-6" />
             )}
           </div>
-          <div className="min-w-0 pl-[7.55rem] sm:pl-[9.25rem]">
-            <div className="flex items-center gap-2.5 sm:gap-3">
-              <p className="truncate text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
-                {station?.name ?? '—'}
-              </p>
-            </div>
-            <p className={`mt-0.5 truncate text-xs sm:mt-0.5 sm:text-sm ${
+          <div className="flex h-12 flex-col justify-center min-w-0 pl-[7.55rem] sm:h-14 sm:pl-[9.25rem]">
+            <p className="truncate text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+              {station?.name ?? '—'}
+            </p>
+            <p className={`h-4 truncate text-xs sm:h-5 sm:text-sm ${
               isError ? 'text-red-200/80' : 'text-zinc-300'
             }`}>
               {secondaryLine}

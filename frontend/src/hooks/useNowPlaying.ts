@@ -41,13 +41,15 @@ export function useNowPlaying(
   stationId: string | null | undefined,
   streamId: string | null | undefined,
   active: boolean,
-): NowPlaying | null {
+): { nowPlaying: NowPlaying | null; settled: boolean } {
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null)
+  const [settled, setSettled] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Clear track immediately on station change so stale data never shows.
   useEffect(() => {
     setNowPlaying(null)
+    setSettled(false)
   }, [stationId, streamId])
 
   useEffect(() => {
@@ -91,6 +93,7 @@ export function useNowPlaying(
         if (!res.ok) {
           // Server error — keep current cadence and retry.
           setNowPlaying(null)
+          setSettled(true)
           schedule(slow ? SLOW_MS : FAST_MS)
           return
         }
@@ -101,6 +104,7 @@ export function useNowPlaying(
         if (data.status === 'disabled') {
           // Admin explicitly disabled metadata polling for this station.
           setNowPlaying(null)
+          setSettled(true)
           return
         }
 
@@ -110,12 +114,14 @@ export function useNowPlaying(
           slowMisses = 0
           slow = false
           setNowPlaying(data)
+          setSettled(true)
           schedule(FAST_MS)
           return
         }
 
         // No metadata this poll.
         setNowPlaying(null)
+        setSettled(true)
         if (!slow) {
           fastMisses++
           if (fastMisses >= MAX_FAST_MISSES) {
@@ -135,6 +141,7 @@ export function useNowPlaying(
         // Network error — keep current cadence.
         if (!cancelled) {
           setNowPlaying(null)
+          setSettled(true)
           schedule(slow ? SLOW_MS : FAST_MS)
         }
       }
@@ -149,5 +156,5 @@ export function useNowPlaying(
     }
   }, [stationId, streamId, active])
 
-  return nowPlaying
+  return { nowPlaying, settled }
 }
