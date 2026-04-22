@@ -37,10 +37,7 @@ const stationSkeletonCells = [
   { tdClassName: 'px-4 py-3', items: ['h-7 w-7 rounded shrink-0', 'h-4 w-36'] },
   { tdClassName: 'px-4 py-3 hidden md:table-cell', skeletonClassName: 'h-4 w-20' },
   { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-16' },
-  { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-16' },
-  { tdClassName: 'px-4 py-3 hidden xl:table-cell', skeletonClassName: 'h-2 w-20' },
   { tdClassName: 'px-4 py-3 hidden xl:table-cell', skeletonClassName: 'h-5 w-10 mx-auto' },
-  { tdClassName: 'px-4 py-3', skeletonClassName: 'h-5 w-16 rounded-full' },
   { tdClassName: 'px-4 py-3', skeletonClassName: 'h-7 w-16 ml-auto' },
 ]
 
@@ -51,7 +48,6 @@ interface AdminStation {
   genres: string[]
   country: string
   city: string
-  reliability_score: number
   featured: boolean
   status: string
   editor_notes?: string
@@ -79,19 +75,6 @@ const statusVariants = {
 
 function normalizeModerationStatus(value: string | null | undefined): 'pending' | 'approved' {
   return value === 'approved' ? 'approved' : 'pending'
-}
-
-function ReliabilityBar({ score }: { score: number }) {
-  const pct = Math.round(score * 100)
-  const color = score >= 0.7 ? 'bg-green-500' : score >= 0.4 ? 'bg-yellow-500' : 'bg-red-400'
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs tabular-nums text-muted-foreground">{pct}%</span>
-    </div>
-  )
 }
 
 function isValidAbsoluteURL(value: string) {
@@ -403,8 +386,6 @@ export default function AdminStationsPage() {
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('col_station')}</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">{t('col_genre')}</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">{t('col_country')}</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">{t('col_quality')}</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden xl:table-cell">{t('col_reliability')}</th>
               <th className="px-4 py-3 text-center font-medium text-muted-foreground hidden xl:table-cell">{t('col_staff_pick')}</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t('col_actions')}</th>
             </tr>
@@ -414,7 +395,7 @@ export default function AdminStationsPage() {
               <AdminTableSkeletonRows cells={stationSkeletonCells} />
             ) : stations.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-16 text-center text-muted-foreground text-sm">
+                <td colSpan={6} className="px-4 py-16 text-center text-muted-foreground text-sm">
                   {t('no_stations')}
                 </td>
               </tr>
@@ -433,33 +414,35 @@ export default function AdminStationsPage() {
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        {s.logo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={s.logo}
-                            alt=""
-                            className="h-7 w-7 rounded shrink-0 object-cover bg-muted"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="h-7 w-7 rounded shrink-0 bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground uppercase select-none">
-                            {s.name.charAt(0)}
-                          </div>
-                        )}
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className="font-medium leading-tight truncate">{s.name}</span>
-                          {s.editor_notes && (
-                            <span className="text-xs text-muted-foreground line-clamp-1">{s.editor_notes}</span>
+                      <Link
+                        href={`/admin/stations/${s.id}`}
+                        className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {s.logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={s.logo}
+                              alt=""
+                              className="h-7 w-7 rounded shrink-0 object-cover bg-muted"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold uppercase text-muted-foreground select-none">
+                              {s.name.charAt(0)}
+                            </div>
                           )}
+                          <div className="flex min-w-0 flex-col gap-0.5">
+                            <span className="truncate font-medium leading-tight transition-colors hover:text-foreground/80">{s.name}</span>
+                            {s.editor_notes && (
+                              <span className="line-clamp-1 text-xs text-muted-foreground">{s.editor_notes}</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      </Link>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{(s.genres ?? []).join(', ') || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.country || '—'}</td>
-                    <td className="px-4 py-3 hidden xl:table-cell">
-                      <ReliabilityBar score={s.reliability_score} />
-                    </td>
                     <td className="px-4 py-3 hidden xl:table-cell">
                       <div className="flex justify-center">
                         <Switch

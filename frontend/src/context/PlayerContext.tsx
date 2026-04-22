@@ -247,7 +247,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     const tick = (now: number) => {
       const progress = Math.min(1, (now - startedAt) / durationMs)
-      audio.volume = startVolume + (targetVolume - startVolume) * progress
+      audio.volume = clampVolume(startVolume + (targetVolume - startVolume) * progress)
       if (progress < 1) {
         volumeRampRef.current = requestAnimationFrame(tick)
       } else {
