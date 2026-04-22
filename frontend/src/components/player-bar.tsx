@@ -132,7 +132,7 @@ export function PlayerBar() {
           </div>
           <div className="min-w-0 pl-[7.55rem] sm:pl-[9.25rem]">
             <div className="flex items-center gap-2.5 sm:gap-3">
-              <p className="truncate text-sm font-medium leading-tight text-zinc-100 sm:text-base">
+              <p className="truncate text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
                 {station?.name ?? '—'}
               </p>
               {isPlaying && <WaveformBars />}
