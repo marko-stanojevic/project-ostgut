@@ -71,10 +71,11 @@ export function PlayerBar() {
   const hasQualityDetails = streamDetailBadges.primary.length > 0 || streamDetailBadges.secondary.length > 0 || (bitrateKbps > 0 && !isLosslessLike)
   const cityLine = (station?.city && station.city !== '-') ? station.city : ''
   const hasNowPlaying = Boolean(nowPlaying?.title)
+  const isReconnecting = isLoading && !hasNowPlaying
   const secondaryLine = isError
     ? 'Tap play to reconnect'
-    : isLoading && !hasNowPlaying
-      ? 'Reconnecting to stream'
+    : isReconnecting
+      ? null
       : hasNowPlaying
         ? nowPlaying?.artist
           ? `${nowPlaying.artist} · ${nowPlaying.song}`
@@ -117,11 +118,9 @@ export function PlayerBar() {
             <p className="truncate text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
               {station?.name ?? '—'}
             </p>
-            <p className={`h-4 truncate text-xs sm:h-5 sm:text-sm ${
-              isError ? 'text-red-200/80' : 'text-zinc-300'
-            }`}>
-              {secondaryLine}
-            </p>
+            <div className={`flex h-4 items-center sm:h-5 ${isError ? 'text-red-200/80' : 'text-zinc-300'}`}>
+              {!isReconnecting && <p className="truncate text-xs sm:text-sm">{secondaryLine}</p>}
+            </div>
           </div>
         </div>
 
