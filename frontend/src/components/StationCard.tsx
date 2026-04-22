@@ -33,7 +33,6 @@ export function StationCard({
         } else {
             play(toStation(s))
         }
-        onOpen()
     }
 
     const meta = showCountry

@@ -3,22 +3,21 @@
 import { useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
-import { useNowPlaying } from '@/hooks/useNowPlaying'
+import { PlayerVolumeControl } from '@/components/player-volume-control'
 import {
   PlayIcon,
   PauseIcon,
   SkipBackIcon,
   SkipForwardIcon,
-  SpeakerHighIcon,
-  SpeakerXIcon,
   RadioIcon,
   CircleNotchIcon,
   ArrowsInIcon,
 } from '@phosphor-icons/react'
+import type { NowPlaying } from '@/hooks/useNowPlaying'
 
 function WaveformBars() {
   return (
-    <span className="flex h-4 items-end gap-[3px]">
+    <span className="flex h-4 items-end gap-[3px] animate-in fade-in duration-300">
       {[0, 1, 2, 3].map((i) => (
         <span
           key={i}
@@ -35,10 +34,11 @@ function WaveformBars() {
 }
 
 interface FullScreenPlayerProps {
+  nowPlaying: NowPlaying | null
   onClose: () => void
 }
 
-export function FullScreenPlayer({ onClose }: FullScreenPlayerProps) {
+export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps) {
   const { station, currentStream, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
 
   const isPlaying = state === 'playing'
@@ -46,8 +46,6 @@ export function FullScreenPlayer({ onClose }: FullScreenPlayerProps) {
   const isError = state === 'error'
   const hasPrev = queueIndex > 0
   const hasNext = queueIndex < queue.length - 1
-
-  const nowPlaying = useNowPlaying(station?.id, currentStream?.id, isPlaying || isLoading)
 
   const displayStream = useMemo(() => {
     if (currentStream) return currentStream
@@ -79,9 +77,11 @@ export function FullScreenPlayer({ onClose }: FullScreenPlayerProps) {
 
   const locationLine = [station?.city, station?.country].filter(Boolean).join(', ')
   const genreLine = (station?.genres ?? []).join(', ')
+  const hasNowPlaying = Boolean(nowPlaying?.title)
+  const fallbackLine = [genreLine || undefined, locationLine || undefined].filter(Boolean).join(' · ')
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-zinc-950">
+    <div className="fixed inset-0 z-[60] flex animate-in fade-in duration-300 flex-col bg-zinc-950">
       {/* Blurred artwork background */}
       {station?.logo && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -94,67 +94,124 @@ export function FullScreenPlayer({ onClose }: FullScreenPlayerProps) {
           />
         </div>
       )}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(200,116,58,0.18),transparent_34%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.06),transparent_28%)]"
+      />
 
       {/* Collapse button */}
-      <div className="relative flex items-center justify-end px-6 pt-6">
+      <div className="relative flex animate-in slide-in-from-top-3 fade-in duration-300 items-center justify-between px-6 pt-6">
+        <div className="flex items-center gap-3">
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-zinc-400">
+            Listening Room
+          </span>
+          <span className={`rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] ${
+            isError
+              ? 'border-red-500/30 bg-red-500/10 text-red-200/80'
+              : isLoading
+                ? 'border-white/10 bg-white/[0.06] text-zinc-300'
+                : isPlaying
+                  ? 'border-brand/30 bg-brand/10 text-brand/90'
+                  : 'border-white/10 bg-white/[0.04] text-zinc-500'
+          }`}>
+            {(isPlaying || isLoading) && !isError ? (
+              <span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
+                isPlaying ? 'animate-pulse bg-brand' : 'animate-pulse bg-zinc-300'
+              }`} />
+            ) : null}
+            {isError ? 'Recover' : isLoading ? 'Connecting' : isPlaying ? 'Live' : 'Paused'}
+          </span>
+        </div>
         <button
           onClick={onClose}
           title="Close full screen"
-          className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
         >
           <ArrowsInIcon className="h-5 w-5" />
         </button>
       </div>
 
       {/* Main content */}
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-10 px-8 pb-8">
+      <div className="relative flex flex-1 animate-in slide-in-from-bottom-4 fade-in duration-500 flex-col items-center justify-center gap-8 px-8 pb-8 sm:gap-10">
         {/* Station artwork */}
-        <div
-          className={`relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-zinc-800 shadow-2xl transition-all duration-500 sm:h-64 sm:w-64 ${isPlaying ? 'shadow-brand/20' : ''}`}
-        >
-          {station?.logo ? (
-            <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
-          ) : (
-            <RadioIcon className="h-16 w-16 text-zinc-600" />
-          )}
+        <div className="relative">
+          <div
+            aria-hidden="true"
+            className={`absolute inset-[-10%] rounded-full blur-3xl transition-all duration-700 ${
+              isPlaying ? 'bg-brand/20 opacity-100' : 'bg-white/8 opacity-60'
+            }`}
+          />
+          <div
+            className={`relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-800/90 shadow-2xl transition-all duration-500 sm:h-64 sm:w-64 ${isPlaying ? 'shadow-brand/20' : ''}`}
+          >
+            {station?.logo ? (
+              <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
+            ) : (
+              <RadioIcon className="h-16 w-16 text-zinc-600" />
+            )}
+          </div>
         </div>
 
         {/* Station info */}
-        <div className="flex w-full max-w-sm flex-col items-center gap-2 text-center">
+        <div className="flex w-full max-w-xl flex-col items-center gap-3 text-center">
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold tracking-tight text-zinc-100 sm:text-3xl">
+            <h2 className="text-3xl font-semibold tracking-[-0.04em] text-zinc-100 sm:text-5xl">
               {station?.name ?? '—'}
             </h2>
             {isPlaying && <WaveformBars />}
           </div>
 
-          <p className="text-base text-zinc-400">
+          {hasNowPlaying ? (
+            <div className="space-y-1">
+              <p className="text-lg font-medium text-zinc-100 sm:text-2xl">
+                {nowPlaying?.song ?? nowPlaying?.title}
+              </p>
+              {nowPlaying?.artist ? (
+                <p className="text-sm uppercase tracking-[0.24em] text-zinc-500 sm:text-base">
+                  {nowPlaying.artist}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-base text-zinc-400 sm:text-lg">
+              {fallbackLine}
+            </p>
+          )}
+
+          <div className={`rounded-full border px-4 py-2 text-sm transition-all duration-300 ${
+            isError
+              ? 'border-red-500/30 bg-red-500/10 text-red-200/80'
+              : isLoading
+                ? 'border-white/10 bg-white/[0.05] text-zinc-300'
+                : 'border-white/10 bg-white/[0.03] text-zinc-400'
+          }`}>
             {isError
-              ? 'Stream unavailable'
-              : isLoading && !nowPlaying
-                ? 'Connecting…'
-                : nowPlaying?.title
-                  ? nowPlaying.artist
-                    ? `${nowPlaying.artist} · ${nowPlaying.song}`
-                    : nowPlaying.title
-                  : [genreLine || undefined, locationLine || undefined].filter(Boolean).join(' · ')}
-          </p>
+              ? 'Stream unavailable. Press play to try again.'
+              : isLoading
+                ? 'Reconnecting to the live stream…'
+                : 'Live radio stays uninterrupted while you browse.'}
+          </div>
 
           {/* Quality badge */}
-          {(isLosslessLike || codecLabel || bitrateKbps > 0) && (
-            <div className="mt-1 flex items-center gap-2">
+          {(isLosslessLike || codecLabel || bitrateKbps > 0 || locationLine) && (
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+              {locationLine ? (
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-medium text-zinc-400">
+                  {locationLine}
+                </span>
+              ) : null}
               {isLosslessLike && (
-                <span className="rounded-md border border-brand/30 bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
+                <span className="rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
                   Lossless
                 </span>
               )}
               {codecLabel && !isLosslessLike && (
-                <span className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs font-medium text-zinc-400">
+                <span className="rounded-full border border-zinc-700 bg-zinc-800/90 px-3 py-1 text-xs font-medium text-zinc-400">
                   {codecLabel}
                 </span>
               )}
               {bitrateKbps > 0 && !isLosslessLike && (
-                <span className="text-xs tabular-nums text-zinc-600">{bitrateKbps} kbps</span>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs tabular-nums text-zinc-500">{bitrateKbps} kbps</span>
               )}
             </div>
           )}
@@ -172,23 +229,22 @@ export function FullScreenPlayer({ onClose }: FullScreenPlayerProps) {
           </button>
 
           {isLoading ? (
-            <div className="flex h-16 w-16 items-center justify-center">
+            <div className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center">
               <CircleNotchIcon className="h-7 w-7 animate-spin text-zinc-500" />
             </div>
           ) : isPlaying ? (
             <button
               onClick={pause}
               title="Pause"
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:bg-brand/25"
+              className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:scale-[1.03] hover:bg-brand/25"
             >
               <PauseIcon weight="fill" className="h-7 w-7" />
             </button>
           ) : (
             <button
               onClick={resume}
-              disabled={isError}
               title="Play"
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:bg-zinc-700 disabled:opacity-40"
+              className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:scale-[1.03] hover:bg-zinc-700"
             >
               <PlayIcon weight="fill" className="ml-0.5 h-7 w-7" />
             </button>
@@ -205,50 +261,13 @@ export function FullScreenPlayer({ onClose }: FullScreenPlayerProps) {
         </div>
 
         {/* Volume control */}
-        <div className="flex w-full max-w-xs items-center gap-3">
-          <button
-            onClick={() => setVolume(volume === 0 ? 0.8 : 0)}
-            title={volume === 0 ? 'Unmute' : 'Mute'}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
-          >
-            {volume === 0
-              ? <SpeakerXIcon className="h-5 w-5" />
-              : <SpeakerHighIcon className="h-5 w-5" />
-            }
-          </button>
-
-          <div
-            className="group relative flex h-6 flex-1 cursor-pointer items-center"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect()
-              setVolume(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)))
-            }}
-            onMouseMove={(e) => {
-              if (e.buttons !== 1) return
-              const rect = e.currentTarget.getBoundingClientRect()
-              setVolume(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)))
-            }}
-            onTouchStart={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect()
-              setVolume(Math.min(1, Math.max(0, (e.touches[0].clientX - rect.left) / rect.width)))
-            }}
-            onTouchMove={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect()
-              setVolume(Math.min(1, Math.max(0, (e.touches[0].clientX - rect.left) / rect.width)))
-            }}
-          >
-            <div className="h-1.5 w-full rounded-full bg-zinc-800">
-              <div
-                className="h-full rounded-full bg-zinc-500 transition-colors group-hover:bg-zinc-300"
-                style={{ width: `${volume * 100}%` }}
-              />
-            </div>
-            <div
-              className="absolute h-3.5 w-3.5 rounded-full bg-zinc-300 opacity-90 shadow-sm transition-opacity group-hover:opacity-100"
-              style={{ left: `calc(${volume * 100}% - 7px)` }}
-            />
-          </div>
-        </div>
+        <PlayerVolumeControl
+          className="flex w-full max-w-sm items-center gap-3"
+          labelClassName="w-11 text-right text-sm tabular-nums text-zinc-500"
+          showPercentage
+          volume={volume}
+          setVolume={setVolume}
+        />
       </div>
     </div>
   )
