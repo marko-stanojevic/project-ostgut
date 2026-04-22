@@ -174,13 +174,6 @@ function getStreamURLValidationMessage(value: string) {
     return ''
 }
 
-function formatStreamAudioDetails(stream: AdminStream): string {
-    const bitDepth = stream.bit_depth > 0 ? `${stream.bit_depth}-bit` : '-bit'
-    const sampleRate = stream.sample_rate_hz > 0 ? `${stream.sample_rate_hz} Hz` : '- Hz'
-    const channels = stream.channels > 0 ? `${stream.channels}ch` : '-ch'
-    return `${bitDepth} / ${sampleRate} / ${channels}`
-}
-
 function formatSampleRateConfidenceLabel(stream: AdminStream): string {
     switch ((stream.sample_rate_confidence || '').toLowerCase()) {
         case 'parsed_streaminfo':
@@ -590,18 +583,26 @@ export default function StationEditorPage() {
                             {allCurrentTags.length > 0 && (
                                 <div>
                                     <p className="mb-1.5 text-xs text-muted-foreground">Tags</p>
-                                    <div className="flex flex-wrap gap-1">
+                                    <div className="flex flex-wrap gap-1.5">
                                         {currentGenreTags.map((t) => (
-                                            <Badge key={`genre-${t}`} variant="default" className="text-xs">{t}</Badge>
+                                            <Badge key={`genre-${t}`} variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                {t}
+                                            </Badge>
                                         ))}
                                         {currentStyleTags.map((t) => (
-                                            <Badge key={`style-${t}`} variant="default" className="text-xs">{t}</Badge>
+                                            <Badge key={`style-${t}`} variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                {t}
+                                            </Badge>
                                         ))}
                                         {currentFormatTags.map((t) => (
-                                            <Badge key={`format-${t}`} variant="default" className="text-xs">{t}</Badge>
+                                            <Badge key={`format-${t}`} variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                {t}
+                                            </Badge>
                                         ))}
                                         {currentTextureTags.map((t) => (
-                                            <Badge key={`texture-${t}`} className="text-xs">{t}</Badge>
+                                            <Badge key={`texture-${t}`} variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                {t}
+                                            </Badge>
                                         ))}
                                     </div>
                                 </div>
@@ -706,54 +707,124 @@ export default function StationEditorPage() {
                                             )}
                                         </div>
 
-                                        <div className="rounded-lg border p-3">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm font-medium">Metadata polling</p>
-                                                    <p className="text-xs text-muted-foreground">Metadata type is auto-detected for every stream</p>
-                                                </div>
-                                                <Switch
-                                                    checked={stream.metadata_enabled}
-                                                    onCheckedChange={(checked) => setForm((prev) => ({
-                                                        ...prev,
-                                                        streams: prev.streams.map((s, idx) =>
-                                                            idx === i ? { ...s, metadata_enabled: !!checked } : s
-                                                        ),
-                                                    }))}
-                                                />
-                                            </div>
-                                        </div>
-
                                         {streamDetails[i] && (
-                                            <div className="rounded-lg border p-3">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="min-w-0">
-                                                        <p className="text-xs text-muted-foreground">Latest metadata status</p>
-                                                        <p className="mt-1 break-all text-sm">{streamDetails[i].url}</p>
+                                            <div className="grid gap-3 lg:grid-cols-2">
+                                                <div className="rounded-lg border p-3">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs text-muted-foreground">Stream status</p>
+                                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    {streamDetails[i].kind}
+                                                                </Badge>
+                                                                {streamDetails[i].codec && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        {streamDetails[i].codec}
+                                                                    </Badge>
+                                                                )}
+                                                                {streamDetails[i].lossless && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        Lossless
+                                                                    </Badge>
+                                                                )}
+                                                                {typeof streamDetails[i].health_score === 'number' && (
+                                                                    <span className={`text-xs font-medium tabular-nums ${streamDetails[i].health_score >= 0.7 ? 'text-green-600 dark:text-green-400' : streamDetails[i].health_score >= 0.4 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-500'}`}>
+                                                                        {Math.round(streamDetails[i].health_score * 100)}%
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <Badge variant={streamDetails[i].metadata_enabled ? 'default' : 'secondary'} className="text-[10px] uppercase tracking-wide">
-                                                        {streamDetails[i].metadata_enabled ? (streamDetails[i].metadata_type || 'auto') : 'disabled'}
-                                                    </Badge>
-                                                    {streamDetails[i].metadata_source && (
-                                                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                                                            {streamDetails[i].metadata_source}
-                                                        </Badge>
+                                                    {(streamDetails[i].lossless || streamDetails[i].codec.toUpperCase().includes('FLAC') || streamDetails[i].bit_depth > 0 || streamDetails[i].sample_rate_hz > 0 || streamDetails[i].channels > 0 || streamDetails[i].bitrate > 0) && (
+                                                        <div className="mt-3 space-y-1">
+                                                            <p className="text-xs text-muted-foreground">Audio details</p>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {streamDetails[i].bit_depth > 0 && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        {streamDetails[i].bit_depth}-bit
+                                                                    </Badge>
+                                                                )}
+                                                                {streamDetails[i].sample_rate_hz > 0 && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        {streamDetails[i].sample_rate_hz} Hz
+                                                                    </Badge>
+                                                                )}
+                                                                {streamDetails[i].channels > 0 && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        {streamDetails[i].channels}ch
+                                                                    </Badge>
+                                                                )}
+                                                                {(streamDetails[i].lossless || streamDetails[i].codec.toUpperCase().includes('FLAC') || streamDetails[i].bit_depth > 0 || streamDetails[i].sample_rate_hz > 0 || streamDetails[i].channels > 0) && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        {formatSampleRateConfidenceLabel(streamDetails[i])}
+                                                                    </Badge>
+                                                                )}
+                                                                {streamDetails[i].bitrate > 0 && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        {streamDetails[i].bitrate} kbps
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     )}
-                                                </div>
-                                                <div className="mt-3 space-y-1">
-                                                    {streamDetails[i].metadata_error_code && (
-                                                        <Badge variant="default" className="text-[10px] uppercase tracking-wide">
-                                                            {streamDetails[i].metadata_error_code}
-                                                        </Badge>
-                                                    )}
-                                                    <p className="text-sm">
-                                                        {streamDetails[i].metadata_error ? streamDetails[i].metadata_error : 'No metadata errors recorded'}
-                                                    </p>
-                                                    {streamDetails[i].metadata_last_fetched_at && (
-                                                        <p className="text-xs text-muted-foreground">
-                                                            Last checked: {new Date(streamDetails[i].metadata_last_fetched_at!).toLocaleString()}
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Latest probe</p>
+                                                        <p className="text-sm">
+                                                            {streamDetails[i].last_error ? streamDetails[i].last_error : 'No stream errors recorded'}
                                                         </p>
-                                                    )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-lg border p-3">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs text-muted-foreground">Metadata status</p>
+                                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    {streamDetails[i].metadata_enabled ? (streamDetails[i].metadata_type || 'auto') : 'disabled'}
+                                                                </Badge>
+                                                                {streamDetails[i].metadata_source && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        {streamDetails[i].metadata_source}
+                                                                    </Badge>
+                                                                )}
+                                                                {streamDetails[i].metadata_error_code && (
+                                                                    <Badge variant="secondary" className="rounded-none border-brand bg-brand font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                        {streamDetails[i].metadata_error_code}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <Switch
+                                                            checked={stream.metadata_enabled}
+                                                            onCheckedChange={(checked) => setForm((prev) => ({
+                                                                ...prev,
+                                                                streams: prev.streams.map((s, idx) =>
+                                                                    idx === i ? { ...s, metadata_enabled: !!checked } : s
+                                                                ),
+                                                            }))}
+                                                        />
+                                                    </div>
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Metadata polling</p>
+                                                        <p className="text-sm">
+                                                            {stream.metadata_enabled ? 'Enabled with auto-detection' : 'Disabled'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Latest metadata check</p>
+                                                        <p className="text-sm">
+                                                            {streamDetails[i].metadata_error ? streamDetails[i].metadata_error : 'No metadata errors recorded'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Last checked</p>
+                                                        <p className="text-sm">
+                                                            {streamDetails[i].metadata_last_fetched_at
+                                                                ? new Date(streamDetails[i].metadata_last_fetched_at!).toLocaleString()
+                                                                : 'Not checked yet'}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
@@ -780,10 +851,10 @@ export default function StationEditorPage() {
                                         : 'At least one stream URL is required'}
                                 </p>
                             )}
-                            <p className="text-xs text-muted-foreground">
-                                URLs are probed on save. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
-                            </p>
-                        </CardContent>
+                        <p className="text-xs text-muted-foreground">
+                            URLs are probed on save. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
+                        </p>
+                    </CardContent>
                     </Card>
                 </div>
 
@@ -913,76 +984,6 @@ export default function StationEditorPage() {
                         </CardContent>
                     </Card>
 
-                    {station.streams && station.streams.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                                    Stream Variants
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                {station.streams
-                                    .slice()
-                                    .sort((a, b) => a.priority - b.priority)
-                                    .map((stream, i) => (
-                                        <div key={stream.id || i} className={`rounded-lg border p-3 ${!stream.is_active ? 'opacity-50' : ''}`}>
-                                            <div className="flex items-center justify-between gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-mono text-muted-foreground">#{stream.priority}</span>
-                                                    <Badge variant={stream.is_active ? 'default' : 'outline'} className="text-[10px] uppercase tracking-wide">
-                                                        {stream.kind}
-                                                    </Badge>
-                                                    {stream.codec && (
-                                                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                                                            {stream.codec}
-                                                        </Badge>
-                                                    )}
-                                                    {stream.lossless && (
-                                                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                                                            Lossless
-                                                        </Badge>
-                                                    )}
-                                                    {(stream.lossless || stream.codec.toUpperCase().includes('FLAC') || stream.bit_depth > 0 || stream.sample_rate_hz > 0 || stream.channels > 0) && (
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {formatStreamAudioDetails(stream)} · {formatSampleRateConfidenceLabel(stream)}
-                                                        </span>
-                                                    )}
-                                                    {stream.bitrate > 0 && (
-                                                        <span className="text-xs text-muted-foreground">{stream.bitrate} kbps</span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    {typeof stream.health_score === 'number' && (
-                                                        <span className={`text-xs font-medium tabular-nums ${stream.health_score >= 0.7 ? 'text-green-600 dark:text-green-400' : stream.health_score >= 0.4 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-500'}`}>
-                                                            {Math.round(stream.health_score * 100)}%
-                                                        </span>
-                                                    )}
-                                                    <a
-                                                        href={stream.resolved_url || stream.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-muted-foreground transition-colors hover:text-foreground"
-                                                    >
-                                                        <ArrowSquareOutIcon className="h-3.5 w-3.5" />
-                                                    </a>
-                                                </div>
-                                            </div>
-                                            <p className="mt-1.5 break-all font-mono text-[11px] text-muted-foreground">
-                                                {stream.resolved_url || stream.url}
-                                            </p>
-                                            {stream.resolved_url && stream.resolved_url !== stream.url && (
-                                                <p className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground/50">
-                                                    via {stream.url}
-                                                </p>
-                                            )}
-                                            {stream.last_error && (
-                                                <p className="mt-1 text-xs text-destructive">{stream.last_error}</p>
-                                            )}
-                                        </div>
-                                    ))}
-                            </CardContent>
-                        </Card>
-                    )}
                 </div>
             </div>
         </div>
