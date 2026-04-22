@@ -36,23 +36,6 @@ function getStreamDetailBadges(stream?: {
   return { primary, secondary }
 }
 
-function WaveformBars() {
-  return (
-    <span className="flex h-[14px] items-end gap-[2px] animate-in fade-in duration-300 sm:h-[17px] sm:gap-[2.5px]">
-      {[0, 1, 2, 3].map((i) => (
-        <span
-          key={i}
-          className="block w-[2.5px] origin-bottom rounded-full bg-brand sm:w-[3px]"
-          style={{
-            height: '100%',
-            animation: 'wave-bar 0.9s ease-in-out infinite',
-            animationDelay: `${i * 0.14}s`,
-          }}
-        />
-      ))}
-    </span>
-  )
-}
 
 export function PlayerBar() {
   const [mounted, setMounted] = useState(false)
@@ -135,10 +118,9 @@ export function PlayerBar() {
               <p className="truncate text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
                 {station?.name ?? '—'}
               </p>
-              {isPlaying && <WaveformBars />}
             </div>
             <p className={`mt-0.5 truncate text-xs sm:mt-0.5 sm:text-sm ${
-              isError ? 'text-red-200/80' : hasNowPlaying ? 'text-zinc-300' : 'text-zinc-500'
+              isError ? 'text-red-200/80' : 'text-zinc-300'
             }`}>
               {secondaryLine}
             </p>
