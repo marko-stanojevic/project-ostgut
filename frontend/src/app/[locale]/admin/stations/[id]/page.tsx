@@ -132,9 +132,11 @@ type CompleteUploadResponse = {
 }
 
 const statusConfig = {
-    pending: { label: 'Pending', icon: ClockIcon, className: 'text-warning' },
-    approved: { label: 'Approved', icon: CheckCircleIcon, className: 'text-success' },
+    pending: { label: 'Pending', icon: ClockIcon, className: 'ui-admin-status-pending' },
+    approved: { label: 'Approved', icon: CheckCircleIcon, className: 'ui-admin-status-success' },
 }
+
+const ADMIN_TAG_BADGE_CLASS = 'ui-admin-tag-badge rounded-none border-transparent font-medium text-[10px] uppercase tracking-wide'
 
 function SourceField({ label, value }: { label: string; value?: string }) {
     if (!value) {
@@ -681,22 +683,22 @@ export default function StationEditorPage() {
                                     <p className="mb-1.5 text-xs text-muted-foreground">Tags</p>
                                     <div className="flex flex-wrap gap-1.5">
                                         {currentGenreTags.map((t) => (
-                                            <Badge key={`genre-${t}`} variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                            <Badge key={`genre-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                 {t}
                                             </Badge>
                                         ))}
                                         {currentStyleTags.map((t) => (
-                                            <Badge key={`style-${t}`} variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                            <Badge key={`style-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                 {t}
                                             </Badge>
                                         ))}
                                         {currentFormatTags.map((t) => (
-                                            <Badge key={`format-${t}`} variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                            <Badge key={`format-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                 {t}
                                             </Badge>
                                         ))}
                                         {currentTextureTags.map((t) => (
-                                            <Badge key={`texture-${t}`} variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                            <Badge key={`texture-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                 {t}
                                             </Badge>
                                         ))}
@@ -795,21 +797,21 @@ export default function StationEditorPage() {
                                                         <div className="min-w-0">
                                                             <p className="text-xs text-muted-foreground">Stream status</p>
                                                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                                <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                     {streamDetails[i].kind}
                                                                 </Badge>
                                                                 {streamDetails[i].codec && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].codec}
                                                                     </Badge>
                                                                 )}
                                                                 {streamDetails[i].lossless && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         Lossless
                                                                     </Badge>
                                                                 )}
                                                                 {typeof streamDetails[i].health_score === 'number' && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {Math.round(streamDetails[i].health_score * 100)}%
                                                                     </Badge>
                                                                 )}
@@ -821,27 +823,27 @@ export default function StationEditorPage() {
                                                             <p className="text-xs text-muted-foreground">Audio details</p>
                                                             <div className="flex flex-wrap gap-2">
                                                                 {streamDetails[i].bit_depth > 0 && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].bit_depth}-bit
                                                                     </Badge>
                                                                 )}
                                                                 {streamDetails[i].sample_rate_hz > 0 && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].sample_rate_hz} Hz
                                                                     </Badge>
                                                                 )}
                                                                 {streamDetails[i].channels > 0 && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].channels}ch
                                                                     </Badge>
                                                                 )}
                                                                 {(streamDetails[i].lossless || streamDetails[i].codec.toUpperCase().includes('FLAC') || streamDetails[i].bit_depth > 0 || streamDetails[i].sample_rate_hz > 0 || streamDetails[i].channels > 0) && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {formatSampleRateConfidenceLabel(streamDetails[i])}
                                                                     </Badge>
                                                                 )}
                                                                 {streamDetails[i].bitrate > 0 && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].bitrate} kbps
                                                                     </Badge>
                                                                 )}
@@ -879,12 +881,12 @@ export default function StationEditorPage() {
                                                             <p className="text-xs text-muted-foreground">Metadata status</p>
                                                             <div className="mt-1 flex flex-wrap items-center gap-2">
                                                                 {streamDetails[i].metadata_source && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].metadata_source}
                                                                     </Badge>
                                                                 )}
                                                                 {streamDetails[i].metadata_error_code && (
-                                                                    <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].metadata_error_code}
                                                                     </Badge>
                                                                 )}
@@ -902,7 +904,7 @@ export default function StationEditorPage() {
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Metadata polling</p>
-                                                        <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                        <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                             {stream.metadata_enabled ? 'Enabled' : 'Disabled'}
                                                         </Badge>
                                                     </div>
@@ -943,7 +945,7 @@ export default function StationEditorPage() {
                                                     <div className="min-w-0">
                                                         <p className="text-xs text-muted-foreground">Loudness status</p>
                                                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                            <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                 {formatLoudnessStatusLabel(streamDetails[i].loudness_measurement_status)}
                                                             </Badge>
                                                         </div>
@@ -951,7 +953,7 @@ export default function StationEditorPage() {
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Measured loudness</p>
                                                         {typeof streamDetails[i].loudness_integrated_lufs === 'number' ? (
-                                                            <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                 {(streamDetails[i].loudness_integrated_lufs ?? 0).toFixed(1)} LUFS
                                                             </Badge>
                                                         ) : (
@@ -961,7 +963,7 @@ export default function StationEditorPage() {
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">True peak</p>
                                                         {typeof streamDetails[i].loudness_peak_dbfs === 'number' ? (
-                                                            <Badge variant="secondary" className="rounded-none border-transparent bg-[#f5c842] font-medium text-black text-[10px] uppercase tracking-wide">
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                 {(streamDetails[i].loudness_peak_dbfs ?? 0).toFixed(1)} dBFS
                                                             </Badge>
                                                         ) : (

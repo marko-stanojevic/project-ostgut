@@ -82,6 +82,15 @@
   --player-screen-icon-hover: #201914;
   --player-screen-artwork-bg: #DED2C3;
   --player-screen-artwork-icon: #7B6A59;
+  --admin-pending-surface: color-mix(in oklab, var(--warning) 14%, var(--card));
+  --admin-pending-border: color-mix(in oklab, var(--warning) 34%, var(--border));
+  --admin-pending-text: color-mix(in oklab, var(--warning) 90%, var(--foreground));
+  --admin-success-surface: color-mix(in oklab, var(--success) 14%, var(--card));
+  --admin-success-border: color-mix(in oklab, var(--success) 34%, var(--border));
+  --admin-success-text: color-mix(in oklab, var(--success) 88%, var(--foreground));
+  --admin-tag-surface: color-mix(in oklab, var(--brand) 18%, var(--card));
+  --admin-tag-border: color-mix(in oklab, var(--brand) 32%, var(--border));
+  --admin-tag-text: color-mix(in oklab, var(--brand) 82%, var(--foreground));
   --chart-1: #0C0C0C;
   --chart-2: #3F3F46;
   --chart-3: #71717A;
@@ -192,6 +201,15 @@
   --player-screen-icon-hover: #F4F4F5;
   --player-screen-artwork-bg: rgba(39, 39, 42, 0.9);
   --player-screen-artwork-icon: #71717A;
+  --admin-pending-surface: color-mix(in oklab, var(--warning) 16%, var(--card));
+  --admin-pending-border: color-mix(in oklab, var(--warning) 38%, var(--border));
+  --admin-pending-text: color-mix(in oklab, var(--warning) 78%, white);
+  --admin-success-surface: color-mix(in oklab, var(--success) 16%, var(--card));
+  --admin-success-border: color-mix(in oklab, var(--success) 34%, var(--border));
+  --admin-success-text: color-mix(in oklab, var(--success) 82%, white);
+  --admin-tag-surface: color-mix(in oklab, var(--brand) 16%, var(--card));
+  --admin-tag-border: color-mix(in oklab, var(--brand) 34%, var(--border));
+  --admin-tag-text: color-mix(in oklab, var(--brand) 76%, white);
   --chart-1: #F5F3EF;
   --chart-2: #A0998E;
   --chart-3: #71717A;
@@ -296,6 +314,15 @@
   --player-screen-icon-hover: #2F241B;
   --player-screen-artwork-bg: rgba(220, 203, 181, 0.9);
   --player-screen-artwork-icon: #7A624B;
+  --admin-pending-surface: color-mix(in oklab, var(--warning) 16%, var(--card));
+  --admin-pending-border: color-mix(in oklab, var(--warning) 36%, var(--border));
+  --admin-pending-text: color-mix(in oklab, var(--warning) 88%, var(--foreground));
+  --admin-success-surface: color-mix(in oklab, var(--success) 16%, var(--card));
+  --admin-success-border: color-mix(in oklab, var(--success) 32%, var(--border));
+  --admin-success-text: color-mix(in oklab, var(--success) 86%, var(--foreground));
+  --admin-tag-surface: color-mix(in oklab, var(--brand) 20%, var(--card));
+  --admin-tag-border: color-mix(in oklab, var(--brand) 34%, var(--border));
+  --admin-tag-text: color-mix(in oklab, var(--brand) 84%, var(--foreground));
   --chart-1: #2A211A;
   --chart-2: #6B5441;
   --chart-3: #9F8266;
@@ -402,6 +429,15 @@
   --player-screen-icon-hover: #E7F0FA;
   --player-screen-artwork-bg: rgba(16, 34, 56, 0.92);
   --player-screen-artwork-icon: #6F8DAA;
+  --admin-pending-surface: color-mix(in oklab, var(--warning) 18%, var(--card));
+  --admin-pending-border: color-mix(in oklab, var(--warning) 42%, var(--border));
+  --admin-pending-text: color-mix(in oklab, var(--warning) 80%, white);
+  --admin-success-surface: color-mix(in oklab, var(--success) 18%, var(--card));
+  --admin-success-border: color-mix(in oklab, var(--success) 36%, var(--border));
+  --admin-success-text: color-mix(in oklab, var(--success) 82%, white);
+  --admin-tag-surface: color-mix(in oklab, var(--brand) 20%, var(--card));
+  --admin-tag-border: color-mix(in oklab, var(--brand) 36%, var(--border));
+  --admin-tag-text: color-mix(in oklab, var(--brand) 80%, white);
   --chart-1: #E7F0FA;
   --chart-2: #8EA5BC;
   --chart-3: #5D7690;
@@ -487,6 +523,15 @@
   --color-player-screen-icon-hover: var(--player-screen-icon-hover);
   --color-player-screen-artwork-bg: var(--player-screen-artwork-bg);
   --color-player-screen-artwork-icon: var(--player-screen-artwork-icon);
+  --color-admin-pending-surface: var(--admin-pending-surface);
+  --color-admin-pending-border: var(--admin-pending-border);
+  --color-admin-pending-text: var(--admin-pending-text);
+  --color-admin-success-surface: var(--admin-success-surface);
+  --color-admin-success-border: var(--admin-success-border);
+  --color-admin-success-text: var(--admin-success-text);
+  --color-admin-tag-surface: var(--admin-tag-surface);
+  --color-admin-tag-border: var(--admin-tag-border);
+  --color-admin-tag-text: var(--admin-tag-text);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -605,6 +650,32 @@
 
   .ui-editorial-text {
     color: var(--editorial-text);
+  }
+
+  .ui-admin-status-pending {
+    color: var(--admin-pending-text);
+  }
+
+  .ui-admin-status-success {
+    color: var(--admin-success-text);
+  }
+
+  .ui-admin-status-pending-badge {
+    border: 1px solid var(--admin-pending-border);
+    background: var(--admin-pending-surface);
+    color: var(--admin-pending-text);
+  }
+
+  .ui-admin-status-success-badge {
+    border: 1px solid var(--admin-success-border);
+    background: var(--admin-success-surface);
+    color: var(--admin-success-text);
+  }
+
+  .ui-admin-tag-badge {
+    border: 1px solid var(--admin-tag-border);
+    background: var(--admin-tag-surface);
+    color: var(--admin-tag-text);
   }
 
   .editorial-prose {

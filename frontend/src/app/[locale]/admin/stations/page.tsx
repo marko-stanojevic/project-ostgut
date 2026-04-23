@@ -360,7 +360,7 @@ export default function AdminStationsPage() {
               variant="outline"
               disabled={bulkLoading}
               onClick={() => bulkAction('approved')}
-              className="border-success/30 text-success hover:bg-success/10"
+              className="ui-admin-status-success-badge hover:brightness-[1.03]"
             >
               <CheckCircleIcon className="h-3.5 w-3.5 mr-1.5" />
               {t('bulk_approve')}

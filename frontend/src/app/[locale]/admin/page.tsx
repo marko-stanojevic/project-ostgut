@@ -31,8 +31,8 @@ function StatCard({
 }) {
   const colorMap = {
     default: 'text-muted-foreground',
-    pending: 'text-warning',
-    success: 'text-success',
+    pending: 'ui-admin-status-pending',
+    success: 'ui-admin-status-success',
     destructive: 'text-destructive',
   }
   return (
