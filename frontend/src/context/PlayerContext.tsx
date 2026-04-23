@@ -122,6 +122,32 @@ function getPlayableVariants(s: Station, caps: PlaybackCapabilities): PlayableVa
   return [{ url, kind, codec: '', mimeType: '', lossless: url.toLowerCase().includes('flac') }]
 }
 
+function getPlaybackStationSnapshot(next: Station, current: Station | null): Station {
+  if (!current || current.id !== next.id) return next
+
+  const nextHasStreams = (next.streams?.length ?? 0) > 0
+  const currentHasStreams = (current.streams?.length ?? 0) > 0
+  const nextHasMetadata = Boolean(
+    next.streams?.some((stream) => typeof stream.metadataEnabled === 'boolean' || Boolean(stream.metadataSource)),
+  )
+  const currentHasMetadata = Boolean(
+    current.streams?.some((stream) => typeof stream.metadataEnabled === 'boolean' || Boolean(stream.metadataSource)),
+  )
+
+  return {
+    ...current,
+    ...next,
+    streams:
+      currentHasStreams && (!nextHasStreams || (currentHasMetadata && !nextHasMetadata))
+        ? current.streams
+        : next.streams,
+    logo: next.logo || current.logo,
+    genres: next.genres?.length ? next.genres : current.genres,
+    country: next.country || current.country,
+    city: next.city || current.city,
+  }
+}
+
 function getVariantContentType(variant: PlayableVariant): string {
   const mimeType = variant.mimeType.trim()
   if (mimeType) return mimeType
@@ -454,6 +480,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [baseVolume])
 
   useEffect(() => {
+    stationRef.current = station
+  }, [station])
+
+  useEffect(() => {
     normalizationEnabledRef.current = normalizationEnabled
   }, [normalizationEnabled])
 
@@ -533,7 +563,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const session = castContext.getCurrentSession()
     if (!session) return false
 
-    const variants = getPlayableVariants(s, playbackCaps)
+    const playbackStation = getPlaybackStationSnapshot(s, station)
+    const variants = getPlayableVariants(playbackStation, playbackCaps)
     if (variants.length === 0) {
       setCurrentStream(null)
       setState('error')
@@ -572,8 +603,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audioRef.current?.pause()
       audioRef.current?.removeAttribute('src')
       audioRef.current?.load()
-      stationRef.current = s
-      setStation(s)
+      stationRef.current = playbackStation
+      setStation(playbackStation)
       setCurrentStream(variant.source ?? null)
       setTransport('cast')
       setCastState('connected')
@@ -585,7 +616,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setState('error')
       return false
     }
-  }, [clearReconnect, detachHls, playbackCaps])
+  }, [clearReconnect, detachHls, playbackCaps, station])
 
   const promptCast = useCallback(async () => {
     if (!window.cast || !window.chrome) return false
@@ -712,7 +743,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current
     if (!audio) return
 
-    const variants = getPlayableVariants(s, playbackCaps)
+    const playbackStation = getPlaybackStationSnapshot(s, station)
+
+    const variants = getPlayableVariants(playbackStation, playbackCaps)
     if (variants.length === 0) {
       setCurrentStream(null)
       setState('error')
@@ -737,9 +770,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio.pause()
     detachHls()
     clearReconnect()
-    stationRef.current = s
+    stationRef.current = playbackStation
     setState('loading')
-    setStation(s)
+    setStation(playbackStation)
     touchPreferences()
 
     const { url, kind } = variant

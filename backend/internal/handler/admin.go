@@ -210,7 +210,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
-	metadataSource, metadataError, metadataErrorCode, metadataFetchedAt := detectMetadataSnapshot(
+	nowPlayingSnapshot := detectNowPlayingSnapshot(
 		h.admin.metaFetcher.Fetch(c.Request.Context(), probe.ResolvedURL, metadata.Config{Enabled: true, Type: metadata.TypeAuto}),
 	)
 
@@ -236,10 +236,13 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		LoudnessStatus:         probe.LoudnessStatus,
 		MetadataEnabled:        true,
 		MetadataType:           "auto",
-		MetadataSource:         metadataSource,
-		MetadataError:          metadataError,
-		MetadataErrorCode:      metadataErrorCode,
-		MetadataLastFetchedAt:  metadataFetchedAt,
+		MetadataSource:         nowPlayingSnapshot.MetadataSource,
+		MetadataError:          nowPlayingSnapshot.MetadataError,
+		MetadataErrorCode:      nowPlayingSnapshot.MetadataErrorCode,
+		MetadataLastFetchedAt:  nowPlayingSnapshot.MetadataLastFetchedAt,
+		NowPlayingTitle:        nowPlayingSnapshot.Title,
+		NowPlayingArtist:       nowPlayingSnapshot.Artist,
+		NowPlayingSong:         nowPlayingSnapshot.Song,
 		HealthScore:            initialProbeHealthScore(probe),
 		LastCheckedAt:          &probe.LastCheckedAt,
 		LastError:              probe.LastError,
@@ -356,20 +359,13 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		if metadataURL == "" {
 			metadataURL = target.URL
 		}
-		metadataSource, metadataError, metadataErrorCode, metadataFetchedAt := detectMetadataSnapshot(
+		nowPlayingSnapshot := detectNowPlayingSnapshot(
 			h.admin.metaFetcher.Fetch(c.Request.Context(), metadataURL, metadata.Config{
 				Enabled: target.MetadataEnabled,
 				Type:    target.MetadataType,
 			}),
 		)
-		if err := h.admin.streams.UpdateMetadataHealth(
-			c.Request.Context(),
-			target.ID,
-			metadataSource,
-			metadataError,
-			metadataErrorCode,
-			metadataFetchedAt,
-		); err != nil {
+		if err := h.admin.streams.UpdateNowPlayingSnapshot(c.Request.Context(), target.ID, nowPlayingSnapshot); err != nil {
 			h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
@@ -658,16 +654,13 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			metadataEnabled = stream.MetadataEnabled
 			break
 		}
-		var metadataSource *string
-		var metadataError *string
-		var metadataErrorCode *string
-		var metadataFetchedAt *time.Time
+		nowPlayingSnapshot := store.NowPlayingSnapshot{}
 		if metadataEnabled {
 			np := h.admin.metaFetcher.Fetch(c.Request.Context(), primaryProbe.ResolvedURL, metadata.Config{
 				Enabled: true,
 				Type:    metadata.TypeAuto,
 			})
-			metadataSource, metadataError, metadataErrorCode, metadataFetchedAt = detectMetadataSnapshot(np)
+			nowPlayingSnapshot = detectNowPlayingSnapshot(np)
 		}
 		_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
 			URL:                    u.StreamURL,
@@ -691,10 +684,13 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			LoudnessStatus:         primaryProbe.LoudnessStatus,
 			MetadataEnabled:        metadataEnabled,
 			MetadataType:           metadata.TypeAuto,
-			MetadataSource:         metadataSource,
-			MetadataError:          metadataError,
-			MetadataErrorCode:      metadataErrorCode,
-			MetadataLastFetchedAt:  metadataFetchedAt,
+			MetadataSource:         nowPlayingSnapshot.MetadataSource,
+			MetadataError:          nowPlayingSnapshot.MetadataError,
+			MetadataErrorCode:      nowPlayingSnapshot.MetadataErrorCode,
+			MetadataLastFetchedAt:  nowPlayingSnapshot.MetadataLastFetchedAt,
+			NowPlayingTitle:        nowPlayingSnapshot.Title,
+			NowPlayingArtist:       nowPlayingSnapshot.Artist,
+			NowPlayingSong:         nowPlayingSnapshot.Song,
 			HealthScore:            initialProbeHealthScore(*primaryProbe),
 			LastCheckedAt:          &primaryProbe.LastCheckedAt,
 			LastError:              primaryProbe.LastError,
@@ -733,31 +729,29 @@ func normalizeMetadataType(raw string) string {
 	}
 }
 
-func detectMetadataSnapshot(np *metadata.NowPlaying) (*string, *string, *string, *time.Time) {
+func detectNowPlayingSnapshot(np *metadata.NowPlaying) store.NowPlayingSnapshot {
 	if np == nil {
-		return nil, nil, nil, nil
+		return store.NowPlayingSnapshot{}
 	}
 
-	var source *string
+	snapshot := store.NowPlayingSnapshot{
+		Title:  strings.TrimSpace(np.Title),
+		Artist: strings.TrimSpace(np.Artist),
+		Song:   strings.TrimSpace(np.Song),
+	}
 	if v := strings.TrimSpace(np.Source); v != "" {
-		source = &v
+		snapshot.MetadataSource = &v
 	}
-
-	var errMsg *string
 	if v := strings.TrimSpace(np.Error); v != "" {
-		errMsg = &v
+		snapshot.MetadataError = &v
 	}
-
-	var errCode *string
 	if v := strings.TrimSpace(np.ErrorCode); v != "" {
-		errCode = &v
+		snapshot.MetadataErrorCode = &v
 	}
-
-	fetchedAt := np.FetchedAt
-	if fetchedAt.IsZero() {
-		return source, errMsg, errCode, nil
+	if !np.FetchedAt.IsZero() {
+		snapshot.MetadataLastFetchedAt = &np.FetchedAt
 	}
-	return source, errMsg, errCode, &fetchedAt
+	return snapshot
 }
 
 func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []adminStreamRequest {
@@ -853,16 +847,13 @@ func (h *Handler) buildStationStreams(
 		}
 		metadataType := "auto"
 
-		var metadataSource *string
-		var metadataError *string
-		var metadataErrorCode *string
-		var metadataLastFetchedAt *time.Time
+		nowPlayingSnapshot := store.NowPlayingSnapshot{}
 		if metadataEnabled {
 			np := h.admin.metaFetcher.Fetch(ctx.Request.Context(), probe.ResolvedURL, metadata.Config{
 				Enabled: true,
 				Type:    metadata.TypeAuto,
 			})
-			metadataSource, metadataError, metadataErrorCode, metadataLastFetchedAt = detectMetadataSnapshot(np)
+			nowPlayingSnapshot = detectNowPlayingSnapshot(np)
 		}
 
 		inputs = append(inputs, store.StationStreamInput{
@@ -887,10 +878,13 @@ func (h *Handler) buildStationStreams(
 			LoudnessStatus:         probe.LoudnessStatus,
 			MetadataEnabled:        metadataEnabled,
 			MetadataType:           metadataType,
-			MetadataSource:         metadataSource,
-			MetadataError:          metadataError,
-			MetadataErrorCode:      metadataErrorCode,
-			MetadataLastFetchedAt:  metadataLastFetchedAt,
+			MetadataSource:         nowPlayingSnapshot.MetadataSource,
+			MetadataError:          nowPlayingSnapshot.MetadataError,
+			MetadataErrorCode:      nowPlayingSnapshot.MetadataErrorCode,
+			MetadataLastFetchedAt:  nowPlayingSnapshot.MetadataLastFetchedAt,
+			NowPlayingTitle:        nowPlayingSnapshot.Title,
+			NowPlayingArtist:       nowPlayingSnapshot.Artist,
+			NowPlayingSong:         nowPlayingSnapshot.Song,
 			HealthScore:            initialProbeHealthScore(probe),
 			LastCheckedAt:          &probe.LastCheckedAt,
 			LastError:              probe.LastError,

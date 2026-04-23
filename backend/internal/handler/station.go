@@ -36,36 +36,37 @@ type stationResponse struct {
 }
 
 type streamResponse struct {
-	ID                     string   `json:"id"`
-	URL                    string   `json:"url"`
-	ResolvedURL            string   `json:"resolved_url"`
-	Kind                   string   `json:"kind"`
-	Container              string   `json:"container"`
-	Transport              string   `json:"transport"`
-	MimeType               string   `json:"mime_type"`
-	Codec                  string   `json:"codec"`
-	Lossless               bool     `json:"lossless"`
-	Bitrate                int      `json:"bitrate"`
-	BitDepth               int      `json:"bit_depth"`
-	SampleRateHz           int      `json:"sample_rate_hz"`
-	SampleRateConfidence   string   `json:"sample_rate_confidence"`
-	Channels               int      `json:"channels"`
-	Priority               int      `json:"priority"`
-	IsActive               bool     `json:"is_active"`
-	LoudnessIntegratedLUFS *float64 `json:"loudness_integrated_lufs,omitempty"`
-	LoudnessPeakDBFS       *float64 `json:"loudness_peak_dbfs,omitempty"`
-	LoudnessSampleDuration float64  `json:"loudness_sample_duration_seconds"`
-	LoudnessMeasuredAt     *string  `json:"loudness_measured_at,omitempty"`
-	LoudnessStatus         string   `json:"loudness_measurement_status"`
-	MetadataEnabled        bool     `json:"metadata_enabled"`
-	MetadataType           string   `json:"metadata_type"`
-	MetadataSource         *string  `json:"metadata_source,omitempty"`
-	MetadataError          *string  `json:"metadata_error,omitempty"`
-	MetadataErrorCode      *string  `json:"metadata_error_code,omitempty"`
-	MetadataLastFetchedAt  *string  `json:"metadata_last_fetched_at,omitempty"`
-	HealthScore            float64  `json:"health_score"`
-	LastCheckedAt          *string  `json:"last_checked_at,omitempty"`
-	LastError              *string  `json:"last_error,omitempty"`
+	ID                      string   `json:"id"`
+	URL                     string   `json:"url"`
+	ResolvedURL             string   `json:"resolved_url"`
+	Kind                    string   `json:"kind"`
+	Container               string   `json:"container"`
+	Transport               string   `json:"transport"`
+	MimeType                string   `json:"mime_type"`
+	Codec                   string   `json:"codec"`
+	Lossless                bool     `json:"lossless"`
+	Bitrate                 int      `json:"bitrate"`
+	BitDepth                int      `json:"bit_depth"`
+	SampleRateHz            int      `json:"sample_rate_hz"`
+	SampleRateConfidence    string   `json:"sample_rate_confidence"`
+	Channels                int      `json:"channels"`
+	Priority                int      `json:"priority"`
+	IsActive                bool     `json:"is_active"`
+	LoudnessIntegratedLUFS  *float64 `json:"loudness_integrated_lufs,omitempty"`
+	LoudnessPeakDBFS        *float64 `json:"loudness_peak_dbfs,omitempty"`
+	LoudnessSampleDuration  float64  `json:"loudness_sample_duration_seconds"`
+	LoudnessMeasuredAt      *string  `json:"loudness_measured_at,omitempty"`
+	LoudnessStatus          string   `json:"loudness_measurement_status"`
+	MetadataEnabled         bool     `json:"metadata_enabled"`
+	MetadataType            string   `json:"metadata_type"`
+	MetadataSource          *string  `json:"metadata_source,omitempty"`
+	MetadataError           *string  `json:"metadata_error,omitempty"`
+	MetadataErrorCode       *string  `json:"metadata_error_code,omitempty"`
+	MetadataLastFetchedAt   *string  `json:"metadata_last_fetched_at,omitempty"`
+	MetadataClientCandidate bool     `json:"metadata_client_candidate"`
+	HealthScore             float64  `json:"health_score"`
+	LastCheckedAt           *string  `json:"last_checked_at,omitempty"`
+	LastError               *string  `json:"last_error,omitempty"`
 }
 
 func toStreamResponse(s *store.StationStream) streamResponse {
@@ -85,36 +86,37 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 		loudnessMeasuredAt = &formatted
 	}
 	return streamResponse{
-		ID:                     s.ID,
-		URL:                    s.URL,
-		ResolvedURL:            s.ResolvedURL,
-		Kind:                   s.Kind,
-		Container:              s.Container,
-		Transport:              s.Transport,
-		MimeType:               s.MimeType,
-		Codec:                  s.Codec,
-		Lossless:               isLosslessStream(s.Codec, s.MimeType, s.URL, s.ResolvedURL),
-		Bitrate:                s.Bitrate,
-		BitDepth:               s.BitDepth,
-		SampleRateHz:           s.SampleRateHz,
-		SampleRateConfidence:   s.SampleRateConfidence,
-		Channels:               s.Channels,
-		Priority:               s.Priority,
-		IsActive:               s.IsActive,
-		LoudnessIntegratedLUFS: s.LoudnessIntegratedLUFS,
-		LoudnessPeakDBFS:       s.LoudnessPeakDBFS,
-		LoudnessSampleDuration: s.LoudnessSampleDuration,
-		LoudnessMeasuredAt:     loudnessMeasuredAt,
-		LoudnessStatus:         s.LoudnessStatus,
-		MetadataEnabled:        s.MetadataEnabled,
-		MetadataType:           s.MetadataType,
-		MetadataSource:         s.MetadataSource,
-		MetadataError:          s.MetadataError,
-		MetadataErrorCode:      s.MetadataErrorCode,
-		MetadataLastFetchedAt:  metadataLastFetchedAt,
-		HealthScore:            s.HealthScore,
-		LastCheckedAt:          lastCheckedAt,
-		LastError:              s.LastError,
+		ID:                      s.ID,
+		URL:                     s.URL,
+		ResolvedURL:             s.ResolvedURL,
+		Kind:                    s.Kind,
+		Container:               s.Container,
+		Transport:               s.Transport,
+		MimeType:                s.MimeType,
+		Codec:                   s.Codec,
+		Lossless:                isLosslessStream(s.Codec, s.MimeType, s.URL, s.ResolvedURL),
+		Bitrate:                 s.Bitrate,
+		BitDepth:                s.BitDepth,
+		SampleRateHz:            s.SampleRateHz,
+		SampleRateConfidence:    s.SampleRateConfidence,
+		Channels:                s.Channels,
+		Priority:                s.Priority,
+		IsActive:                s.IsActive,
+		LoudnessIntegratedLUFS:  s.LoudnessIntegratedLUFS,
+		LoudnessPeakDBFS:        s.LoudnessPeakDBFS,
+		LoudnessSampleDuration:  s.LoudnessSampleDuration,
+		LoudnessMeasuredAt:      loudnessMeasuredAt,
+		LoudnessStatus:          s.LoudnessStatus,
+		MetadataEnabled:         s.MetadataEnabled,
+		MetadataType:            s.MetadataType,
+		MetadataSource:          s.MetadataSource,
+		MetadataError:           s.MetadataError,
+		MetadataErrorCode:       s.MetadataErrorCode,
+		MetadataLastFetchedAt:   metadataLastFetchedAt,
+		MetadataClientCandidate: isMetadataClientCandidate(s),
+		HealthScore:             s.HealthScore,
+		LastCheckedAt:           lastCheckedAt,
+		LastError:               s.LastError,
 	}
 }
 
@@ -145,8 +147,30 @@ func defaultStreamResponseForStation(s *store.Station) []streamResponse {
 		MetadataEnabled:        true,
 		MetadataType:           "auto",
 		MetadataSource:         nil,
-		HealthScore:            s.ReliabilityScore,
+		MetadataClientCandidate: isMetadataClientCandidate(&store.StationStream{
+			URL:             s.StreamURL,
+			ResolvedURL:     s.StreamURL,
+			Kind:            "direct",
+			Container:       "none",
+			Transport:       transport,
+			MetadataEnabled: true,
+		}),
+		HealthScore: s.ReliabilityScore,
 	}}
+}
+
+func isMetadataClientCandidate(s *store.StationStream) bool {
+	if s == nil || !s.MetadataEnabled {
+		return false
+	}
+	if s.Kind != "direct" || s.Container != "none" {
+		return false
+	}
+	resolved := strings.ToLower(strings.TrimSpace(s.ResolvedURL))
+	if resolved == "" {
+		resolved = strings.ToLower(strings.TrimSpace(s.URL))
+	}
+	return strings.HasPrefix(resolved, "http://") || strings.HasPrefix(resolved, "https://")
 }
 
 func isLosslessStream(codec, mimeType, urlValue, resolvedURL string) bool {

@@ -13,8 +13,9 @@ import (
 
 // GetNowPlaying handles GET /stations/:id/now-playing.
 // It returns the currently-playing track metadata for the station's stream URL.
-// Results are cached in the Fetcher for 30 s, so this endpoint is safe to poll
-// from player clients on every track change.
+// Responses are served from the latest stored snapshot. When the snapshot is
+// stale, the handler schedules an async refresh and immediately returns the
+// cached payload so playback UI never waits on upstream metadata probes.
 func (h *Handler) GetNowPlaying(c *gin.Context) {
 	id := c.Param("id")
 	requestedStreamID := strings.TrimSpace(c.Query("stream_id"))
@@ -33,9 +34,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 	streamURL := station.StreamURL
 	selectedStreamID := ""
 	metadataEnabled := true
-	metadataType := metadata.TypeAuto
-	var metadataError *string
-	var metadataErrorCode *string
+	var selectedStream *store.StationStream
 	streams, err := h.station.streams.ListByStationID(c.Request.Context(), station.ID)
 	if err != nil {
 		h.log.Warn("list station streams for now-playing", "station_id", station.ID, "error", err)
@@ -53,9 +52,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 					streamURL = candidate
 					selectedStreamID = stream.ID
 					metadataEnabled = stream.MetadataEnabled
-					metadataType = stream.MetadataType
-					metadataError = stream.MetadataError
-					metadataErrorCode = stream.MetadataErrorCode
+					selectedStream = stream
 					break
 				}
 			}
@@ -74,9 +71,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 					streamURL = candidate
 					selectedStreamID = stream.ID
 					metadataEnabled = stream.MetadataEnabled
-					metadataType = stream.MetadataType
-					metadataError = stream.MetadataError
-					metadataErrorCode = stream.MetadataErrorCode
+					selectedStream = stream
 					break
 				}
 			}
@@ -91,45 +86,91 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 			ErrorCode: metadata.ErrorCodeDisabled,
 			FetchedAt: time.Now(),
 		}
-		if metadataError != nil {
-			np.Error = *metadataError
+		if selectedStream != nil && selectedStream.MetadataError != nil {
+			np.Error = *selectedStream.MetadataError
 		}
-		if metadataErrorCode != nil {
-			np.ErrorCode = *metadataErrorCode
+		if selectedStream != nil && selectedStream.MetadataErrorCode != nil {
+			np.ErrorCode = *selectedStream.MetadataErrorCode
 		}
 		c.JSON(http.StatusOK, np)
 		return
 	}
 
-	np := h.station.metaFetcher.Fetch(c.Request.Context(), streamURL, metadata.Config{
-		Enabled: metadataEnabled,
-		Type:    metadataType,
-	})
-
-	var resultMetadataError *string
-	var resultMetadataErrorCode *string
-	if np.Status == "ok" {
-		resultMetadataError = nil
-		resultMetadataErrorCode = nil
-	} else if np.Error != "" {
-		errMsg := np.Error
-		resultMetadataError = &errMsg
-	}
-	if np.ErrorCode != "" {
-		errCode := np.ErrorCode
-		resultMetadataErrorCode = &errCode
-	}
-
-	if selectedStreamID != "" {
-		var metadataSource *string
-		if strings.TrimSpace(np.Source) != "" {
-			source := strings.TrimSpace(np.Source)
-			metadataSource = &source
-		}
-		if err := h.station.streams.UpdateMetadataHealth(c.Request.Context(), selectedStreamID, metadataSource, resultMetadataError, resultMetadataErrorCode, &np.FetchedAt); err != nil {
-			h.log.Warn("update metadata health", "station_id", station.ID, "stream_id", selectedStreamID, "error", err)
+	if selectedStream == nil && selectedStreamID != "" {
+		selectedStream = &store.StationStream{
+			ID:              selectedStreamID,
+			URL:             streamURL,
+			ResolvedURL:     streamURL,
+			MetadataEnabled: metadataEnabled,
+			MetadataType:    metadata.TypeAuto,
 		}
 	}
 
+	if selectedStream != nil && h.station.metaRefresher.NeedsRefresh(selectedStream) {
+		h.station.metaRefresher.RefreshAsync(selectedStream)
+	}
+
+	np := buildNowPlayingResponse(selectedStream)
 	c.JSON(http.StatusOK, np)
+}
+
+func buildNowPlayingResponse(stream *store.StationStream) *metadata.NowPlaying {
+	now := time.Now()
+	if stream == nil {
+		return &metadata.NowPlaying{
+			Source:    "",
+			Supported: false,
+			Status:    "unsupported",
+			ErrorCode: metadata.ErrorCodeNoMeta,
+			FetchedAt: now,
+		}
+	}
+
+	fetchedAt := now
+	if stream.MetadataLastFetchedAt != nil && !stream.MetadataLastFetchedAt.IsZero() {
+		fetchedAt = *stream.MetadataLastFetchedAt
+	}
+
+	source := ""
+	if stream.MetadataSource != nil {
+		source = strings.TrimSpace(*stream.MetadataSource)
+	}
+
+	if title := strings.TrimSpace(stream.NowPlayingTitle); title != "" {
+		return &metadata.NowPlaying{
+			Title:     title,
+			Artist:    strings.TrimSpace(stream.NowPlayingArtist),
+			Song:      strings.TrimSpace(stream.NowPlayingSong),
+			Source:    source,
+			Supported: true,
+			Status:    "ok",
+			FetchedAt: fetchedAt,
+		}
+	}
+
+	errorCode := ""
+	if stream.MetadataErrorCode != nil {
+		errorCode = strings.TrimSpace(*stream.MetadataErrorCode)
+	}
+	errorMessage := ""
+	if stream.MetadataError != nil {
+		errorMessage = strings.TrimSpace(*stream.MetadataError)
+	}
+
+	status := "unsupported"
+	switch errorCode {
+	case "", metadata.ErrorCodeNoMeta:
+		status = "unsupported"
+	default:
+		status = "error"
+	}
+
+	return &metadata.NowPlaying{
+		Source:    source,
+		Supported: false,
+		Status:    status,
+		ErrorCode: errorCode,
+		Error:     errorMessage,
+		FetchedAt: fetchedAt,
+	}
 }

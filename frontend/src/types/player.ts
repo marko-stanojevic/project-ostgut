@@ -15,6 +15,10 @@ export interface StationStream {
     channels?: number
     priority: number
     isActive: boolean
+    metadataEnabled?: boolean
+    metadataType?: string
+    metadataSource?: string
+    metadataClientCandidate?: boolean
     healthScore: number
     loudnessIntegratedLufs?: number
     loudnessPeakDbfs?: number

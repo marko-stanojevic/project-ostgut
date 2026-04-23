@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -66,6 +67,7 @@ type stationHandlers struct {
 	stations          *store.StationStore
 	streams           *store.StationStreamStore
 	metaFetcher       *metadata.Fetcher
+	metaRefresher     *radio.MetadataRefresher
 	streamProbeClient *http.Client
 }
 
@@ -111,6 +113,7 @@ type Handler struct {
 func New(deps Dependencies, opts Options) *Handler {
 	streamProbeClient := &http.Client{Timeout: 8 * time.Second}
 	metaFetcher := metadata.NewFetcher(opts.Log)
+	metaRefresher := radio.NewMetadataRefresher(deps.StationStreamStore, metaFetcher, opts.Log)
 	return &Handler{
 		auth: authHandlers{
 			users:     deps.UserStore,
@@ -133,6 +136,7 @@ func New(deps Dependencies, opts Options) *Handler {
 			stations:          deps.StationStore,
 			streams:           deps.StationStreamStore,
 			metaFetcher:       metaFetcher,
+			metaRefresher:     metaRefresher,
 			streamProbeClient: streamProbeClient,
 		},
 		media: mediaHandlers{

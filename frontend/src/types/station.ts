@@ -26,6 +26,7 @@ export interface ApiStream {
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string
+    metadata_client_candidate: boolean
     health_score: number
     last_checked_at?: string
     last_error?: string
