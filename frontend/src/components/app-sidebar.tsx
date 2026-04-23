@@ -43,7 +43,7 @@ function SettingsSubNav() {
               className={cn(
                 'relative mb-2 flex items-center gap-3.5 rounded-xl px-6 py-4 text-[0.94rem] tracking-[0.01em] transition-colors',
                 active
-                  ? 'bg-brand/[0.04] font-medium text-foreground before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[2px] before:rounded-full before:bg-[linear-gradient(180deg,rgba(200,116,58,0.55),rgba(200,116,58,1),rgba(200,116,58,0.55))] before:shadow-[0_0_10px_rgba(200,116,58,0.28)]'
+                  ? 'ui-nav-sidebar-active font-medium text-foreground before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[2px] before:rounded-full'
                   : 'font-light text-muted-foreground hover:bg-foreground/[0.018] hover:text-foreground'
               )}
             >
@@ -66,9 +66,9 @@ function NowPlayingIndicator() {
     <span className="ml-auto flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.28em] text-muted-foreground/80">
       <span className={cn(
         'h-1.5 w-1.5 rounded-full',
-        state === 'playing' ? 'animate-pulse bg-brand' : 'bg-muted-foreground/40'
+        state === 'playing' ? 'ui-nav-live-dot animate-pulse' : 'bg-muted-foreground/40'
       )} />
-      <span className={state === 'playing' ? 'text-brand' : ''}>
+      <span className={state === 'playing' ? 'ui-nav-live-text' : ''}>
         {state === 'playing' ? t('live') : t('paused')}
       </span>
     </span>
@@ -109,10 +109,10 @@ export function AppSidebarMobile() {
               <Icon className="h-3.5 w-3.5 shrink-0" />
               {label}
               {active && (
-                <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-brand" />
+                <span className="ui-nav-underline absolute bottom-0 left-2 right-2 h-[2px] rounded-full" />
               )}
               {isCuratedAndPlaying && !active && state === 'playing' && (
-                <span className="h-1 w-1 animate-pulse rounded-full bg-brand" />
+                <span className="ui-nav-live-dot h-1 w-1 animate-pulse rounded-full" />
               )}
             </Link>
           )
@@ -155,7 +155,7 @@ export function AppSidebar() {
                     className={cn(
                       'relative mb-2 flex items-center gap-3.5 rounded-xl px-6 py-4 text-[0.94rem] tracking-[0.01em] transition-colors',
                       active
-                        ? 'bg-brand/[0.04] text-foreground before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[2px] before:rounded-full before:bg-[linear-gradient(180deg,rgba(200,116,58,0.55),rgba(200,116,58,1),rgba(200,116,58,0.55))] before:shadow-[0_0_10px_rgba(200,116,58,0.28)]'
+                        ? 'ui-nav-sidebar-active text-foreground before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[2px] before:rounded-full'
                         : 'font-light text-muted-foreground hover:bg-foreground/[0.018] hover:text-foreground'
                     )}
                   >

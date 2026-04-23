@@ -39,16 +39,16 @@ export default function HomePage() {
       <main className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-28 text-center">
         {/* Warm ambient glow */}
         <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/6 blur-[120px]" />
-          <div className="absolute right-[-10%] top-[-5%] h-72 w-72 rounded-full bg-brand/4 blur-[80px]" />
-          <div className="absolute bottom-[5%] left-[-5%] h-52 w-52 rounded-full bg-primary/5 blur-[60px]" />
+          <div className="absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--hero-glow-primary)] blur-[120px]" />
+          <div className="absolute right-[-10%] top-[-5%] h-72 w-72 rounded-full bg-[var(--hero-glow-secondary)] blur-[80px]" />
+          <div className="absolute bottom-[5%] left-[-5%] h-52 w-52 rounded-full bg-[var(--hero-glow-tertiary)] blur-[60px]" />
         </div>
 
         <div className="relative z-10 max-w-2xl space-y-8">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3.5 py-1.5">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
-            <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-brand">
+          <div className="ui-editorial-badge inline-flex items-center gap-2 rounded-full px-3.5 py-1.5">
+            <span className="ui-nav-live-dot h-1.5 w-1.5 animate-pulse rounded-full" />
+            <span className="text-[11px] font-medium uppercase tracking-[0.2em]">
               {t('badge')}
             </span>
           </div>

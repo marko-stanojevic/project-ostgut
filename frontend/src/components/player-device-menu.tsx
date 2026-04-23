@@ -103,15 +103,15 @@ export function PlayerDeviceMenu() {
       </Tooltip>
       <DropdownMenuContent align="end" className="w-80 p-1.5">
         <div className="px-3 pt-2 pb-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-zinc-500">
+          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-player-bar-muted">
             Connect
           </p>
         </div>
 
-        <div className="mx-1 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+        <div className="mx-1 rounded-xl border border-player-bar-chip-border bg-player-bar-chip-bg px-3 py-3">
           <div className="flex items-center gap-2.5">
             <CheckCircleIcon className="h-4.5 w-4.5 text-player-accent" weight="fill" />
-            <p className="text-sm font-medium text-zinc-100">This web browser</p>
+            <p className="text-sm font-medium text-player-bar-fg">This web browser</p>
           </div>
         </div>
 
@@ -156,9 +156,9 @@ export function PlayerDeviceMenu() {
               <>
                 <DropdownMenuSeparator />
                 <div className="px-3 py-3">
-                  <p className="text-sm font-medium text-zinc-100">No other devices found</p>
-                  <p className="mt-1 text-sm text-zinc-400">Check your WiFi</p>
-                  <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+                  <p className="text-sm font-medium text-player-bar-fg">No other devices found</p>
+                  <p className="mt-1 text-sm text-player-bar-muted">Check your WiFi</p>
+                  <p className="mt-4 text-sm leading-relaxed text-player-bar-muted">
                     Connect the devices you&apos;re using to the same WiFi.
                   </p>
                 </div>
@@ -168,9 +168,9 @@ export function PlayerDeviceMenu() {
         ) : (
           <>
             <div className="px-3 py-3">
-              <p className="text-sm font-medium text-zinc-100">No other devices found</p>
-              <p className="mt-1 text-sm text-zinc-400">Check your WiFi</p>
-              <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+              <p className="text-sm font-medium text-player-bar-fg">No other devices found</p>
+              <p className="mt-1 text-sm text-player-bar-muted">Check your WiFi</p>
+              <p className="mt-4 text-sm leading-relaxed text-player-bar-muted">
                 Connect the devices you&apos;re using to the same WiFi.
               </p>
             </div>
@@ -178,15 +178,15 @@ export function PlayerDeviceMenu() {
             <DropdownMenuSeparator />
 
             <div className="px-3 py-3">
-              <p className="text-sm font-medium text-zinc-100">Play from another device</p>
-              <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+              <p className="text-sm font-medium text-player-bar-fg">Play from another device</p>
+              <p className="mt-1 text-sm leading-relaxed text-player-bar-muted">
                 It will automatically appear here.
               </p>
             </div>
 
             <div className="px-3 pb-3">
-              <p className="text-sm font-medium text-zinc-100">Switch to the OSTGUT app</p>
-              <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+              <p className="text-sm font-medium text-player-bar-fg">Switch to the OSTGUT app</p>
+              <p className="mt-1 text-sm leading-relaxed text-player-bar-muted">
                 The app can detect more devices.
               </p>
             </div>

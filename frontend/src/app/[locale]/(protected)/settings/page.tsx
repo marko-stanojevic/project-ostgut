@@ -235,7 +235,7 @@ function ProfileSection() {
           <Button onClick={handleSave} disabled={saving || !displayName.trim()} size="sm">
             {saving ? t('saving') : t('save')}
           </Button>
-          {saved && <span className="text-sm text-green-500">{t('saved')}</span>}
+          {saved && <span className="text-sm text-success">{t('saved')}</span>}
         </div>
       </div>
 
@@ -283,7 +283,7 @@ function SecuritySection() {
       <div className="rounded-xl border border-border/50 bg-card/50 p-5">
         <p className="mb-4 text-sm font-medium">{t('change_password')}</p>
         {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
-        {success && <p className="mb-3 text-sm text-green-500">{t('updated')}</p>}
+        {success && <p className="mb-3 text-sm text-success">{t('updated')}</p>}
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div className="space-y-1.5">
             <Label htmlFor="current-password">{t('current_password')}</Label>

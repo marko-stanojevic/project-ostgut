@@ -84,7 +84,7 @@ export function StationCard({
                 </button>
             </div>
             {isActive && isPlaying && (
-                <span className="absolute right-2.5 top-2.5 h-2 w-2 animate-pulse rounded-full bg-brand shadow-[0_0_6px_rgba(200,116,58,0.6)]" />
+                <span className="ui-nav-live-dot absolute right-2.5 top-2.5 h-2 w-2 animate-pulse rounded-full" />
             )}
         </article>
     )

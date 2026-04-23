@@ -117,7 +117,7 @@ function TopNav() {
           >
             <span>{label}</span>
             {active && (
-              <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-brand" />
+              <span className="ui-nav-underline absolute bottom-0 left-2 right-2 h-[2px] rounded-full" />
             )}
           </Link>
         )
