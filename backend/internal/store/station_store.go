@@ -166,6 +166,7 @@ type stationQueryParts struct {
 	searchClause string
 	orderClause  string
 	args         []any
+	countArgs    []any // args for COUNT query (excludes ORDER BY args)
 }
 
 type stationQueryBuilder struct {
@@ -185,6 +186,7 @@ func buildStationQueryParts(f StationFilter) stationQueryParts {
 	}
 
 	where, searchClause := buildStationFilterClause(f, builder)
+	countArgs := append([]any{}, builder.args...)
 	orderClause := buildStationOrderClause(f, builder)
 
 	return stationQueryParts{
@@ -192,6 +194,7 @@ func buildStationQueryParts(f StationFilter) stationQueryParts {
 		searchClause: searchClause,
 		orderClause:  orderClause,
 		args:         builder.args,
+		countArgs:    countArgs,
 	}
 }
 
@@ -286,6 +289,7 @@ func buildStationOrderClause(f StationFilter, builder *stationQueryBuilder) stri
 	containsPlaceholder := builder.addArg(containsMatch)
 	tagExactPlaceholder := builder.addArg(exactMatch)
 	genrePrefixPlaceholder := builder.addArg(prefixMatch)
+	cityPrefixPlaceholder := builder.addArg(prefixMatch)
 	countryPrefixPlaceholder := builder.addArg(prefixMatch)
 	languagePrefixPlaceholder := builder.addArg(prefixMatch)
 
@@ -300,12 +304,12 @@ func buildStationOrderClause(f StationFilter, builder *stationQueryBuilder) stri
 				WHERE lower(tag) = $%d
 			) THEN 3
 			WHEN EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) LIKE $%d) THEN 4
-			WHEN lower(country) LIKE $%d OR lower(language) LIKE $%d THEN 5
+			WHEN lower(city) LIKE $%d OR lower(country) LIKE $%d OR lower(language) LIKE $%d THEN 5
 			ELSE 6
 		END,
 		featured DESC,
 		reliability_score DESC,
-		name ASC`, exactPlaceholder, prefixPlaceholder, containsPlaceholder, tagExactPlaceholder, genrePrefixPlaceholder, countryPrefixPlaceholder, languagePrefixPlaceholder)
+		name ASC`, exactPlaceholder, prefixPlaceholder, containsPlaceholder, tagExactPlaceholder, genrePrefixPlaceholder, cityPrefixPlaceholder, countryPrefixPlaceholder, languagePrefixPlaceholder)
 }
 
 // GetByID returns a single approved station by its internal UUID.
@@ -498,7 +502,7 @@ func (s *StationStore) Count(ctx context.Context, f StationFilter) (int, error) 
 	var n int
 	err := s.pool.QueryRow(ctx,
 		fmt.Sprintf(`SELECT COUNT(*) FROM stations WHERE %s%s`, parts.where, parts.searchClause),
-		parts.args...,
+		parts.countArgs...,
 	).Scan(&n)
 	return n, err
 }

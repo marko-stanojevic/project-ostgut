@@ -318,6 +318,7 @@ export function PlayerBar() {
             iconClassName="h-5.5 w-5.5"
             utilitySlot={<PlayerDeviceMenu />}
             normalizationEnabled={normalizationEnabled}
+            showNormalizationActivity={isPlaying || isLoading}
             onToggleNormalization={setNormalizationEnabled}
             volume={volume}
             setVolume={setVolume}

@@ -14,6 +14,7 @@ interface PlayerVolumeControlProps {
   showPercentage?: boolean
   utilitySlot?: ReactNode
   normalizationEnabled?: boolean
+  showNormalizationActivity?: boolean
   onToggleNormalization?: (enabled: boolean) => void
   volume: number
   setVolume: (value: number) => void
@@ -26,6 +27,7 @@ export function PlayerVolumeControl({
   showPercentage = false,
   utilitySlot,
   normalizationEnabled,
+  showNormalizationActivity = false,
   onToggleNormalization,
   volume,
   setVolume,
@@ -47,7 +49,7 @@ export function PlayerVolumeControl({
               className="relative flex h-9 shrink-0 items-center justify-center rounded-[0.7rem] px-2.5 text-[11px] font-medium uppercase tracking-[0.18em] text-player-muted transition-colors hover:text-player-muted-hover"
             >
               <span>Leveling</span>
-              {normalizationEnabled ? (
+              {normalizationEnabled && showNormalizationActivity ? (
                 <span className="absolute -bottom-0.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-player-accent animate-player-leveling-dot" />
               ) : null}
             </TooltipTrigger>

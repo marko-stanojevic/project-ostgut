@@ -304,6 +304,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
           className="flex w-full max-w-md flex-col"
           labelClassName="w-11 text-right text-sm tabular-nums text-player-muted"
           normalizationEnabled={normalizationEnabled}
+          showNormalizationActivity={isPlaying || isLoading}
           onToggleNormalization={setNormalizationEnabled}
           showPercentage
           volume={volume}
