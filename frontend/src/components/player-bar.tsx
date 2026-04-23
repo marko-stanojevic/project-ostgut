@@ -6,6 +6,7 @@ import { usePlayer } from '@/context/PlayerContext'
 import { useNowPlaying } from '@/hooks/useNowPlaying'
 import { FullScreenPlayer } from '@/components/full-screen-player'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   PlayIcon,
   PauseIcon,
@@ -14,7 +15,6 @@ import {
   RadioIcon,
   CircleNotchIcon,
   CornersOutIcon,
-  WaveformIcon,
 } from '@phosphor-icons/react'
 
 function getStreamDetailBadges(stream?: {
@@ -28,11 +28,10 @@ function getStreamDetailBadges(stream?: {
   if (!stream) return { primary: [], secondary: [] }
   const primary: string[] = []
   const secondary: string[] = []
-  if (stream.codec) primary.push(stream.codec)
-  if (stream.lossless) primary.push('Lossless')
-  if ((stream.bitDepth ?? 0) > 0) secondary.push(`${stream.bitDepth}-bit`)
-  if ((stream.sampleRateHz ?? 0) > 0) secondary.push(`${stream.sampleRateHz} Hz`)
-  if ((stream.channels ?? 0) > 0) secondary.push(`${stream.channels}ch`)
+  if (stream.codec) primary.push(`Codec: ${stream.codec}`)
+  if (stream.lossless) primary.push('Format: Lossless')
+  if ((stream.bitDepth ?? 0) > 0) secondary.push(`Depth: ${stream.bitDepth}-bit`)
+  if ((stream.sampleRateHz ?? 0) > 0) secondary.push(`Rate: ${stream.sampleRateHz} Hz`)
   return { primary, secondary }
 }
 
@@ -134,7 +133,10 @@ export function PlayerBar() {
     displayStream?.lossless || (displayStream?.codec || '').toUpperCase().includes('FLAC'),
   )
   const bitrateKbps = displayStream ? (displayStream.bitrate ?? 0) : (station?.bitrate || 0)
-  const hasQualityDetails = streamDetailBadges.primary.length > 0 || streamDetailBadges.secondary.length > 0 || (bitrateKbps > 0 && !isLosslessLike)
+  const normalizationBadge = Math.abs(normalizationOffsetDb) >= 0.1
+    ? `${normalizationOffsetDb > 0 ? '+' : ''}${normalizationOffsetDb.toFixed(1)} dB`
+    : null
+  const hasQualityDetails = streamDetailBadges.primary.length > 0 || streamDetailBadges.secondary.length > 0 || (bitrateKbps > 0 && !isLosslessLike) || Boolean(normalizationEnabled && normalizationBadge)
   const cityLine = (station?.city && station.city !== '-') ? station.city : ''
   const hasNowPlaying = Boolean(nowPlaying?.title)
   const isReconnecting = isLoading && !hasNowPlaying
@@ -194,43 +196,59 @@ export function PlayerBar() {
 
         {/* Playback controls — center */}
         <div className="flex shrink-0 items-center justify-self-center gap-1.5 sm:gap-2">
-          <button
-            onClick={playPrev}
-            disabled={!hasPrev}
-            title="Previous"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
-          >
-            <SkipBackIcon weight="fill" className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              delay={300}
+              onClick={playPrev}
+              disabled={!hasPrev}
+              aria-label="Previous"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
+            >
+              <SkipBackIcon weight="fill" className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
+            </TooltipTrigger>
+            <TooltipContent>Previous</TooltipContent>
+          </Tooltip>
           {isLoading ? (
             <div className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center sm:h-14 sm:w-14">
               <CircleNotchIcon className="h-5.5 w-5.5 animate-spin text-zinc-500 sm:h-6.5 sm:w-6.5" />
             </div>
           ) : isPlaying ? (
-            <button
-              onClick={pause}
-              title="Pause"
-              className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:scale-[1.03] hover:bg-brand/25 sm:h-14 sm:w-14"
-            >
-              <PauseIcon weight="fill" className="h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                delay={300}
+                onClick={pause}
+                aria-label="Pause"
+                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:scale-[1.03] hover:bg-brand/25 sm:h-14 sm:w-14"
+              >
+                <PauseIcon weight="fill" className="h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
+              </TooltipTrigger>
+              <TooltipContent>Pause</TooltipContent>
+            </Tooltip>
           ) : (
-            <button
-              onClick={resume}
-              title="Play"
-              className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:scale-[1.03] hover:bg-zinc-700 sm:h-14 sm:w-14"
-            >
-              <PlayIcon weight="fill" className="ml-0.5 h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                delay={300}
+                onClick={resume}
+                aria-label="Play"
+                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:scale-[1.03] hover:bg-zinc-700 sm:h-14 sm:w-14"
+              >
+                <PlayIcon weight="fill" className="ml-0.5 h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
+              </TooltipTrigger>
+              <TooltipContent>Play</TooltipContent>
+            </Tooltip>
           )}
-          <button
-            onClick={playNext}
-            disabled={!hasNext}
-            title="Next"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
-          >
-            <SkipForwardIcon weight="fill" className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              delay={300}
+              onClick={playNext}
+              disabled={!hasNext}
+              aria-label="Next"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
+            >
+              <SkipForwardIcon weight="fill" className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
+            </TooltipTrigger>
+            <TooltipContent>Next</TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Volume + bitrate — right */}
@@ -247,41 +265,50 @@ export function PlayerBar() {
                     {streamDetailBadges.primary.map((detail) => (
                       <span
                         key={detail}
-                        className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400"
+                        className="shrink-0 rounded-[0.34rem] border border-white/12 bg-white/[0.06] px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-zinc-400"
                       >
                         {detail}
                       </span>
                     ))}
                     {bitrateKbps > 0 && !isLosslessLike ? (
-                      <span className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium tabular-nums uppercase tracking-[0.12em] text-zinc-400">
-                        {bitrateKbps} kbps
+                      <span className="shrink-0 rounded-[0.34rem] border border-white/12 bg-white/[0.06] px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-zinc-400">
+                        Bitrate: {bitrateKbps} kbps
                       </span>
                     ) : null}
                   </div>
-                  {streamDetailBadges.secondary.length > 0 ? (
+                  {streamDetailBadges.secondary.length > 0 || (normalizationEnabled && normalizationBadge) ? (
                     <div className="flex items-center gap-2">
                       {streamDetailBadges.secondary.map((detail) => (
                         <span
                           key={detail}
-                          className="shrink-0 rounded-[0.45rem] border border-white/12 bg-white/[0.06] px-2 py-0.75 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400"
+                          className="shrink-0 rounded-[0.34rem] border border-white/12 bg-white/[0.06] px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-zinc-400"
                         >
                           {detail}
                         </span>
                       ))}
+                      {normalizationEnabled && normalizationBadge ? (
+                        <span className="shrink-0 rounded-[0.34rem] border border-brand/35 bg-brand/12 px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-brand">
+                          Leveling: {normalizationBadge}
+                        </span>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
               </div>
 
-              <button
-                type="button"
-                aria-expanded={statsExpanded}
-                aria-label={statsExpanded ? 'Hide audio stats' : 'Show audio stats'}
-                onClick={() => setStatsExpanded((prev) => !prev)}
-                className="flex h-10 w-14 shrink-0 items-center justify-center rounded-[0.7rem] text-zinc-400 transition-colors hover:text-zinc-200"
-              >
-                <WaveformIcon className="h-5.5 w-5.5" weight="regular" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger
+                  delay={300}
+                  type="button"
+                  aria-expanded={statsExpanded}
+                  aria-label={statsExpanded ? 'Hide stats' : 'Show stats'}
+                  onClick={() => setStatsExpanded((prev) => !prev)}
+                  className="flex h-10 shrink-0 items-center justify-center rounded-[0.7rem] px-2.5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-400 transition-colors hover:text-zinc-200"
+                >
+                  <span>Stats</span>
+                </TooltipTrigger>
+                <TooltipContent>{statsExpanded ? 'Hide stats for nerds' : 'Show stats for nerds'}</TooltipContent>
+              </Tooltip>
             </div>
           ) : null}
 
@@ -289,19 +316,22 @@ export function PlayerBar() {
             className="hidden w-64 shrink-0 flex-col md:flex"
             iconClassName="h-5.5 w-5.5"
             normalizationEnabled={normalizationEnabled}
-            normalizationOffsetDb={normalizationOffsetDb}
             onToggleNormalization={setNormalizationEnabled}
             volume={volume}
             setVolume={setVolume}
           />
 
-          <button
-            onClick={() => setFullScreen(true)}
-            title="Full screen"
-            className="flex h-12 w-12 shrink-0 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-200"
-          >
-            <CornersOutIcon className="h-9 w-9" weight="light" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              delay={300}
+              onClick={() => setFullScreen(true)}
+              aria-label="Full screen"
+              className="flex h-12 w-12 shrink-0 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-200"
+            >
+              <CornersOutIcon className="h-9 w-9" weight="light" />
+            </TooltipTrigger>
+            <TooltipContent>Full screen</TooltipContent>
+          </Tooltip>
         </div>
 
       </div>
