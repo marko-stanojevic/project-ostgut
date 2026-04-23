@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Link, useRouter } from '@/i18n/navigation'
+import { routing } from '@/i18n/routing'
 import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { signIn } from 'next-auth/react'
@@ -13,10 +14,32 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { AuthShell } from '@/components/auth/auth-shell'
 
+function normalizeCallbackForLocaleRouter(callbackUrl: string): string {
+  if (!callbackUrl) return '/'
+
+  let value = callbackUrl
+
+  if (callbackUrl.startsWith('http://') || callbackUrl.startsWith('https://')) {
+    try {
+      const url = new URL(callbackUrl)
+      value = `${url.pathname}${url.search}${url.hash}`
+    } catch {
+      return '/'
+    }
+  }
+
+  if (!value.startsWith('/')) return '/'
+
+  const localePattern = new RegExp(`^/(${routing.locales.join('|')})(?=/|$)`)
+  const normalized = value.replace(localePattern, '')
+  return normalized || '/'
+}
+
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') || '/'
+  const normalizedCallbackUrl = normalizeCallbackForLocaleRouter(callbackUrl)
   const { signIn: credentialsSignIn } = useAuth()
   const t = useTranslations('auth.login')
   const [email, setEmail] = useState('')
@@ -30,7 +53,7 @@ function LoginForm() {
     setLoading(true)
     try {
       await credentialsSignIn(email, password)
-      router.push(callbackUrl)
+      router.push(normalizedCallbackUrl)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
@@ -40,7 +63,7 @@ function LoginForm() {
 
   const handleOAuthLogin = async (provider: 'github' | 'google') => {
     try {
-      await signIn(provider, { callbackUrl })
+      await signIn(provider, { callbackUrl: normalizedCallbackUrl })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'OAuth login failed')
     }

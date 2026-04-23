@@ -71,8 +71,13 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
     const router = useRouter()
     const { user, session, signOut } = useAuth()
     const { isAdmin } = useAdminStatus()
+    const [mounted, setMounted] = useState(false)
     const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.image ?? null)
     const t = useTranslations('account_menu')
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
 
     useEffect(() => {
         if (!session?.accessToken) {
@@ -97,6 +102,20 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
             active = false
         }
     }, [session?.accessToken, user?.image])
+
+    if (!mounted) {
+        return (
+            <span
+                className={cn(
+                    'inline-flex rounded-full outline-none ring-offset-2 transition-opacity',
+                    className
+                )}
+                aria-label="Account"
+            >
+                <Avatar name={user?.name} image={avatarUrl} size={avatarSize} />
+            </span>
+        )
+    }
 
     return (
         <DropdownMenu>

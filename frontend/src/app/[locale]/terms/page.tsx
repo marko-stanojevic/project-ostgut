@@ -4,7 +4,7 @@ import { AuthenticatedHeaderActions, GuestHeaderActions } from '@/components/sit
 import { SiteFooter } from '@/components/site-footer'
 
 export const metadata = {
-  title: 'Terms of Service — bougie.fm',
+  title: 'Terms of Service — OSTGUT',
 }
 
 export default async function TermsPage() {
@@ -27,14 +27,14 @@ export default async function TermsPage() {
             <section>
               <h2 className="text-lg font-semibold mb-2">1. Acceptance of Terms</h2>
               <p>
-                By accessing or using bougie.fm (&quot;the Service&quot;), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Service.
+                By accessing or using OSTGUT (&quot;the Service&quot;), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Service.
               </p>
             </section>
 
             <section>
               <h2 className="text-lg font-semibold mb-2">2. Description of Service</h2>
               <p>
-                bougie.fm is a software-as-a-service platform. We reserve the right to modify, suspend, or discontinue the Service at any time with reasonable notice.
+                OSTGUT is a software-as-a-service platform. We reserve the right to modify, suspend, or discontinue the Service at any time with reasonable notice.
               </p>
             </section>
 
@@ -80,14 +80,14 @@ export default async function TermsPage() {
             <section>
               <h2 className="text-lg font-semibold mb-2">7. Intellectual Property</h2>
               <p>
-                The Service and its original content, features, and functionality are owned by bougie.fm and are protected by applicable intellectual property laws. You retain ownership of any content you submit through the Service.
+                The Service and its original content, features, and functionality are owned by OSTGUT and are protected by applicable intellectual property laws. You retain ownership of any content you submit through the Service.
               </p>
             </section>
 
             <section>
               <h2 className="text-lg font-semibold mb-2">8. Limitation of Liability</h2>
               <p>
-                To the maximum extent permitted by law, bougie.fm shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service. Our total liability shall not exceed the amount you paid us in the twelve months preceding the claim.
+                To the maximum extent permitted by law, OSTGUT shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service. Our total liability shall not exceed the amount you paid us in the twelve months preceding the claim.
               </p>
             </section>
 

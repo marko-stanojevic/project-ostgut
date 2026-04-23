@@ -38,6 +38,11 @@ interface PlayerContextValue {
   normalizationOffsetDb: number
   queue: Station[]
   queueIndex: number
+  transport: PlaybackTransport
+  castState: CastConnectionState
+  airPlaySupported: boolean
+  airPlayAvailable: boolean
+  airPlayActive: boolean
   play: (station: Station) => void
   setQueue: (stations: Station[], index: number) => void
   playNext: () => void
@@ -47,13 +52,20 @@ interface PlayerContextValue {
   stop: () => void
   setVolume: (v: number) => void
   setNormalizationEnabled: (enabled: boolean) => void
+  promptCast: () => Promise<boolean>
+  disconnectCast: () => void
+  promptAirPlay: () => Promise<boolean>
 }
 
 const LAST_SUCCESSFUL_STREAM_KEY = 'player:last-successful-stream:v1'
+type PlaybackTransport = 'local' | 'cast'
+type CastConnectionState = 'unavailable' | 'idle' | 'connecting' | 'connected'
+
 interface PlaybackCapabilities {
   flac: boolean
   hls: boolean
 }
+
 interface PlayableVariant {
   url: string
   kind: string
@@ -108,6 +120,20 @@ function getPlayableVariants(s: Station, caps: PlaybackCapabilities): PlayableVa
   if (kind === 'hls' && !caps.hls) return []
   if (url.toLowerCase().includes('flac') && !caps.flac) return []
   return [{ url, kind, codec: '', mimeType: '', lossless: url.toLowerCase().includes('flac') }]
+}
+
+function getVariantContentType(variant: PlayableVariant): string {
+  const mimeType = variant.mimeType.trim()
+  if (mimeType) return mimeType
+
+  if (variant.kind === 'hls') return 'application/vnd.apple.mpegurl'
+
+  const url = variant.url.toLowerCase()
+  if (url.endsWith('.aac')) return 'audio/aac'
+  if (url.endsWith('.ogg') || url.endsWith('.oga')) return 'audio/ogg'
+  if (url.endsWith('.m4a') || url.endsWith('.mp4')) return 'audio/mp4'
+  if (variant.lossless || variant.codec.includes('FLAC') || url.includes('flac')) return 'audio/flac'
+  return 'audio/mpeg'
 }
 
 function getPreferredVariantURL(stationID: string | undefined): string {
@@ -192,8 +218,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [prefsUpdatedAt, setPrefsUpdatedAt] = useState(initialState?.updatedAt ?? new Date().toISOString())
   const [queue, setQueueArr] = useState<Station[]>([])
   const [queueIndex, setQueueIdx] = useState(-1)
+  const [transport, setTransport] = useState<PlaybackTransport>('local')
+  const [castState, setCastState] = useState<CastConnectionState>('unavailable')
+  const [airPlaySupported, setAirPlaySupported] = useState(false)
+  const [airPlayAvailable, setAirPlayAvailable] = useState(false)
+  const [airPlayActive, setAirPlayActive] = useState(false)
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hlsRef = useRef<Hls | null>(null)
+  const castContextRef = useRef<cast.framework.CastContext | null>(null)
+  const castPlayerRef = useRef<cast.framework.RemotePlayer | null>(null)
+  const castControllerRef = useRef<cast.framework.RemotePlayerController | null>(null)
+  const castInitializedRef = useRef(false)
 
   // Reconnect machinery — refs only so timers never trigger re-renders.
   const stationRef = useRef<Station | null>(initialState?.station ?? null)
@@ -211,6 +247,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // closures still invoke the current implementation.
   const startStationRef = useRef<((s: Station) => void) | null>(null)
   const tryNextVariantRef = useRef<(() => void) | null>(null)
+  const loadStationOnCastRef = useRef<((s: Station) => Promise<boolean>) | null>(null)
 
   // Stable — only touches refs, safe to call from stale closures.
   const clearReconnect = useCallback(() => {
@@ -258,6 +295,30 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     volumeRampRef.current = requestAnimationFrame(tick)
   }, [stopVolumeRamp])
 
+  const handleAudioElementRef = useCallback((node: HTMLAudioElement | null) => {
+    audioRef.current = node
+    setAudioElement(node)
+  }, [])
+
+  const syncCastPlayerState = useCallback(() => {
+    const remotePlayer = castPlayerRef.current
+    if (!remotePlayer || transport !== 'cast') return
+
+    if (!remotePlayer.isConnected || !remotePlayer.isMediaLoaded) {
+      setState('paused')
+      return
+    }
+
+    setBaseVolumeState(clampVolume(remotePlayer.volumeLevel))
+
+    if (remotePlayer.playerState === chrome.cast.media.PlayerState.BUFFERING) {
+      setState('loading')
+      return
+    }
+
+    setState(remotePlayer.isPaused ? 'paused' : 'playing')
+  }, [transport])
+
   // Schedules the next reconnect attempt with exponential backoff, resetting
   // to variant 0 so the full failover sequence runs again after a cool-down.
   const scheduleReconnect = useCallback(() => {
@@ -280,7 +341,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   // Create the audio element once.
   useEffect(() => {
-    const audio = new Audio()
+    const audio = audioElement
+    if (!audio) return
+
     audio.preload = 'none'
     audio.volume = getEffectiveVolume(baseVolumeRef.current, normalizationEnabledRef.current, null)
 
@@ -317,6 +380,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       // Fatal source error: try next variant before falling back to backoff.
       tryNextVariantRef.current?.()
     })
+    if (typeof audio.webkitShowPlaybackTargetPicker === 'function') {
+      setAirPlaySupported(true)
+      setAirPlayActive(Boolean(audio.webkitCurrentPlaybackTargetIsWireless))
+
+      const handleAirPlayAvailability = (event: HTMLAudioElementEventMap['webkitplaybacktargetavailabilitychanged']) => {
+        setAirPlayAvailable(event.availability === 'available')
+      }
+      const handleAirPlayState = () => {
+        setAirPlayActive(Boolean(audio.webkitCurrentPlaybackTargetIsWireless))
+      }
+
+      audio.addEventListener('webkitplaybacktargetavailabilitychanged', handleAirPlayAvailability)
+      audio.addEventListener('webkitcurrentplaybacktargetiswirelesschanged', handleAirPlayState)
+    } else {
+      setAirPlaySupported(false)
+      setAirPlayAvailable(false)
+      setAirPlayActive(false)
+    }
 
     audioRef.current = audio
 
@@ -329,7 +410,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.src = ''
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [audioElement, clearReconnect, stopVolumeRamp])
 
   const applyPreferenceUpdate = useCallback(
     (update: { volume: number; station: Station | null; normalizationEnabled: boolean; updatedAt: string }) => {
@@ -437,12 +518,192 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setPrefsUpdatedAt(new Date().toISOString())
   }
 
-  const detachHls = () => {
+  const detachHls = useCallback(() => {
     if (hlsRef.current) {
       hlsRef.current.destroy()
       hlsRef.current = null
     }
-  }
+  }, [])
+
+  const loadStationOnCast = useCallback(async (s: Station) => {
+    if (!window.cast || !window.chrome) return false
+
+    const castContext = castContextRef.current ?? cast.framework.CastContext.getInstance()
+    castContextRef.current = castContext
+    const session = castContext.getCurrentSession()
+    if (!session) return false
+
+    const variants = getPlayableVariants(s, playbackCaps)
+    if (variants.length === 0) {
+      setCurrentStream(null)
+      setState('error')
+      return false
+    }
+
+    let idx = streamVariantRef.current
+    if (idx <= 0) {
+      const preferred = getPreferredVariantURL(s.id)
+      if (preferred) {
+        const preferredIndex = variants.findIndex((variant) => variant.url === preferred)
+        if (preferredIndex >= 0) idx = preferredIndex
+      }
+    }
+    idx = Math.min(Math.max(0, idx), Math.max(0, variants.length - 1))
+    const variant = variants[idx]
+    streamVariantRef.current = idx
+    streamVariantURLRef.current = variant.url
+    rememberPreferredVariant(s.id, variant.url)
+
+    const metadata = new chrome.cast.media.GenericMediaMetadata()
+    metadata.title = s.name
+    metadata.subtitle = [s.city, s.country].filter(Boolean).join(', ') || 'Live radio'
+    metadata.images = s.logo ? [new cast.framework.Image(s.logo)] : undefined
+
+    const mediaInfo = new chrome.cast.media.MediaInfo(variant.url, getVariantContentType(variant))
+    mediaInfo.metadata = metadata
+    mediaInfo.streamType = chrome.cast.media.StreamType.LIVE
+
+    const request = new chrome.cast.media.LoadRequest(mediaInfo)
+    request.autoplay = true
+
+    try {
+      clearReconnect()
+      detachHls()
+      audioRef.current?.pause()
+      audioRef.current?.removeAttribute('src')
+      audioRef.current?.load()
+      stationRef.current = s
+      setStation(s)
+      setCurrentStream(variant.source ?? null)
+      setTransport('cast')
+      setCastState('connected')
+      setState('loading')
+      touchPreferences()
+      await session.loadMedia(request)
+      return true
+    } catch {
+      setState('error')
+      return false
+    }
+  }, [clearReconnect, detachHls, playbackCaps])
+
+  const promptCast = useCallback(async () => {
+    if (!window.cast || !window.chrome) return false
+
+    try {
+      const castContext = castContextRef.current ?? cast.framework.CastContext.getInstance()
+      castContextRef.current = castContext
+      setCastState('connecting')
+      await castContext.requestSession()
+      setCastState('connected')
+      setTransport('cast')
+      if (stationRef.current) {
+        return await loadStationOnCastRef.current?.(stationRef.current) ?? true
+      }
+      return true
+    } catch {
+      setCastState(castContextRef.current?.getCastState() === cast.framework.CastState.NO_DEVICES_AVAILABLE ? 'unavailable' : 'idle')
+      return false
+    }
+  }, [])
+
+  const disconnectCast = useCallback(() => {
+    const session = castContextRef.current?.getCurrentSession()
+    if (session) {
+      session.endSession(true)
+    }
+    setTransport('local')
+    setCastState(castInitializedRef.current ? 'idle' : 'unavailable')
+    setState((prev) => (prev === 'playing' || prev === 'loading' ? 'paused' : prev))
+  }, [])
+
+  const promptAirPlay = useCallback(async () => {
+    const audio = audioRef.current
+    if (!audio || typeof audio.webkitShowPlaybackTargetPicker !== 'function') return false
+
+    try {
+      audio.webkitShowPlaybackTargetPicker()
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const initializeCast = () => {
+      if (!window.cast || !window.chrome || castInitializedRef.current) return
+
+      const castContext = cast.framework.CastContext.getInstance()
+      castContext.setOptions({
+        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+        autoJoinPolicy: cast.framework.AutoJoinPolicy.ORIGIN_SCOPED,
+      })
+      castContextRef.current = castContext
+
+      const remotePlayer = new cast.framework.RemotePlayer()
+      const controller = new cast.framework.RemotePlayerController(remotePlayer)
+      castPlayerRef.current = remotePlayer
+      castControllerRef.current = controller
+      castInitializedRef.current = true
+      setCastState(castContext.getCastState() === cast.framework.CastState.NO_DEVICES_AVAILABLE ? 'unavailable' : 'idle')
+
+      const handleCastContextEvent = (event: cast.framework.SessionStateEventData | cast.framework.CastStateEventData) => {
+        if ('castState' in event) {
+          setCastState(event.castState === cast.framework.CastState.NO_DEVICES_AVAILABLE ? 'unavailable' : event.castState === cast.framework.CastState.CONNECTED ? 'connected' : event.castState === cast.framework.CastState.CONNECTING ? 'connecting' : 'idle')
+          return
+        }
+
+        if (event.sessionState === cast.framework.SessionState.SESSION_STARTED || event.sessionState === cast.framework.SessionState.SESSION_RESUMED) {
+          setTransport('cast')
+          setCastState('connected')
+          syncCastPlayerState()
+          return
+        }
+
+        if (event.sessionState === cast.framework.SessionState.SESSION_STARTING) {
+          setCastState('connecting')
+          return
+        }
+
+        if (event.sessionState === cast.framework.SessionState.SESSION_ENDED || event.sessionState === cast.framework.SessionState.NO_SESSION || event.sessionState === cast.framework.SessionState.SESSION_RESUME_FAILED || event.sessionState === cast.framework.SessionState.SESSION_START_FAILED) {
+          setTransport('local')
+          setCastState(castContext.getCastState() === cast.framework.CastState.NO_DEVICES_AVAILABLE ? 'unavailable' : 'idle')
+          setState((prev) => (prev === 'playing' || prev === 'loading' ? 'paused' : prev))
+        }
+      }
+
+      castContext.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, handleCastContextEvent)
+      castContext.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, handleCastContextEvent)
+
+      const handleRemotePlayerEvent = () => {
+        if (remotePlayer.isConnected) {
+          setTransport('cast')
+          setCastState('connected')
+        }
+        syncCastPlayerState()
+      }
+
+      controller.addEventListener(cast.framework.RemotePlayerEventType.IS_CONNECTED_CHANGED, handleRemotePlayerEvent)
+      controller.addEventListener(cast.framework.RemotePlayerEventType.IS_MEDIA_LOADED_CHANGED, handleRemotePlayerEvent)
+      controller.addEventListener(cast.framework.RemotePlayerEventType.IS_PAUSED_CHANGED, handleRemotePlayerEvent)
+      controller.addEventListener(cast.framework.RemotePlayerEventType.PLAYER_STATE_CHANGED, handleRemotePlayerEvent)
+      controller.addEventListener(cast.framework.RemotePlayerEventType.VOLUME_LEVEL_CHANGED, handleRemotePlayerEvent)
+    }
+
+    window.__onGCastApiAvailable = (isAvailable: boolean) => {
+      if (!isAvailable) {
+        setCastState('unavailable')
+        return
+      }
+      initializeCast()
+    }
+
+    if (window.cast && window.chrome) {
+      initializeCast()
+    }
+  }, [syncCastPlayerState])
 
   // Starts playback using whichever variant streamVariantRef.current points at.
   // Callers that want to start fresh (new station, explicit play) should reset
@@ -552,11 +813,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     startStationRef.current = startStation
     tryNextVariantRef.current = tryNextVariant
+    loadStationOnCastRef.current = loadStationOnCast
   })
 
   const play = (s: Station) => {
     const audio = audioRef.current
     if (!audio) return
+
+    if (transport === 'cast') {
+      streamVariantRef.current = 0
+      setQueueArr([s])
+      setQueueIdx(0)
+      void loadStationOnCast(s)
+      return
+    }
 
     // Same station — resume if paused, restart if source is gone.
     if (station?.id === s.id && state === 'paused') {
@@ -581,6 +851,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setQueueArr(stations)
     setQueueIdx(i)
     streamVariantRef.current = 0
+    if (transport === 'cast') {
+      void loadStationOnCast(stations[i])
+      return
+    }
     startStation(stations[i])
   }
 
@@ -589,6 +863,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (nextIdx >= queue.length) return
     setQueueIdx(nextIdx)
     streamVariantRef.current = 0
+    if (transport === 'cast') {
+      void loadStationOnCast(queue[nextIdx])
+      return
+    }
     startStation(queue[nextIdx])
   }
 
@@ -597,11 +875,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (prevIdx < 0) return
     setQueueIdx(prevIdx)
     streamVariantRef.current = 0
+    if (transport === 'cast') {
+      void loadStationOnCast(queue[prevIdx])
+      return
+    }
     startStation(queue[prevIdx])
   }
 
   const pause = () => {
     clearReconnect()
+    if (transport === 'cast' && castPlayerRef.current && castControllerRef.current && !castPlayerRef.current.isPaused) {
+      castControllerRef.current.playOrPause()
+      return
+    }
     audioRef.current?.pause()
   }
 
@@ -612,6 +898,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // Restart from scratch when in error state or when the source has been
     // cleared (e.g. after stop() followed by opening the player again).
     const s = stationRef.current ?? station
+    if (transport === 'cast') {
+      if (castPlayerRef.current && castControllerRef.current && castPlayerRef.current.isMediaLoaded && castPlayerRef.current.isPaused) {
+        castControllerRef.current.playOrPause()
+        return
+      }
+      if (s) {
+        streamVariantRef.current = 0
+        void loadStationOnCast(s)
+      }
+      return
+    }
+
     if (state === 'error' || (!audio.src && !hlsRef.current)) {
       if (s) {
         streamVariantRef.current = 0
@@ -626,6 +924,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const stop = () => {
     const audio = audioRef.current
     if (!audio) return
+    if (transport === 'cast' && castControllerRef.current) {
+      castControllerRef.current.stop()
+      setTransport('local')
+      setCastState(castInitializedRef.current ? 'idle' : 'unavailable')
+    }
     clearReconnect()
     reconnectCountRef.current = 0
     streamVariantRef.current = 0
@@ -645,6 +948,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const setVolume = (v: number) => {
     const clamped = clampVolume(v)
     setBaseVolumeState(clamped)
+    if (transport === 'cast' && castPlayerRef.current && castControllerRef.current) {
+      castPlayerRef.current.volumeLevel = clamped
+      castControllerRef.current.setVolumeLevel()
+    }
     touchPreferences()
   }
 
@@ -668,6 +975,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         normalizationOffsetDb,
         queue,
         queueIndex,
+        transport,
+        castState,
+        airPlaySupported,
+        airPlayAvailable,
+        airPlayActive,
         play,
         setQueue,
         playNext,
@@ -677,8 +989,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         stop,
         setVolume,
         setNormalizationEnabled,
+        promptCast,
+        disconnectCast,
+        promptAirPlay,
       }}
     >
+      <audio
+        ref={handleAudioElementRef}
+        preload="none"
+        aria-hidden="true"
+        className="hidden"
+      />
       {children}
     </PlayerContext.Provider>
   )

@@ -1,4 +1,4 @@
-# bougie.fm Feature Backlog (Marketing)
+# OSTGUT Feature Backlog (Marketing)
 
 This file is the single source of truth for product features that should later be turned into marketing copy, landing page sections, launch notes, and social teasers.
 
@@ -24,6 +24,10 @@ This file is the single source of truth for product features that should later b
 | Global Sticky Player | now | Keep listening while navigating anywhere in the app. | Player persists across route changes. |
 | Last Station Resume | now | Return and pick up exactly where your listening left off. | Local + account sync behavior implemented. |
 | Personalized Volume Memory | now | Your preferred listening level follows your sessions. | Local + account sync behavior implemented. |
+| Signal Leveling | now | Smooth loudness jumps between stations for a calmer listening session. | User toggle is persisted and uses measured stream loudness when available. |
+| Device Handoff Menu | now | Move playback to supported living-room devices without leaving the player. | Device menu is integrated directly into the player utility row. |
+| Google Cast Support | now | Send live radio from the web player to Chromecast and Cast-enabled devices. | Web sender flow and Cast session controls are wired into the player state. |
+| Safari AirPlay Support | now | Route live playback to Apple TVs and AirPlay speakers from Safari. | Uses Safari's native AirPlay picker from the in-player device menu. |
 | Live Now Playing Metadata | now | See what is currently on air in real time. | Great for “discover by song” stories. |
 | Quick Explore Search | now | Find stations fast by genre, place, and vibe. | Search UX in protected explore flow. |
 

@@ -4,7 +4,7 @@ import { AuthenticatedHeaderActions, GuestHeaderActions } from '@/components/sit
 import { SiteFooter } from '@/components/site-footer'
 
 export const metadata = {
-  title: 'Privacy Policy — bougie.fm',
+  title: 'Privacy Policy — OSTGUT',
 }
 
 export default async function PrivacyPage() {
@@ -27,7 +27,7 @@ export default async function PrivacyPage() {
             <section>
               <h2 className="text-lg font-semibold mb-2">1. Who We Are</h2>
               <p>
-                bougie.fm (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates the bougie.fm platform. This Privacy Policy explains how we collect, use, and protect your personal data when you use our Service.
+                OSTGUT (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates the OSTGUT platform. This Privacy Policy explains how we collect, use, and protect your personal data when you use our Service.
               </p>
             </section>
 

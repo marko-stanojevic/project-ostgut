@@ -155,7 +155,7 @@ variable "new_relic_license_key" {
 variable "new_relic_app_name" {
   type        = string
   description = "Application name shown in New Relic APM."
-  default     = "bouji-backend"
+  default     = "ostgut-backend"
 }
 
 # ──────────────────────────────────────────────

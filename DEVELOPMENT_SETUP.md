@@ -1,6 +1,6 @@
-# Bouji.fm Development Environment Setup — macOS Guide
+# OSTGUT Development Environment Setup — macOS Guide
 
-This guide covers everything needed to set up a complete development environment for the Bouji.fm project on macOS.
+This guide covers everything needed to set up a complete development environment for the OSTGUT project on macOS.
 
 ## Quick Start: Two Options
 

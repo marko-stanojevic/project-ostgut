@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const streamProbeUserAgent = "bouji.fm/1.0 (radio@worksfine.app)"
+const streamProbeUserAgent = "OSTGUT/1.0 (radio@worksfine.app)"
 const maxProbeRedirects = 5
 const maxProbeHostChanges = 2
 

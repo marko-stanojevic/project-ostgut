@@ -100,7 +100,7 @@ func Load() (*Config, error) {
 		MediaStorageContainerName: strings.TrimSpace(os.Getenv("MEDIA_STORAGE_CONTAINER_NAME")),
 		MediaStorageAccountKey:    strings.TrimSpace(os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")),
 		NewRelicLicenseKey:        os.Getenv("NEW_RELIC_LICENSE_KEY"),
-		NewRelicAppName:           getEnv("NEW_RELIC_APP_NAME", "bouji-backend"),
+		NewRelicAppName:           getEnv("NEW_RELIC_APP_NAME", "ostgut-backend"),
 	}
 
 	if err := validatePaddleConfig(cfg); err != nil {

@@ -1,6 +1,6 @@
 # Reliability And Metadata
 
-bouji.fm tracks two related but separate operational signals for each station:
+OSTGUT tracks two related but separate operational signals for each station:
 
 - **Reliability**: can we still play the station?
 - **Metadata**: can we extract now-playing information from the stream?
@@ -176,3 +176,86 @@ That means:
 - a stream can expose `icy` metadata and still become unreliable if HTTP probing starts failing
 
 This separation is intentional because playback continuity matters more than now-playing decoration.
+
+---
+
+## Loudness + Signal Normalization
+
+### Goal
+
+Signal normalization reduces loudness jumps between stations without changing the station stream itself.
+
+It is a playback-layer adjustment:
+
+- the underlying stream URL stays the same
+- the backend stores measured loudness data per stream variant
+- the frontend applies a temporary gain offset during playback when leveling is enabled
+
+### Data model
+
+Per stream variant, loudness probe data is stored in `station_streams`:
+
+- `loudness_integrated_lufs`
+- `loudness_peak_dbfs`
+- `loudness_sample_duration_seconds`
+- `loudness_measured_at`
+- `loudness_measurement_status`
+
+Per user, the player preference payload stores:
+
+- `normalizationEnabled`
+
+That preference is persisted locally and synced through `GET/PUT /users/me/player-preferences` alongside volume and last station.
+
+### How measurement works
+
+During stream probing, the backend samples audio and runs a loudness measurement pass.
+
+Primary implementation lives in:
+
+- `backend/internal/radio/loudness_probe.go`
+- `backend/internal/radio/stream_probe.go`
+- `backend/internal/store/station_stream_store.go`
+
+The important output for playback is integrated loudness in **LUFS**.
+
+If a probe succeeds, the stream row keeps the latest measured loudness and timestamp. If no valid loudness result is available, normalization safely falls back to no adjustment.
+
+### How playback normalization works
+
+The frontend player computes a gain offset from the current stream loudness.
+
+Implementation lives in:
+
+- `frontend/src/context/PlayerContext.tsx`
+- `frontend/src/components/player-volume-control.tsx`
+- `frontend/src/components/player-bar.tsx`
+
+Current behavior:
+
+- target loudness: **-17 LUFS**
+- maximum boost: **+6 dB**
+- maximum cut: **-9 dB**
+- normalization applies only when the stream has `loudness_measurement_status = measured`
+- otherwise the effective offset is `0 dB`
+
+The player multiplies the user’s base volume by the calculated gain and ramps smoothly between changes so switching stations does not create abrupt output jumps.
+
+### User experience
+
+In the player UI this appears as **Leveling**:
+
+- users can toggle it on or off from the player controls
+- the preference persists across reloads and signed-in devices
+- when an offset is active, the player surfaces the applied dB adjustment in the quality stats area
+
+### Important boundaries
+
+Normalization is intentionally conservative:
+
+- it does not rewrite audio files
+- it does not modify station metadata
+- it does not affect reliability scoring
+- it does not apply when loudness data is missing or stale in a way that prevents a measured result
+
+This keeps the feature reversible and low-risk: if measurement is unavailable, playback continues normally with no loudness compensation.

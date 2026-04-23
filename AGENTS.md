@@ -1,8 +1,8 @@
-# bouji.fm — Agent Instructions
+# OSTGUT — Agent Instructions
 
 ## What this product is
 
-**bouji.fm** is a premium, curated internet radio platform — "The Listening Room". It is not a radio directory. It is an editorial listening experience where users discover and enjoy high-quality live stations from around the world.
+**OSTGUT** is a premium, curated internet radio platform — "The Listening Room". It is not a radio directory. It is an editorial listening experience where users discover and enjoy high-quality live stations from around the world.
 
 The product feel targets Apple Music / Netflix quality perception applied to live radio. Every design and engineering decision should reinforce: taste, intention, and calm focus over volume and noise.
 
@@ -129,6 +129,7 @@ project-ostgut/
 - **Auth**: `useAuth()` from `@/context/AuthContext` gives `{ user, session, signOut }`. `session.accessToken` is the JWT for backend calls
 - **API calls**: use `process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'` as base URL, always pass `Authorization: Bearer ${session.accessToken}` on protected endpoints
 - **Audio player**: global state in `PlayerContext` — persists across navigation. Player bar is pinned to bottom of the protected layout. Volume and last station survive page reload (localStorage) and are synced per-user to the backend
+- **Device playback handoff**: the web player supports Google Cast and Safari AirPlay from the in-player device menu. Keep system device routing system-native; do not reintroduce generic browser output switching.
 
 ## Radio platform
 
@@ -137,6 +138,7 @@ project-ostgut/
 - Stations cached in Postgres, refreshed every 6h via background goroutine
 - Public endpoints (no auth): `GET /stations`, `GET /stations/:id`, `GET /search`
 - Audio: MP3/AAC native, HLS via `hls.js`
+- Casting: Google Cast on the web and Safari AirPlay via the native picker
 - Player preferences (volume + last station): persisted in localStorage and synced to `GET/PUT /users/me/player-preferences`
 - Max ~50 stations per view — paginate or curate, never dump the full list
 

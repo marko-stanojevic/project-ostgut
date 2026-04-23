@@ -38,7 +38,7 @@ const (
 	cacheTTLSupported   = 30 * time.Second // stream returned metadata
 	cacheTTLUnsupported = 3 * time.Minute  // stream returned nothing — don't hammer it
 	maxMetaint          = 65536            // reject streams with implausibly large metadata intervals
-	userAgent           = "bouji.fm/1.0 (radio@worksfine.app)"
+	userAgent           = "OSTGUT/1.0 (radio@worksfine.app)"
 )
 
 const (

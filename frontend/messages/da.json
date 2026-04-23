@@ -12,7 +12,7 @@
   "auth": {
     "login": {
       "title": "Velkommen tilbage",
-      "subtitle": "Log ind for at fortsætte til bougie.fm",
+      "subtitle": "Log ind for at fortsætte til OSTGUT",
       "email": "E-mail",
       "password": "Adgangskode",
       "forgot_password": "Glemt adgangskode?",
@@ -25,7 +25,7 @@
       "sign_up": "Tilmeld dig"
     },
     "signup": {
-      "title": "Bliv en del af bougie.fm",
+      "title": "Bliv en del af OSTGUT",
       "subtitle": "Opret din konto og træd ind i Lytterummet.",
       "email": "E-mail",
       "password": "Adgangskode",
@@ -168,7 +168,7 @@
     },
     "profile": {
       "title": "Profil",
-      "description": "Din offentlige identitet på bougie.fm.",
+      "description": "Din offentlige identitet på OSTGUT.",
       "avatar_label": "Avatar",
       "avatar_hint": "Kvadratiske billeder fungerer bedst. JPG, PNG eller WebP op til 5 MB.",
       "upload": "Upload avatar",

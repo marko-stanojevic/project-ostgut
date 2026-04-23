@@ -12,7 +12,7 @@
   "auth": {
     "login": {
       "title": "Welkom terug",
-      "subtitle": "Log in om door te gaan naar bougie.fm",
+      "subtitle": "Log in om door te gaan naar OSTGUT",
       "email": "E-mail",
       "password": "Wachtwoord",
       "forgot_password": "Wachtwoord vergeten?",
@@ -25,7 +25,7 @@
       "sign_up": "Registreren"
     },
     "signup": {
-      "title": "Sluit je aan bij bougie.fm",
+      "title": "Sluit je aan bij OSTGUT",
       "subtitle": "Maak je account aan en betreed de Luisterkamer.",
       "email": "E-mail",
       "password": "Wachtwoord",
@@ -168,7 +168,7 @@
     },
     "profile": {
       "title": "Profiel",
-      "description": "Je publieke identiteit op bougie.fm.",
+      "description": "Je publieke identiteit op OSTGUT.",
       "avatar_label": "Avatar",
       "avatar_hint": "Vierkante afbeeldingen werken het beste. JPG, PNG of WebP tot 5 MB.",
       "upload": "Avatar uploaden",
