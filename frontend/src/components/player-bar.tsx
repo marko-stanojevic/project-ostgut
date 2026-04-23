@@ -164,7 +164,7 @@ export function PlayerBar() {
           onClose={() => setFullScreen(false)}
         />
       )}
-    <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300 border-t border-white/[0.07] bg-[linear-gradient(180deg,rgba(18,18,18,0.88)_0%,rgba(10,10,10,0.96)_100%)] text-zinc-100 backdrop-blur-xl">
+    <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300 border-t border-[var(--player-bar-border)] bg-[image:var(--player-bar-bg)] text-player-bar-fg backdrop-blur-xl">
       <div
         className="relative grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 py-4.5 sm:px-5 sm:py-5"
       >
@@ -172,7 +172,7 @@ export function PlayerBar() {
         {/* Station identity — left */}
         <div className="flex min-w-0 max-w-[calc(50vw-5.5rem)] items-center justify-self-start gap-3 overflow-hidden sm:max-w-[calc(50vw-7.5rem)] sm:gap-3.5">
           <div
-            className={`absolute bottom-[0.4rem] left-4 flex h-[6.8rem] w-[6.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.68rem] bg-zinc-800 shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-500 sm:bottom-[0.5rem] sm:left-5 sm:h-[8.4rem] sm:w-[8.4rem] sm:rounded-[0.82rem] ${isPlaying
+            className={`absolute bottom-[0.4rem] left-4 flex h-[6.8rem] w-[6.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.68rem] bg-player-bar-artwork-bg shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-500 sm:bottom-[0.5rem] sm:left-5 sm:h-[8.4rem] sm:w-[8.4rem] sm:rounded-[0.82rem] ${isPlaying
               ? 'shadow-[0_0_20px_var(--player-accent-glow),0_14px_34px_rgba(0,0,0,0.32)]'
               : ''
               }`}
@@ -180,14 +180,14 @@ export function PlayerBar() {
             {station?.logo ? (
               <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
             ) : (
-              <RadioIcon className="h-5 w-5 text-zinc-600 sm:h-6 sm:w-6" />
+              <RadioIcon className="h-5 w-5 text-player-bar-artwork-icon sm:h-6 sm:w-6" />
             )}
           </div>
           <div className="flex h-12 min-w-0 flex-1 flex-col justify-center pl-[7.55rem] sm:h-14 sm:pl-[9.25rem]">
-            <p className="truncate text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+            <p className="truncate text-xl font-semibold tracking-tight text-player-bar-fg sm:text-2xl">
               {station?.name ?? '—'}
             </p>
-            <div className={`flex h-4 min-w-0 items-center sm:h-5 ${isError ? 'text-red-200/80' : 'text-zinc-300'}`}>
+            <div className={`flex h-4 min-w-0 items-center sm:h-5 ${isError ? 'text-red-300' : 'text-player-bar-secondary'}`}>
               {!isReconnecting && secondaryLine ? (
                 <PlayerMetadataTicker className="w-full min-w-0 text-xs sm:text-sm" text={secondaryLine} />
               ) : null}
@@ -203,7 +203,7 @@ export function PlayerBar() {
               onClick={playPrev}
               disabled={!hasPrev}
               aria-label="Previous"
-              className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-player-bar-icon transition-all hover:bg-player-bar-chip-bg hover:text-player-bar-icon-hover disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
             >
               <SkipBackIcon weight="fill" className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
             </TooltipTrigger>
@@ -211,7 +211,7 @@ export function PlayerBar() {
           </Tooltip>
           {isLoading ? (
             <div className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center sm:h-14 sm:w-14">
-              <CircleNotchIcon className="h-5.5 w-5.5 animate-spin text-zinc-500 sm:h-6.5 sm:w-6.5" />
+              <CircleNotchIcon className="h-5.5 w-5.5 animate-spin text-player-bar-muted sm:h-6.5 sm:w-6.5" />
             </div>
           ) : isPlaying ? (
             <Tooltip>
@@ -231,7 +231,7 @@ export function PlayerBar() {
                 delay={300}
                 onClick={resume}
                 aria-label="Play"
-                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-surface text-zinc-100 transition-all hover:scale-[1.03] hover:bg-player-surface-hover sm:h-14 sm:w-14"
+                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-surface text-player-bar-fg transition-all hover:scale-[1.03] hover:bg-player-surface-hover sm:h-14 sm:w-14"
               >
                 <PlayIcon weight="fill" className="ml-0.5 h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
               </TooltipTrigger>
@@ -244,7 +244,7 @@ export function PlayerBar() {
               onClick={playNext}
               disabled={!hasNext}
               aria-label="Next"
-              className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-player-bar-icon transition-all hover:bg-player-bar-chip-bg hover:text-player-bar-icon-hover disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
             >
               <SkipForwardIcon weight="fill" className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
             </TooltipTrigger>
@@ -266,13 +266,13 @@ export function PlayerBar() {
                     {streamDetailBadges.primary.map((detail) => (
                       <span
                         key={detail}
-                        className="shrink-0 rounded-[0.34rem] border border-white/12 bg-white/[0.06] px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-zinc-400"
+                        className="shrink-0 rounded-[0.34rem] border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-player-bar-muted"
                       >
                         {detail}
                       </span>
                     ))}
                     {bitrateKbps > 0 && !isLosslessLike ? (
-                      <span className="shrink-0 rounded-[0.34rem] border border-white/12 bg-white/[0.06] px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-zinc-400">
+                      <span className="shrink-0 rounded-[0.34rem] border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-player-bar-muted">
                         Bitrate: {bitrateKbps} kbps
                       </span>
                     ) : null}
@@ -282,7 +282,7 @@ export function PlayerBar() {
                       {streamDetailBadges.secondary.map((detail) => (
                         <span
                           key={detail}
-                          className="shrink-0 rounded-[0.34rem] border border-white/12 bg-white/[0.06] px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-zinc-400"
+                          className="shrink-0 rounded-[0.34rem] border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-player-bar-muted"
                         >
                           {detail}
                         </span>
@@ -304,7 +304,7 @@ export function PlayerBar() {
                   aria-expanded={statsExpanded}
                   aria-label={statsExpanded ? 'Hide stats' : 'Show stats'}
                   onClick={() => setStatsExpanded((prev) => !prev)}
-                  className="flex h-10 shrink-0 items-center justify-center rounded-[0.7rem] px-2.5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-400 transition-colors hover:text-zinc-200"
+                  className="flex h-10 shrink-0 items-center justify-center rounded-[0.7rem] px-2.5 text-[11px] font-medium uppercase tracking-[0.18em] text-player-bar-muted transition-colors hover:text-player-bar-icon-hover"
                 >
                   <span>Stats</span>
                 </TooltipTrigger>
@@ -328,7 +328,7 @@ export function PlayerBar() {
               delay={300}
               onClick={() => setFullScreen(true)}
               aria-label="Full screen"
-              className="flex h-12 w-12 shrink-0 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-200"
+              className="flex h-12 w-12 shrink-0 items-center justify-center text-player-bar-muted transition-colors hover:text-player-bar-icon-hover"
             >
               <CornersOutIcon className="h-9 w-9" weight="light" />
             </TooltipTrigger>
