@@ -166,13 +166,13 @@ export function PlayerBar() {
       )}
     <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300 border-t border-[var(--player-bar-border)] bg-[image:var(--player-bar-bg)] text-player-bar-fg backdrop-blur-xl">
       <div
-        className="relative grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 py-4.5 sm:px-5 sm:py-5"
+        className="relative grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 py-3 sm:px-5 sm:py-3.5"
       >
 
         {/* Station identity — left */}
         <div className="flex min-w-0 max-w-[calc(50vw-5.5rem)] items-center justify-self-start gap-3 overflow-hidden sm:max-w-[calc(50vw-7.5rem)] sm:gap-3.5">
           <div
-            className={`absolute bottom-[0.4rem] left-4 flex h-[6.8rem] w-[6.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.68rem] bg-player-bar-artwork-bg shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-500 sm:bottom-[0.5rem] sm:left-5 sm:h-[8.4rem] sm:w-[8.4rem] sm:rounded-[0.82rem] ${isPlaying
+            className={`absolute bottom-[0.2rem] left-4 flex h-[6.8rem] w-[6.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.68rem] bg-player-bar-artwork-bg shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-500 sm:bottom-[0.25rem] sm:left-5 sm:h-[8.4rem] sm:w-[8.4rem] sm:rounded-[0.82rem] ${isPlaying
               ? 'shadow-[0_0_20px_var(--player-accent-glow),0_14px_34px_rgba(0,0,0,0.32)]'
               : ''
               }`}
@@ -183,35 +183,35 @@ export function PlayerBar() {
               <RadioIcon className="h-5 w-5 text-player-bar-artwork-icon sm:h-6 sm:w-6" />
             )}
           </div>
-          <div className="flex h-12 min-w-0 flex-1 flex-col justify-center pl-[7.55rem] sm:h-14 sm:pl-[9.25rem]">
-            <p className="truncate text-xl font-semibold tracking-tight text-player-bar-fg sm:text-2xl">
+          <div className="flex h-10 min-w-0 flex-1 flex-col justify-center pl-[7.55rem] sm:h-12 sm:pl-[9.25rem]">
+            <p className="truncate text-[1rem] font-semibold tracking-tight text-player-bar-fg sm:text-[1.4rem]">
               {station?.name ?? '—'}
             </p>
-            <div className={`flex h-4 min-w-0 items-center sm:h-5 ${isError ? 'text-red-300' : 'text-player-bar-secondary'}`}>
+            <div className={`flex h-3.5 min-w-0 items-center ${isError ? 'text-red-300' : 'text-player-bar-secondary'}`}>
               {!isReconnecting && secondaryLine ? (
-                <PlayerMetadataTicker className="w-full min-w-0 text-xs sm:text-sm" text={secondaryLine} />
+                <PlayerMetadataTicker className="w-full min-w-0 text-[11px] sm:text-[13px]" text={secondaryLine} />
               ) : null}
             </div>
           </div>
         </div>
 
         {/* Playback controls — center */}
-        <div className="flex shrink-0 items-center justify-self-center gap-1.5 sm:gap-2">
+        <div className="flex shrink-0 items-center justify-self-center gap-1 sm:gap-1.5">
           <Tooltip>
             <TooltipTrigger
               delay={300}
               onClick={playPrev}
               disabled={!hasPrev}
               aria-label="Previous"
-              className="flex h-10 w-10 items-center justify-center rounded-full text-player-bar-icon transition-all hover:bg-player-bar-chip-bg hover:text-player-bar-icon-hover disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-player-bar-icon transition-all hover:bg-player-bar-chip-bg hover:text-player-bar-icon-hover disabled:cursor-not-allowed disabled:opacity-30 sm:h-10 sm:w-10"
             >
-              <SkipBackIcon weight="fill" className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
+              <SkipBackIcon weight="fill" className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
             </TooltipTrigger>
             <TooltipContent>Previous</TooltipContent>
           </Tooltip>
           {isLoading ? (
-            <div className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center sm:h-14 sm:w-14">
-              <CircleNotchIcon className="h-5.5 w-5.5 animate-spin text-player-bar-muted sm:h-6.5 sm:w-6.5" />
+            <div className="flex h-11 w-11 animate-in zoom-in-90 fade-in duration-200 items-center justify-center sm:h-12 sm:w-12">
+              <CircleNotchIcon className="h-5 w-5 animate-spin text-player-bar-muted sm:h-5.5 sm:w-5.5" />
             </div>
           ) : isPlaying ? (
             <Tooltip>
@@ -219,9 +219,9 @@ export function PlayerBar() {
                 delay={300}
                 onClick={pause}
                 aria-label="Pause"
-                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-accent-soft text-player-accent transition-all hover:scale-[1.03] hover:bg-player-accent-soft-hover sm:h-14 sm:w-14"
+                className="flex h-11 w-11 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-accent-soft text-player-accent transition-all hover:scale-[1.03] hover:bg-player-accent-soft-hover sm:h-12 sm:w-12"
               >
-                <PauseIcon weight="fill" className="h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
+                <PauseIcon weight="fill" className="h-5 w-5 sm:h-5.5 sm:w-5.5" />
               </TooltipTrigger>
               <TooltipContent>Pause</TooltipContent>
             </Tooltip>
@@ -231,9 +231,9 @@ export function PlayerBar() {
                 delay={300}
                 onClick={resume}
                 aria-label="Play"
-                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-surface text-player-bar-fg transition-all hover:scale-[1.03] hover:bg-player-surface-hover sm:h-14 sm:w-14"
+                className="flex h-11 w-11 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-surface text-player-bar-fg transition-all hover:scale-[1.03] hover:bg-player-surface-hover sm:h-12 sm:w-12"
               >
-                <PlayIcon weight="fill" className="ml-0.5 h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
+                <PlayIcon weight="fill" className="ml-0.5 h-5 w-5 sm:h-5.5 sm:w-5.5" />
               </TooltipTrigger>
               <TooltipContent>Play</TooltipContent>
             </Tooltip>
@@ -244,16 +244,16 @@ export function PlayerBar() {
               onClick={playNext}
               disabled={!hasNext}
               aria-label="Next"
-              className="flex h-10 w-10 items-center justify-center rounded-full text-player-bar-icon transition-all hover:bg-player-bar-chip-bg hover:text-player-bar-icon-hover disabled:cursor-not-allowed disabled:opacity-30 sm:h-12 sm:w-12"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-player-bar-icon transition-all hover:bg-player-bar-chip-bg hover:text-player-bar-icon-hover disabled:cursor-not-allowed disabled:opacity-30 sm:h-10 sm:w-10"
             >
-              <SkipForwardIcon weight="fill" className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
+              <SkipForwardIcon weight="fill" className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
             </TooltipTrigger>
             <TooltipContent>Next</TooltipContent>
           </Tooltip>
         </div>
 
         {/* Volume + bitrate — right */}
-        <div className="flex items-center justify-end gap-3 sm:gap-4">
+        <div className="flex items-center justify-end gap-2.5 sm:gap-3">
           {hasQualityDetails ? (
             <div className="hidden items-center md:flex">
               <div
@@ -314,7 +314,7 @@ export function PlayerBar() {
           ) : null}
 
           <PlayerVolumeControl
-            className="hidden w-[19rem] shrink-0 flex-col md:flex"
+            className="hidden w-[18rem] shrink-0 flex-col md:flex"
             iconClassName="h-5.5 w-5.5"
             utilitySlot={<PlayerDeviceMenu />}
             normalizationEnabled={normalizationEnabled}
@@ -329,9 +329,9 @@ export function PlayerBar() {
               delay={300}
               onClick={() => setFullScreen(true)}
               aria-label="Full screen"
-              className="flex h-12 w-12 shrink-0 items-center justify-center text-player-bar-muted transition-colors hover:text-player-bar-icon-hover"
+              className="flex h-10 w-10 shrink-0 items-center justify-center text-player-bar-muted transition-colors hover:text-player-bar-icon-hover"
             >
-              <CornersOutIcon className="h-9 w-9" weight="light" />
+              <CornersOutIcon className="h-8 w-8" weight="light" />
             </TooltipTrigger>
             <TooltipContent>Full screen</TooltipContent>
           </Tooltip>

@@ -10,6 +10,7 @@ import { AccountMenu } from '@/components/account-menu'
 import { AppSidebarMobile } from '@/components/app-sidebar'
 import { GoogleCastScript } from '@/components/google-cast-script'
 import { SearchInput } from '@/components/search-input'
+import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 function getSearchTarget(pathname: string) {
@@ -117,6 +118,10 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
+  const tNav = useTranslations('nav')
+  const isSettings = pathname === '/settings' || pathname.startsWith('/settings/')
+
   return (
     <>
       <GoogleCastScript />
@@ -133,7 +138,19 @@ export default function DashboardLayout({
             </div>
             <TopNav />
             <div className="flex min-w-0 flex-1 items-center pb-1 md:pb-0 md:py-2.5">
-              <ExploreSearch />
+              {isSettings ? (
+                <div className="hidden md:flex min-w-0 flex-1 justify-end">
+                  <Link
+                    href="/curated"
+                    className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-light text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <ArrowLeftIcon className="h-3.5 w-3.5" />
+                    {tNav('back_to_app')}
+                  </Link>
+                </div>
+              ) : (
+                <ExploreSearch />
+              )}
             </div>
             <div className="hidden items-center gap-3 md:flex">
               <AccountMenu avatarSize={42} />
