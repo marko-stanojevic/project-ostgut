@@ -15,6 +15,11 @@ export interface ApiStream {
     channels: number
     priority: number
     is_active: boolean
+    loudness_integrated_lufs?: number
+    loudness_peak_dbfs?: number
+    loudness_sample_duration_seconds?: number
+    loudness_measured_at?: string
+    loudness_measurement_status?: string
     metadata_enabled: boolean
     metadata_type: string
     metadata_source?: string

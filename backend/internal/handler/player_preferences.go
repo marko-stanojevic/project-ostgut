@@ -11,9 +11,10 @@ import (
 )
 
 type playerPreferencesRequest struct {
-	Volume    float64              `json:"volume"`
-	Station   *store.PlayerStation `json:"station"`
-	UpdatedAt string               `json:"updatedAt"`
+	Volume               float64              `json:"volume"`
+	Station              *store.PlayerStation `json:"station"`
+	NormalizationEnabled bool                 `json:"normalizationEnabled"`
+	UpdatedAt            string               `json:"updatedAt"`
 }
 
 // GetPlayerPreferences returns persisted player controls for the authenticated user.
@@ -37,9 +38,10 @@ func (h *Handler) GetPlayerPreferences(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"volume":    prefs.Volume,
-		"station":   prefs.Station,
-		"updatedAt": prefs.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		"volume":               prefs.Volume,
+		"station":              prefs.Station,
+		"normalizationEnabled": prefs.NormalizationEnabled,
+		"updatedAt":            prefs.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	})
 }
 
@@ -62,7 +64,6 @@ func (h *Handler) UpdatePlayerPreferences(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "volume must be between 0 and 1"})
 		return
 	}
-
 	updatedAt := time.Now().UTC()
 	if req.UpdatedAt != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, req.UpdatedAt)
@@ -74,9 +75,10 @@ func (h *Handler) UpdatePlayerPreferences(c *gin.Context) {
 	}
 
 	result, err := h.player.users.UpdatePlayerPreferences(c.Request.Context(), userID, store.PlayerPreferences{
-		Volume:    req.Volume,
-		Station:   req.Station,
-		UpdatedAt: updatedAt,
+		Volume:               req.Volume,
+		Station:              req.Station,
+		NormalizationEnabled: req.NormalizationEnabled,
+		UpdatedAt:            updatedAt,
 	})
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -94,10 +96,11 @@ func (h *Handler) UpdatePlayerPreferences(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":   message,
-		"stale":     !result.Applied,
-		"volume":    result.Preferences.Volume,
-		"station":   result.Preferences.Station,
-		"updatedAt": result.Preferences.UpdatedAt.Format(time.RFC3339Nano),
+		"message":              message,
+		"stale":                !result.Applied,
+		"volume":               result.Preferences.Volume,
+		"station":              result.Preferences.Station,
+		"normalizationEnabled": result.Preferences.NormalizationEnabled,
+		"updatedAt":            result.Preferences.UpdatedAt.Format(time.RFC3339Nano),
 	})
 }

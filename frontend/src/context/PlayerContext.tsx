@@ -16,6 +16,7 @@ import {
   type PlayerState,
   type StationStream,
   clampVolume,
+  normalizeNormalizationEnabled,
   readPersistedPlayerState,
 } from '@/types/player'
 import { usePlayerStorage } from '@/hooks/usePlayerStorage'
@@ -32,6 +33,9 @@ interface PlayerContextValue {
   currentStream: StationStream | null
   state: PlayerState
   volume: number
+  baseVolume: number
+  normalizationEnabled: boolean
+  normalizationOffsetDb: number
   queue: Station[]
   queueIndex: number
   play: (station: Station) => void
@@ -42,6 +46,7 @@ interface PlayerContextValue {
   resume: () => void
   stop: () => void
   setVolume: (v: number) => void
+  setNormalizationEnabled: (enabled: boolean) => void
 }
 
 const LAST_SUCCESSFUL_STREAM_KEY = 'player:last-successful-stream:v1'
@@ -138,8 +143,40 @@ const RECONNECT_MAX_MS = 30_000
 const RECONNECT_JITTER_MS = 800
 // How long to wait in a stalled/buffering state before forcing a reconnect.
 const STALL_TIMEOUT_MS = 8_000
+const OUTPUT_RAMP_MS = 160
+const STATION_SWITCH_RAMP_MS = 360
+const TARGET_LOUDNESS_LUFS = -17
+const MAX_NORMALIZATION_BOOST_DB = 6
+const MAX_NORMALIZATION_CUT_DB = -9
 
 const PlayerContext = createContext<PlayerContextValue | null>(null)
+
+function gainFromDb(db: number): number {
+  return 10 ** (db / 20)
+}
+
+function getEffectiveVolume(
+  baseVolume: number,
+  normalizationEnabled: boolean,
+  stream: StationStream | null,
+): number {
+  const normalizedBase = clampVolume(baseVolume)
+  const offsetDb = getStreamNormalizationOffsetDb(normalizationEnabled, stream)
+  return clampVolume(normalizedBase * gainFromDb(offsetDb))
+}
+
+function getStreamNormalizationOffsetDb(
+  normalizationEnabled: boolean,
+  stream: StationStream | null,
+): number {
+  if (!normalizationEnabled || !stream) return 0
+  if (stream.loudnessMeasurementStatus !== 'measured') return 0
+  if (!Number.isFinite(stream.loudnessIntegratedLufs)) return 0
+  return Math.max(
+    MAX_NORMALIZATION_CUT_DB,
+    Math.min(MAX_NORMALIZATION_BOOST_DB, TARGET_LOUDNESS_LUFS - (stream.loudnessIntegratedLufs ?? TARGET_LOUDNESS_LUFS)),
+  )
+}
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth()
@@ -148,7 +185,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [station, setStation] = useState<Station | null>(initialState?.station ?? null)
   const [currentStream, setCurrentStream] = useState<StationStream | null>(null)
   const [state, setState] = useState<PlayerState>('idle')
-  const [volume, setVolumeState] = useState(initialState?.volume ?? 0.8)
+  const [baseVolume, setBaseVolumeState] = useState(initialState?.volume ?? 0.8)
+  const [normalizationEnabled, setNormalizationEnabledState] = useState(
+    normalizeNormalizationEnabled(initialState?.normalizationEnabled),
+  )
   const [prefsUpdatedAt, setPrefsUpdatedAt] = useState(initialState?.updatedAt ?? new Date().toISOString())
   const [queue, setQueueArr] = useState<Station[]>([])
   const [queueIndex, setQueueIdx] = useState(-1)
@@ -160,9 +200,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectCountRef = useRef(0)
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const volumeRampRef = useRef<number | null>(null)
   // Which stream variant we're currently trying (index into getPlayableVariants).
   const streamVariantRef = useRef(0)
   const streamVariantURLRef = useRef('')
+  const baseVolumeRef = useRef(initialState?.volume ?? 0.8)
+  const normalizationEnabledRef = useRef(normalizeNormalizationEnabled(initialState?.normalizationEnabled))
+  const previousPlaybackKeyRef = useRef(initialState?.station?.id ?? '')
   // Always points to the latest startStation / tryNextVariant so stale timer
   // closures still invoke the current implementation.
   const startStationRef = useRef<((s: Station) => void) | null>(null)
@@ -179,6 +223,40 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       stallTimerRef.current = null
     }
   }, [])
+
+  const stopVolumeRamp = useCallback(() => {
+    if (volumeRampRef.current !== null) {
+      cancelAnimationFrame(volumeRampRef.current)
+      volumeRampRef.current = null
+    }
+  }, [])
+
+  const applyAudioVolume = useCallback((nextVolume: number, durationMs = 0) => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const targetVolume = clampVolume(nextVolume)
+    stopVolumeRamp()
+    if (durationMs <= 0) {
+      audio.volume = targetVolume
+      return
+    }
+
+    const startVolume = audio.volume
+    const startedAt = performance.now()
+
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / durationMs)
+      audio.volume = clampVolume(startVolume + (targetVolume - startVolume) * progress)
+      if (progress < 1) {
+        volumeRampRef.current = requestAnimationFrame(tick)
+      } else {
+        volumeRampRef.current = null
+      }
+    }
+
+    volumeRampRef.current = requestAnimationFrame(tick)
+  }, [stopVolumeRamp])
 
   // Schedules the next reconnect attempt with exponential backoff, resetting
   // to variant 0 so the full failover sequence runs again after a cool-down.
@@ -204,7 +282,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const audio = new Audio()
     audio.preload = 'none'
-    audio.volume = volume
+    audio.volume = getEffectiveVolume(baseVolumeRef.current, normalizationEnabledRef.current, null)
 
     audio.addEventListener('playing', () => {
       // Successful (re)connect — reset backoff counters and timers.
@@ -244,6 +322,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       clearReconnect()
+      stopVolumeRamp()
       hlsRef.current?.destroy()
       hlsRef.current = null
       audio.pause()
@@ -253,10 +332,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const applyPreferenceUpdate = useCallback(
-    (update: { volume: number; station: Station | null; updatedAt: string }) => {
+    (update: { volume: number; station: Station | null; normalizationEnabled: boolean; updatedAt: string }) => {
       stationRef.current = update.station
-      setVolumeState(update.volume)
-      if (audioRef.current) audioRef.current.volume = update.volume
+      baseVolumeRef.current = update.volume
+      normalizationEnabledRef.current = update.normalizationEnabled
+      setBaseVolumeState(update.volume)
+      setNormalizationEnabledState(update.normalizationEnabled)
       setStation(update.station)
       setPrefsUpdatedAt(update.updatedAt)
       setQueueArr(update.station ? [update.station] : [])
@@ -271,19 +352,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   )
 
   usePlayerStorage({
-    volume,
+    volume: baseVolume,
     station,
+    normalizationEnabled,
     updatedAt: prefsUpdatedAt,
     onExternalUpdate: applyPreferenceUpdate,
   })
 
   usePlayerSync({
-    volume,
+    volume: baseVolume,
     station,
+    normalizationEnabled,
     updatedAt: prefsUpdatedAt,
     accessToken: session?.accessToken,
     onRemoteUpdate: applyPreferenceUpdate,
   })
+
+  useEffect(() => {
+    baseVolumeRef.current = baseVolume
+  }, [baseVolume])
+
+  useEffect(() => {
+    normalizationEnabledRef.current = normalizationEnabled
+  }, [normalizationEnabled])
+
+  useEffect(() => {
+    const playbackKey = currentStream?.id ?? station?.id ?? ''
+    const didSwitchPlayback = previousPlaybackKeyRef.current !== playbackKey
+    previousPlaybackKeyRef.current = playbackKey
+    const nextVolume = getEffectiveVolume(baseVolume, normalizationEnabled, currentStream)
+    applyAudioVolume(nextVolume, didSwitchPlayback ? STATION_SWITCH_RAMP_MS : OUTPUT_RAMP_MS)
+  }, [applyAudioVolume, baseVolume, normalizationEnabled, currentStream, station?.id])
 
   // Refresh the active station from API so player UI reflects latest stream
   // metadata after editorial edits and older local/remote preference payloads.
@@ -545,13 +644,41 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const setVolume = (v: number) => {
     const clamped = clampVolume(v)
-    setVolumeState(clamped)
+    setBaseVolumeState(clamped)
     touchPreferences()
-    if (audioRef.current) audioRef.current.volume = clamped
   }
 
+  const setNormalizationEnabled = (enabled: boolean) => {
+    setNormalizationEnabledState(enabled)
+    touchPreferences()
+  }
+
+  const effectiveVolume = getEffectiveVolume(baseVolume, normalizationEnabled, currentStream)
+  const normalizationOffsetDb = getStreamNormalizationOffsetDb(normalizationEnabled, currentStream)
+
   return (
-    <PlayerContext.Provider value={{ station, currentStream, state, volume, queue, queueIndex, play, setQueue, playNext, playPrev, pause, resume, stop, setVolume }}>
+    <PlayerContext.Provider
+      value={{
+        station,
+        currentStream,
+        state,
+        volume: effectiveVolume,
+        baseVolume,
+        normalizationEnabled,
+        normalizationOffsetDb,
+        queue,
+        queueIndex,
+        play,
+        setQueue,
+        playNext,
+        playPrev,
+        pause,
+        resume,
+        stop,
+        setVolume,
+        setNormalizationEnabled,
+      }}
+    >
       {children}
     </PlayerContext.Provider>
   )

@@ -36,22 +36,23 @@ type User struct {
 
 // PlayerStation is the persisted station snapshot used for player resume.
 type PlayerStation struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	StreamURL   string   `json:"streamUrl"`
-	Logo        string   `json:"logo,omitempty"`
-	Genres      []string `json:"genres"`
-	Country     string   `json:"country"`
-	City        string   `json:"city,omitempty"`
-	Bitrate     int      `json:"bitrate"`
-	Codec       string   `json:"codec"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	StreamURL string   `json:"streamUrl"`
+	Logo      string   `json:"logo,omitempty"`
+	Genres    []string `json:"genres"`
+	Country   string   `json:"country"`
+	City      string   `json:"city,omitempty"`
+	Bitrate   int      `json:"bitrate"`
+	Codec     string   `json:"codec"`
 }
 
 // PlayerPreferences stores user-level player state for cross-device continuity.
 type PlayerPreferences struct {
-	Volume    float64
-	Station   *PlayerStation
-	UpdatedAt time.Time
+	Volume               float64
+	Station              *PlayerStation
+	NormalizationEnabled bool
+	UpdatedAt            time.Time
 }
 
 // PlayerPreferencesWriteResult describes whether a player preference write won
@@ -232,9 +233,9 @@ func (s *UserStore) GetPlayerPreferences(ctx context.Context, id string) (*Playe
 	var stationRaw []byte
 
 	err := s.pool.QueryRow(ctx,
-		`SELECT player_volume, player_last_station, player_prefs_updated_at FROM users WHERE id = $1`,
+		`SELECT player_volume, player_last_station, player_normalization_enabled, player_prefs_updated_at FROM users WHERE id = $1`,
 		id,
-	).Scan(&prefs.Volume, &stationRaw, &prefs.UpdatedAt)
+	).Scan(&prefs.Volume, &stationRaw, &prefs.NormalizationEnabled, &prefs.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -249,7 +250,6 @@ func (s *UserStore) GetPlayerPreferences(ctx context.Context, id string) (*Playe
 		}
 		prefs.Station = &station
 	}
-
 	return &prefs, nil
 }
 
@@ -269,12 +269,14 @@ func (s *UserStore) UpdatePlayerPreferences(ctx context.Context, id string, pref
 		`UPDATE users
 		 SET player_volume = $1,
 		     player_last_station = $2,
-		     player_prefs_updated_at = $3,
+		     player_normalization_enabled = $3,
+		     player_prefs_updated_at = $4,
 		     updated_at = NOW()
-		 WHERE id = $4
-		   AND player_prefs_updated_at <= $3`,
+		 WHERE id = $5
+		   AND player_prefs_updated_at <= $4`,
 		prefs.Volume,
 		stationRaw,
+		prefs.NormalizationEnabled,
 		prefs.UpdatedAt,
 		id,
 	)

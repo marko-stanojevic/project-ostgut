@@ -7,6 +7,7 @@ Next.js frontend for Project Ostgut SaaS.
 ### Prerequisites
 - Node.js 20+
 - npm or yarn
+- `ffmpeg` installed locally if you also run the backend and want loudness probing to work
 
 ### Development
 

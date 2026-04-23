@@ -7,24 +7,92 @@ import { SquaresFourIcon, RadioIcon, UsersIcon, ArrowLeftIcon } from '@phosphor-
 import { useAuth } from '@/context/AuthContext'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { AccountMenu } from '@/components/account-menu'
-import { SiteHeader } from '@/components/site-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+function AdminTopNav() {
   const pathname = usePathname()
-  const router = useRouter()
-  const { user, session, loading: authLoading } = useAuth()
-  const { isAdmin, loading: adminLoading } = useAdminStatus()
-  const loading = authLoading || adminLoading
   const t = useTranslations('admin')
-  const tNav = useTranslations('nav')
+
+  const navItems = [
+    { title: t('nav_overview'), href: '/admin' },
+    { title: t('nav_stations'), href: '/admin/stations' },
+    { title: t('nav_users'), href: '/admin/users' },
+  ]
+
+  return (
+    <nav className="hidden items-center gap-0.5 md:flex">
+      {navItems.map((item) => {
+        const active = item.href === '/admin'
+          ? pathname === '/admin'
+          : pathname.startsWith(item.href)
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              'relative flex items-center rounded-lg px-3.5 py-2 text-sm transition-colors',
+              active
+                ? 'font-medium text-foreground'
+                : 'font-light text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <span>{item.title}</span>
+            {active && (
+              <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-brand" />
+            )}
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
+
+function AdminTopNavMobile() {
+  const pathname = usePathname()
+  const t = useTranslations('admin')
 
   const navItems = [
     { title: t('nav_overview'), href: '/admin', icon: SquaresFourIcon },
     { title: t('nav_stations'), href: '/admin/stations', icon: RadioIcon },
     { title: t('nav_users'), href: '/admin/users', icon: UsersIcon },
   ]
+
+  return (
+    <nav className="border-b border-border/50 bg-background md:hidden">
+      <div className="flex items-center gap-0.5 overflow-x-auto px-3 py-1.5">
+        {navItems.map(({ title, href, icon: Icon }) => {
+          const active = href === '/admin' ? pathname === '/admin' : pathname.startsWith(href)
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'relative inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                active
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              {title}
+              {active && (
+                <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-brand" />
+              )}
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const { session, loading: authLoading } = useAuth()
+  const { isAdmin, loading: adminLoading } = useAdminStatus()
+  const loading = authLoading || adminLoading
+  const tNav = useTranslations('nav')
 
   useEffect(() => {
     if (!loading && isAdmin === false) {
@@ -44,39 +112,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <SiteHeader className="border-b border-border/50" rightSlot={<AccountMenu />} />
-
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="hidden w-[222px] shrink-0 flex-col border-r border-border/40 bg-background md:flex">
-          <div className="px-4 py-3.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{t('panel_label')}</p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{user?.email}</p>
+      <header className="shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
+        <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:gap-10 md:px-5 md:py-0">
+          <div className="flex items-center justify-between md:shrink-0">
+            <Link href="/admin" className="text-[1.6rem] font-semibold tracking-[-0.04em] text-foreground md:py-3.5">
+              bougie.fm
+            </Link>
+            <div className="md:hidden">
+              <AccountMenu avatarSize={40} />
+            </div>
           </div>
-
-          <nav className="flex-1 px-2">
-            {navItems.map((item) => {
-              const active = item.href === '/admin'
-                ? pathname === '/admin'
-                : pathname.startsWith(item.href)
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
-                    active
-                      ? 'bg-secondary font-medium text-foreground'
-                      : 'font-light text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
-                  )}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {item.title}
-                </Link>
-              )
-            })}
-          </nav>
-
-          <div className="p-3">
+          <AdminTopNav />
+          <div className="hidden items-center gap-3 md:ml-auto md:flex">
             <Link
               href="/curated"
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-light text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
@@ -84,15 +131,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <ArrowLeftIcon className="h-3.5 w-3.5" />
               {tNav('back_to_app')}
             </Link>
+            <AccountMenu avatarSize={42} />
           </div>
-        </aside>
-
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6 pb-24">
-            {children}
-          </div>
-        </main>
-      </div>
+        </div>
+      </header>
+      <AdminTopNavMobile />
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1600px] p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }

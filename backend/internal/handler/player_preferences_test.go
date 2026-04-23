@@ -43,7 +43,8 @@ func TestUpdatePlayerPreferencesReturnsPersistedStateOnStaleWrite(t *testing.T) 
 							Name:      "Current Station",
 							StreamURL: "https://example.com/live",
 						},
-						UpdatedAt: persistedUpdatedAt,
+						NormalizationEnabled: true,
+						UpdatedAt:            persistedUpdatedAt,
 					},
 				},
 			},
@@ -70,11 +71,12 @@ func TestUpdatePlayerPreferencesReturnsPersistedStateOnStaleWrite(t *testing.T) 
 	}
 
 	var resp struct {
-		Message   string               `json:"message"`
-		Stale     bool                 `json:"stale"`
-		Volume    float64              `json:"volume"`
-		Station   *store.PlayerStation `json:"station"`
-		UpdatedAt string               `json:"updatedAt"`
+		Message              string               `json:"message"`
+		Stale                bool                 `json:"stale"`
+		Volume               float64              `json:"volume"`
+		Station              *store.PlayerStation `json:"station"`
+		NormalizationEnabled bool                 `json:"normalizationEnabled"`
+		UpdatedAt            string               `json:"updatedAt"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -91,6 +93,9 @@ func TestUpdatePlayerPreferencesReturnsPersistedStateOnStaleWrite(t *testing.T) 
 	}
 	if resp.Station == nil || resp.Station.ID != "station-current" {
 		t.Fatalf("expected persisted station in response, got %#v", resp.Station)
+	}
+	if !resp.NormalizationEnabled {
+		t.Fatalf("expected persisted normalizationEnabled=true")
 	}
 	if resp.UpdatedAt != persistedUpdatedAt.Format(time.RFC3339Nano) {
 		t.Fatalf("expected persisted updatedAt %q, got %q", persistedUpdatedAt.Format(time.RFC3339Nano), resp.UpdatedAt)

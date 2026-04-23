@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   PlayIcon,
   PauseIcon,
@@ -39,7 +40,21 @@ interface FullScreenPlayerProps {
 }
 
 export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps) {
-  const { station, currentStream, state, volume, queue, queueIndex, pause, resume, playNext, playPrev, setVolume } = usePlayer()
+  const {
+    station,
+    currentStream,
+    state,
+    volume,
+    normalizationEnabled,
+    queue,
+    queueIndex,
+    pause,
+    resume,
+    playNext,
+    playPrev,
+    setVolume,
+    setNormalizationEnabled,
+  } = usePlayer()
 
   const isPlaying = state === 'playing'
   const isLoading = state === 'loading'
@@ -122,13 +137,17 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
             {isError ? 'Recover' : isLoading ? 'Connecting' : isPlaying ? 'Live' : 'Paused'}
           </span>
         </div>
-        <button
-          onClick={onClose}
-          title="Close full screen"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
-        >
-          <ArrowsInIcon className="h-5 w-5" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger
+            delay={300}
+            onClick={onClose}
+            aria-label="Close full screen"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
+          >
+            <ArrowsInIcon className="h-5 w-5" />
+          </TooltipTrigger>
+          <TooltipContent>Close full screen</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Main content */}
@@ -219,51 +238,69 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
 
         {/* Playback controls */}
         <div className="flex items-center gap-4">
-          <button
-            onClick={playPrev}
-            disabled={!hasPrev}
-            title="Previous"
-            className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-25"
-          >
-            <SkipBackIcon weight="fill" className="h-6 w-6" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              delay={300}
+              onClick={playPrev}
+              disabled={!hasPrev}
+              aria-label="Previous"
+              className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-25"
+            >
+              <SkipBackIcon weight="fill" className="h-6 w-6" />
+            </TooltipTrigger>
+            <TooltipContent>Previous</TooltipContent>
+          </Tooltip>
 
           {isLoading ? (
             <div className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center">
               <CircleNotchIcon className="h-7 w-7 animate-spin text-zinc-500" />
             </div>
           ) : isPlaying ? (
-            <button
-              onClick={pause}
-              title="Pause"
-              className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:scale-[1.03] hover:bg-brand/25"
-            >
-              <PauseIcon weight="fill" className="h-7 w-7" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                delay={300}
+                onClick={pause}
+                aria-label="Pause"
+                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:scale-[1.03] hover:bg-brand/25"
+              >
+                <PauseIcon weight="fill" className="h-7 w-7" />
+              </TooltipTrigger>
+              <TooltipContent>Pause</TooltipContent>
+            </Tooltip>
           ) : (
-            <button
-              onClick={resume}
-              title="Play"
-              className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:scale-[1.03] hover:bg-zinc-700"
-            >
-              <PlayIcon weight="fill" className="ml-0.5 h-7 w-7" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                delay={300}
+                onClick={resume}
+                aria-label="Play"
+                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:scale-[1.03] hover:bg-zinc-700"
+              >
+                <PlayIcon weight="fill" className="ml-0.5 h-7 w-7" />
+              </TooltipTrigger>
+              <TooltipContent>Play</TooltipContent>
+            </Tooltip>
           )}
 
-          <button
-            onClick={playNext}
-            disabled={!hasNext}
-            title="Next"
-            className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-25"
-          >
-            <SkipForwardIcon weight="fill" className="h-6 w-6" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              delay={300}
+              onClick={playNext}
+              disabled={!hasNext}
+              aria-label="Next"
+              className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-25"
+            >
+              <SkipForwardIcon weight="fill" className="h-6 w-6" />
+            </TooltipTrigger>
+            <TooltipContent>Next</TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Volume control */}
         <PlayerVolumeControl
-          className="flex w-full max-w-sm items-center gap-3"
+          className="flex w-full max-w-md flex-col"
           labelClassName="w-11 text-right text-sm tabular-nums text-zinc-500"
+          normalizationEnabled={normalizationEnabled}
+          onToggleNormalization={setNormalizationEnabled}
           showPercentage
           volume={volume}
           setVolume={setVolume}
