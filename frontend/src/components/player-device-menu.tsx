@@ -86,8 +86,8 @@ export function PlayerDeviceMenu() {
                 <button
                   type="button"
                   aria-label={ariaLabel}
-                  className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-zinc-200 ${
-                    isActive ? 'text-brand hover:text-brand' : ''
+                  className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-player-muted transition-colors hover:text-player-muted-hover ${
+                    isActive ? 'text-player-accent hover:text-player-accent' : ''
                   }`}
                 />
               }
@@ -96,7 +96,7 @@ export function PlayerDeviceMenu() {
         >
           <BroadcastIcon className="h-5 w-5" weight={transport === 'cast' ? 'fill' : 'regular'} />
           {isActive ? (
-            <span className="absolute -bottom-0.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-brand" />
+            <span className="absolute -bottom-0.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-player-accent" />
           ) : null}
         </TooltipTrigger>
         <TooltipContent>{tooltipLabel}</TooltipContent>
@@ -110,7 +110,7 @@ export function PlayerDeviceMenu() {
 
         <div className="mx-1 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
           <div className="flex items-center gap-2.5">
-            <CheckCircleIcon className="h-4.5 w-4.5 text-brand" weight="fill" />
+            <CheckCircleIcon className="h-4.5 w-4.5 text-player-accent" weight="fill" />
             <p className="text-sm font-medium text-zinc-100">This web browser</p>
           </div>
         </div>

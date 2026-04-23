@@ -209,9 +209,11 @@
       "title": "Præferencer",
       "description": "Tilpas din oplevelse.",
       "appearance_label": "Udseende",
-      "appearance_description": "Skift mellem lys og mørk tilstand.",
+      "appearance_description": "Vælg det Listening Room-udtryk, der passer til stemningen.",
       "light": "Lys",
       "dark": "Mørk",
+      "sepia": "Sepia",
+      "midnight": "Midnat",
       "language_label": "Sprog",
       "language_description": "Vælg dit foretrukne sprog."
     },

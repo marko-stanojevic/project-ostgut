@@ -173,7 +173,7 @@ export function PlayerBar() {
         <div className="flex min-w-0 max-w-[calc(50vw-5.5rem)] items-center justify-self-start gap-3 overflow-hidden sm:max-w-[calc(50vw-7.5rem)] sm:gap-3.5">
           <div
             className={`absolute bottom-[0.4rem] left-4 flex h-[6.8rem] w-[6.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.68rem] bg-zinc-800 shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-500 sm:bottom-[0.5rem] sm:left-5 sm:h-[8.4rem] sm:w-[8.4rem] sm:rounded-[0.82rem] ${isPlaying
-              ? 'shadow-[0_0_20px_rgba(200,116,58,0.22),0_14px_34px_rgba(0,0,0,0.32)]'
+              ? 'shadow-[0_0_20px_var(--player-accent-glow),0_14px_34px_rgba(0,0,0,0.32)]'
               : ''
               }`}
           >
@@ -219,7 +219,7 @@ export function PlayerBar() {
                 delay={300}
                 onClick={pause}
                 aria-label="Pause"
-                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:scale-[1.03] hover:bg-brand/25 sm:h-14 sm:w-14"
+                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-accent-soft text-player-accent transition-all hover:scale-[1.03] hover:bg-player-accent-soft-hover sm:h-14 sm:w-14"
               >
                 <PauseIcon weight="fill" className="h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
               </TooltipTrigger>
@@ -231,7 +231,7 @@ export function PlayerBar() {
                 delay={300}
                 onClick={resume}
                 aria-label="Play"
-                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:scale-[1.03] hover:bg-zinc-700 sm:h-14 sm:w-14"
+                className="flex h-12 w-12 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-surface text-zinc-100 transition-all hover:scale-[1.03] hover:bg-player-surface-hover sm:h-14 sm:w-14"
               >
                 <PlayIcon weight="fill" className="ml-0.5 h-5.5 w-5.5 sm:h-6.5 sm:w-6.5" />
               </TooltipTrigger>
@@ -288,7 +288,7 @@ export function PlayerBar() {
                         </span>
                       ))}
                       {normalizationEnabled && normalizationBadge ? (
-                        <span className="shrink-0 rounded-[0.34rem] border border-brand/35 bg-brand/12 px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-brand">
+                        <span className="shrink-0 rounded-[0.34rem] border border-player-accent-border bg-player-accent-soft px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-player-accent">
                           Leveling: {normalizationBadge}
                         </span>
                       ) : null}

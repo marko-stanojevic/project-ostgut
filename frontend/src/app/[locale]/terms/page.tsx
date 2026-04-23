@@ -19,7 +19,7 @@ export default async function TermsPage() {
       />
 
       <main className="flex-1 py-16 px-4">
-        <div className="max-w-3xl mx-auto prose prose-neutral dark:prose-invert prose-sm sm:prose-base">
+        <div className="editorial-prose prose prose-sm sm:prose-base max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold tracking-tight mb-2">Terms of Service</h1>
           <p className="text-sm text-muted-foreground mb-10">Last updated: {updated}</p>
 

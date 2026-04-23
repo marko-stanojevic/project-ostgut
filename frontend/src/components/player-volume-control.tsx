@@ -31,7 +31,7 @@ export function PlayerVolumeControl({
   setVolume,
 }: PlayerVolumeControlProps) {
   const volumePercent = Math.round(volume * 100)
-  const sliderBackground = `linear-gradient(90deg, rgba(200,116,58,0.95) 0%, rgba(200,116,58,0.95) ${volumePercent}%, rgba(255,255,255,0.12) ${volumePercent}%, rgba(255,255,255,0.12) 100%)`
+  const sliderBackground = `linear-gradient(90deg, var(--player-accent) 0%, var(--player-accent) ${volumePercent}%, var(--player-volume-track) ${volumePercent}%, var(--player-volume-track) 100%)`
 
   return (
     <div className={className}>
@@ -44,11 +44,11 @@ export function PlayerVolumeControl({
               aria-pressed={Boolean(normalizationEnabled)}
               aria-label={normalizationEnabled ? 'Disable leveling' : 'Enable leveling'}
               onClick={() => onToggleNormalization(!normalizationEnabled)}
-              className="relative flex h-9 shrink-0 items-center justify-center rounded-[0.7rem] px-2.5 text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-400 transition-colors hover:text-zinc-200"
+              className="relative flex h-9 shrink-0 items-center justify-center rounded-[0.7rem] px-2.5 text-[11px] font-medium uppercase tracking-[0.18em] text-player-muted transition-colors hover:text-player-muted-hover"
             >
               <span>Leveling</span>
               {normalizationEnabled ? (
-                <span className="absolute -bottom-0.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-brand animate-player-leveling-dot" />
+                <span className="absolute -bottom-0.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-player-accent animate-player-leveling-dot" />
               ) : null}
             </TooltipTrigger>
             <TooltipContent className="max-w-[14rem] whitespace-normal leading-relaxed">
@@ -66,7 +66,7 @@ export function PlayerVolumeControl({
             delay={300}
             onClick={() => setVolume(volume === 0 ? 0.8 : 0)}
             aria-label={volume === 0 ? 'Unmute' : 'Mute'}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-zinc-200"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-player-muted transition-colors hover:text-player-muted-hover"
           >
             {volume === 0
               ? <SpeakerXIcon className={iconClassName ?? 'h-5 w-5'} />
@@ -95,7 +95,7 @@ export function PlayerVolumeControl({
         </div>
 
         {showPercentage ? (
-          <span className={labelClassName ?? 'w-10 text-right text-xs tabular-nums text-zinc-500'}>
+          <span className={labelClassName ?? 'w-10 text-right text-xs tabular-nums text-player-muted'}>
             {volumePercent}%
           </span>
         ) : null}

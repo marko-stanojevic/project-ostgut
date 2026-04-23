@@ -135,7 +135,7 @@ export function AppSidebar() {
   ]
 
   return (
-    <aside className="hidden w-[246px] shrink-0 flex-col border-r border-border/40 bg-[linear-gradient(180deg,rgba(248,247,245,0.98),rgba(245,243,239,0.92))] md:flex dark:bg-[linear-gradient(180deg,rgba(12,11,9,0.98),rgba(18,16,14,0.94))]">
+    <aside className="hidden w-[246px] shrink-0 flex-col border-r border-border/40 bg-[image:var(--sidebar-panel-bg)] md:flex">
       {isSettings ? (
         <Suspense>
           <SettingsSubNav />

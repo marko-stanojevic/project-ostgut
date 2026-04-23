@@ -23,7 +23,7 @@ function WaveformBars() {
       {[0, 1, 2, 3].map((i) => (
         <span
           key={i}
-          className="block w-[3px] origin-bottom rounded-full bg-brand"
+          className="block w-[3px] origin-bottom rounded-full bg-player-accent"
           style={{
             height: '100%',
             animation: 'wave-bar 0.9s ease-in-out infinite',
@@ -112,7 +112,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
       )}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(200,116,58,0.18),transparent_34%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.06),transparent_28%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,var(--player-overlay-top),transparent_34%),radial-gradient(circle_at_bottom,var(--player-overlay-bottom),transparent_28%)]"
       />
 
       {/* Collapse button */}
@@ -127,12 +127,12 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
               : isLoading
                 ? 'border-white/10 bg-white/[0.06] text-zinc-300'
                 : isPlaying
-                  ? 'border-brand/30 bg-brand/10 text-brand/90'
+                  ? 'border-player-accent-border bg-player-accent-soft text-player-accent'
                   : 'border-white/10 bg-white/[0.04] text-zinc-500'
           }`}>
             {(isPlaying || isLoading) && !isError ? (
               <span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
-                isPlaying ? 'animate-pulse bg-brand' : 'animate-pulse bg-zinc-300'
+                isPlaying ? 'animate-pulse bg-player-accent' : 'animate-pulse bg-zinc-300'
               }`} />
             ) : null}
             {isError ? 'Recover' : isLoading ? 'Connecting' : isPlaying ? 'Live' : 'Paused'}
@@ -161,11 +161,11 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
           <div
             aria-hidden="true"
             className={`absolute inset-[-10%] rounded-full blur-3xl transition-all duration-700 ${
-              isPlaying ? 'bg-brand/20 opacity-100' : 'bg-white/8 opacity-60'
+              isPlaying ? 'bg-player-accent-soft-hover opacity-100' : 'bg-white/8 opacity-60'
             }`}
           />
           <div
-            className={`relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-800/90 shadow-2xl transition-all duration-500 sm:h-64 sm:w-64 ${isPlaying ? 'shadow-brand/20' : ''}`}
+            className={`relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-800/90 shadow-2xl transition-all duration-500 sm:h-64 sm:w-64 ${isPlaying ? 'shadow-[0_0_36px_var(--player-accent-glow)]' : ''}`}
           >
             {station?.logo ? (
               <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
@@ -224,7 +224,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
                 </span>
               ) : null}
               {isLosslessLike && (
-                <span className="rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
+                <span className="rounded-full border border-player-accent-border bg-player-accent-soft px-3 py-1 text-xs font-medium text-player-accent">
                   Lossless
                 </span>
               )}
@@ -265,7 +265,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
                 delay={300}
                 onClick={pause}
                 aria-label="Pause"
-                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:scale-[1.03] hover:bg-brand/25"
+                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-accent-soft text-player-accent transition-all hover:scale-[1.03] hover:bg-player-accent-soft-hover"
               >
                 <PauseIcon weight="fill" className="h-7 w-7" />
               </TooltipTrigger>
@@ -277,7 +277,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
                 delay={300}
                 onClick={resume}
                 aria-label="Play"
-                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:scale-[1.03] hover:bg-zinc-700"
+                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-surface text-zinc-100 transition-all hover:scale-[1.03] hover:bg-player-surface-hover"
               >
                 <PlayIcon weight="fill" className="ml-0.5 h-7 w-7" />
               </TooltipTrigger>
@@ -302,7 +302,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
         {/* Volume control */}
         <PlayerVolumeControl
           className="flex w-full max-w-md flex-col"
-          labelClassName="w-11 text-right text-sm tabular-nums text-zinc-500"
+          labelClassName="w-11 text-right text-sm tabular-nums text-player-muted"
           normalizationEnabled={normalizationEnabled}
           onToggleNormalization={setNormalizationEnabled}
           showPercentage

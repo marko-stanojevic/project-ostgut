@@ -11,6 +11,7 @@ import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import { routing } from '@/i18n/routing'
+import { defaultTheme, themeOptions } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import '../globals.css'
 
@@ -55,7 +56,7 @@ export default async function LocaleLayout({
       data-scroll-behavior="smooth"
     >
         <NextIntlClientProvider messages={messages}>
-          <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+          <ThemeProvider attribute="data-theme" defaultTheme={defaultTheme} enableSystem={false} themes={themeOptions.map(({ value }) => value)}>
             <SessionProvider>
               <AuthProvider>
                 <PlayerProvider>

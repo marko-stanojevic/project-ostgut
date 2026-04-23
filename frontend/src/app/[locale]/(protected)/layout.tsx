@@ -158,11 +158,11 @@ export default function DashboardLayout({
         <main className="relative flex-1 overflow-y-auto">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-55 bg-[radial-gradient(52%_42%_at_6%_92%,color-mix(in_oklab,var(--brand)_12%,transparent)_0%,transparent_74%),radial-gradient(48%_38%_at_92%_86%,color-mix(in_oklab,var(--foreground)_7%,transparent)_0%,transparent_76%)] bg-[length:132%_132%,124%_124%] motion-safe:animate-[bg-fade-drift-alt_48s_ease-in-out_infinite_alternate] motion-reduce:animate-none dark:bg-[radial-gradient(52%_42%_at_6%_92%,color-mix(in_oklab,var(--brand)_16%,transparent)_0%,transparent_76%),radial-gradient(48%_38%_at_92%_86%,color-mix(in_oklab,var(--foreground)_10%,transparent)_0%,transparent_78%)]"
+            className="pointer-events-none absolute inset-0 opacity-55 bg-[image:var(--app-shell-overlay-1)] bg-[length:132%_132%,124%_124%] motion-safe:animate-[bg-fade-drift-alt_48s_ease-in-out_infinite_alternate] motion-reduce:animate-none"
           />
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-90 bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_16%,transparent)_0%,transparent_68%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_8%,transparent)_0%,transparent_72%)] bg-[length:118%_118%,112%_112%] motion-safe:animate-[bg-fade-drift_30s_ease-in-out_infinite_alternate] motion-reduce:animate-none dark:bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_20%,transparent)_0%,transparent_70%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_14%,transparent)_0%,transparent_76%)]"
+            className="pointer-events-none absolute inset-0 opacity-90 bg-[image:var(--app-shell-overlay-2)] bg-[length:118%_118%,112%_112%] motion-safe:animate-[bg-fade-drift_30s_ease-in-out_infinite_alternate] motion-reduce:animate-none"
           />
           <div className="relative p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
             {children}

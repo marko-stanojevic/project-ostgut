@@ -209,9 +209,11 @@
       "title": "Preferenze",
       "description": "Personalizza la tua esperienza.",
       "appearance_label": "Aspetto",
-      "appearance_description": "Passa dalla modalità chiara a quella scura.",
+      "appearance_description": "Scegli l'atmosfera della Listening Room più adatta al momento.",
       "light": "Chiaro",
       "dark": "Scuro",
+      "sepia": "Seppia",
+      "midnight": "Mezzanotte",
       "language_label": "Lingua",
       "language_description": "Scegli la tua lingua preferita."
     },

@@ -132,8 +132,8 @@ type CompleteUploadResponse = {
 }
 
 const statusConfig = {
-    pending: { label: 'Pending', icon: ClockIcon, className: 'text-yellow-600 dark:text-yellow-400' },
-    approved: { label: 'Approved', icon: CheckCircleIcon, className: 'text-green-600 dark:text-green-400' },
+    pending: { label: 'Pending', icon: ClockIcon, className: 'text-warning' },
+    approved: { label: 'Approved', icon: CheckCircleIcon, className: 'text-success' },
 }
 
 function SourceField({ label, value }: { label: string; value?: string }) {
@@ -585,7 +585,7 @@ export default function StationEditorPage() {
                 <div className="flex shrink-0 items-center gap-2">
                     {error && <p className="text-sm text-destructive">{error}</p>}
                     {probeError && <p className="text-sm text-destructive">{probeError}</p>}
-                    {saved && <p className="text-sm text-green-600 dark:text-green-400">Saved</p>}
+                    {saved && <p className="text-sm text-success">Saved</p>}
                     <Button onClick={handleSave} disabled={saving || !canSave} className="gap-2">
                         <FloppyDiskIcon className="h-4 w-4" />
                         {saving ? 'Saving…' : 'Save changes'}
