@@ -209,9 +209,11 @@
       "title": "Voorkeuren",
       "description": "Personaliseer je ervaring.",
       "appearance_label": "Uiterlijk",
-      "appearance_description": "Schakel tussen lichte en donkere modus.",
+      "appearance_description": "Kies de Listening Room-sfeer die past bij dit moment.",
       "light": "Licht",
       "dark": "Donker",
+      "sepia": "Sepia",
+      "midnight": "Middernacht",
       "language_label": "Taal",
       "language_description": "Kies je voorkeurstaal."
     },

@@ -23,7 +23,7 @@ function WaveformBars() {
       {[0, 1, 2, 3].map((i) => (
         <span
           key={i}
-          className="block w-[3px] origin-bottom rounded-full bg-brand"
+          className="block w-[3px] origin-bottom rounded-full bg-player-accent"
           style={{
             height: '100%',
             animation: 'wave-bar 0.9s ease-in-out infinite',
@@ -97,7 +97,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
   const fallbackLine = [genreLine || undefined, locationLine || undefined].filter(Boolean).join(' · ')
 
   return (
-    <div className="fixed inset-0 z-[60] flex animate-in fade-in duration-300 flex-col bg-zinc-950">
+    <div className="fixed inset-0 z-[60] flex animate-in fade-in duration-300 flex-col bg-[image:var(--player-screen-bg)] text-player-screen-fg">
       {/* Blurred artwork background */}
       {station?.logo && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -112,27 +112,27 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
       )}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(200,116,58,0.18),transparent_34%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.06),transparent_28%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,var(--player-overlay-top),transparent_34%),radial-gradient(circle_at_bottom,var(--player-overlay-bottom),transparent_28%)]"
       />
 
       {/* Collapse button */}
       <div className="relative flex animate-in slide-in-from-top-3 fade-in duration-300 items-center justify-between px-6 pt-6">
         <div className="flex items-center gap-3">
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-zinc-400">
+          <span className="rounded-full border border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel)] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-player-screen-muted">
             Listening Room
           </span>
           <span className={`rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] ${
             isError
               ? 'border-red-500/30 bg-red-500/10 text-red-200/80'
               : isLoading
-                ? 'border-white/10 bg-white/[0.06] text-zinc-300'
+                ? 'border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel-strong)] text-player-screen-secondary'
                 : isPlaying
-                  ? 'border-brand/30 bg-brand/10 text-brand/90'
-                  : 'border-white/10 bg-white/[0.04] text-zinc-500'
+                  ? 'border-player-accent-border bg-player-accent-soft text-player-accent'
+                  : 'border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel)] text-player-screen-muted'
           }`}>
             {(isPlaying || isLoading) && !isError ? (
               <span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
-                isPlaying ? 'animate-pulse bg-brand' : 'animate-pulse bg-zinc-300'
+                isPlaying ? 'animate-pulse bg-player-accent' : 'animate-pulse bg-player-screen-secondary'
               }`} />
             ) : null}
             {isError ? 'Recover' : isLoading ? 'Connecting' : isPlaying ? 'Live' : 'Paused'}
@@ -145,7 +145,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
               delay={300}
               onClick={onClose}
               aria-label="Close full screen"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--player-screen-panel-border)] text-player-screen-icon transition-colors hover:bg-[var(--player-screen-panel)] hover:text-player-screen-icon-hover"
             >
               <ArrowsInIcon className="h-5 w-5" />
             </TooltipTrigger>
@@ -161,16 +161,16 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
           <div
             aria-hidden="true"
             className={`absolute inset-[-10%] rounded-full blur-3xl transition-all duration-700 ${
-              isPlaying ? 'bg-brand/20 opacity-100' : 'bg-white/8 opacity-60'
+              isPlaying ? 'bg-player-accent-soft-hover opacity-100' : 'bg-[var(--player-screen-panel)] opacity-60'
             }`}
           />
           <div
-            className={`relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-800/90 shadow-2xl transition-all duration-500 sm:h-64 sm:w-64 ${isPlaying ? 'shadow-brand/20' : ''}`}
+            className={`relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-[2rem] border border-[var(--player-screen-panel-border)] bg-player-screen-artwork-bg shadow-2xl transition-all duration-500 sm:h-64 sm:w-64 ${isPlaying ? 'shadow-[0_0_36px_var(--player-accent-glow)]' : ''}`}
           >
             {station?.logo ? (
               <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
             ) : (
-              <RadioIcon className="h-16 w-16 text-zinc-600" />
+              <RadioIcon className="h-16 w-16 text-player-screen-artwork-icon" />
             )}
           </div>
         </div>
@@ -178,7 +178,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
         {/* Station info */}
         <div className="flex w-full max-w-xl flex-col items-center gap-3 text-center">
           <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-semibold tracking-[-0.04em] text-zinc-100 sm:text-5xl">
+            <h2 className="text-3xl font-semibold tracking-[-0.04em] text-player-screen-fg sm:text-5xl">
               {station?.name ?? '—'}
             </h2>
             {isPlaying && <WaveformBars />}
@@ -186,17 +186,17 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
 
           {hasNowPlaying ? (
             <div className="space-y-1">
-              <p className="text-lg font-medium text-zinc-100 sm:text-2xl">
+              <p className="text-lg font-medium text-player-screen-fg sm:text-2xl">
                 {nowPlaying?.song ?? nowPlaying?.title}
               </p>
               {nowPlaying?.artist ? (
-                <p className="text-sm uppercase tracking-[0.24em] text-zinc-500 sm:text-base">
+                <p className="text-sm uppercase tracking-[0.24em] text-player-screen-muted sm:text-base">
                   {nowPlaying.artist}
                 </p>
               ) : null}
             </div>
           ) : (
-            <p className="text-base text-zinc-400 sm:text-lg">
+            <p className="text-base text-player-screen-secondary sm:text-lg">
               {fallbackLine}
             </p>
           )}
@@ -204,9 +204,9 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
           <div className={`rounded-full border px-4 py-2 text-sm transition-all duration-300 ${
             isError
               ? 'border-red-500/30 bg-red-500/10 text-red-200/80'
-              : isLoading
-                ? 'border-white/10 bg-white/[0.05] text-zinc-300'
-                : 'border-white/10 bg-white/[0.03] text-zinc-400'
+            : isLoading
+                ? 'border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel-strong)] text-player-screen-secondary'
+                : 'border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel)] text-player-screen-muted'
           }`}>
             {isError
               ? 'Stream unavailable. Press play to try again.'
@@ -219,22 +219,22 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
           {(isLosslessLike || codecLabel || bitrateKbps > 0 || locationLine) && (
             <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
               {locationLine ? (
-                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-medium text-zinc-400">
+                <span className="rounded-full border border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel)] px-3 py-1 text-xs font-medium text-player-screen-secondary">
                   {locationLine}
                 </span>
               ) : null}
               {isLosslessLike && (
-                <span className="rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-medium text-brand">
+                <span className="rounded-full border border-player-accent-border bg-player-accent-soft px-3 py-1 text-xs font-medium text-player-accent">
                   Lossless
                 </span>
               )}
               {codecLabel && !isLosslessLike && (
-                <span className="rounded-full border border-zinc-700 bg-zinc-800/90 px-3 py-1 text-xs font-medium text-zinc-400">
+                <span className="rounded-full border border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel-strong)] px-3 py-1 text-xs font-medium text-player-screen-secondary">
                   {codecLabel}
                 </span>
               )}
               {bitrateKbps > 0 && !isLosslessLike && (
-                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs tabular-nums text-zinc-500">{bitrateKbps} kbps</span>
+                <span className="rounded-full border border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel)] px-3 py-1 text-xs tabular-nums text-player-screen-muted">{bitrateKbps} kbps</span>
               )}
             </div>
           )}
@@ -248,7 +248,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
               onClick={playPrev}
               disabled={!hasPrev}
               aria-label="Previous"
-              className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-25"
+              className="flex h-12 w-12 items-center justify-center rounded-full text-player-screen-icon transition-all hover:bg-[var(--player-screen-panel)] hover:text-player-screen-icon-hover disabled:cursor-not-allowed disabled:opacity-25"
             >
               <SkipBackIcon weight="fill" className="h-6 w-6" />
             </TooltipTrigger>
@@ -257,7 +257,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
 
           {isLoading ? (
             <div className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center">
-              <CircleNotchIcon className="h-7 w-7 animate-spin text-zinc-500" />
+              <CircleNotchIcon className="h-7 w-7 animate-spin text-player-screen-muted" />
             </div>
           ) : isPlaying ? (
             <Tooltip>
@@ -265,7 +265,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
                 delay={300}
                 onClick={pause}
                 aria-label="Pause"
-                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-brand/15 text-brand transition-all hover:scale-[1.03] hover:bg-brand/25"
+                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-accent-soft text-player-accent transition-all hover:scale-[1.03] hover:bg-player-accent-soft-hover"
               >
                 <PauseIcon weight="fill" className="h-7 w-7" />
               </TooltipTrigger>
@@ -277,7 +277,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
                 delay={300}
                 onClick={resume}
                 aria-label="Play"
-                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-zinc-800 text-zinc-100 transition-all hover:scale-[1.03] hover:bg-zinc-700"
+                className="flex h-16 w-16 animate-in zoom-in-90 fade-in duration-200 items-center justify-center rounded-full bg-player-surface text-player-screen-fg transition-all hover:scale-[1.03] hover:bg-player-surface-hover"
               >
                 <PlayIcon weight="fill" className="ml-0.5 h-7 w-7" />
               </TooltipTrigger>
@@ -291,7 +291,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
               onClick={playNext}
               disabled={!hasNext}
               aria-label="Next"
-              className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-800 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-25"
+              className="flex h-12 w-12 items-center justify-center rounded-full text-player-screen-icon transition-all hover:bg-[var(--player-screen-panel)] hover:text-player-screen-icon-hover disabled:cursor-not-allowed disabled:opacity-25"
             >
               <SkipForwardIcon weight="fill" className="h-6 w-6" />
             </TooltipTrigger>
@@ -302,8 +302,9 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
         {/* Volume control */}
         <PlayerVolumeControl
           className="flex w-full max-w-md flex-col"
-          labelClassName="w-11 text-right text-sm tabular-nums text-zinc-500"
+          labelClassName="w-11 text-right text-sm tabular-nums text-player-muted"
           normalizationEnabled={normalizationEnabled}
+          showNormalizationActivity={isPlaying || isLoading}
           onToggleNormalization={setNormalizationEnabled}
           showPercentage
           volume={volume}

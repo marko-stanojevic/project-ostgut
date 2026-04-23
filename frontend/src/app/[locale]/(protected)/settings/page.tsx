@@ -11,10 +11,18 @@ import { useAuth } from '@/context/AuthContext'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { SubscriptionCard } from '@/components/subscription-card'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
+import { defaultTheme, themeOptions, type AppTheme } from '@/lib/theme'
 import {
   UserIcon,
   CreditCardIcon,
@@ -23,8 +31,6 @@ import {
   PaletteIcon,
   CaretRightIcon,
   SignOutIcon,
-  SunIcon,
-  MoonIcon,
   UploadSimpleIcon,
 } from '@phosphor-icons/react'
 
@@ -229,7 +235,7 @@ function ProfileSection() {
           <Button onClick={handleSave} disabled={saving || !displayName.trim()} size="sm">
             {saving ? t('saving') : t('save')}
           </Button>
-          {saved && <span className="text-sm text-green-500">{t('saved')}</span>}
+          {saved && <span className="text-sm text-success">{t('saved')}</span>}
         </div>
       </div>
 
@@ -277,7 +283,7 @@ function SecuritySection() {
       <div className="rounded-xl border border-border/50 bg-card/50 p-5">
         <p className="mb-4 text-sm font-medium">{t('change_password')}</p>
         {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
-        {success && <p className="mb-3 text-sm text-green-500">{t('updated')}</p>}
+        {success && <p className="mb-3 text-sm text-success">{t('updated')}</p>}
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div className="space-y-1.5">
             <Label htmlFor="current-password">{t('current_password')}</Label>
@@ -335,11 +341,11 @@ function ToggleRow({ id, label, description, checked, onChange, last }: {
 // ─── Preferences ─────────────────────────────────────────────────────────────
 
 function PreferencesSection() {
-  const { resolvedTheme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const t = useTranslations('settings.preferences')
   const locale = useLocale()
   const router = useRouter()
-  const isDark = resolvedTheme === 'dark'
+  const selectedTheme = (theme ?? defaultTheme) as AppTheme
 
   const localeOptions = [
     { value: 'en', label: 'English' },
@@ -363,16 +369,18 @@ function PreferencesSection() {
             <p className="text-sm font-medium">{t('appearance_label')}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">{t('appearance_description')}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setTheme(isDark ? 'light' : 'dark')}
-            className="flex h-8 items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 text-xs font-medium transition-colors hover:bg-secondary/80"
-          >
-            {isDark
-              ? <><SunIcon className="h-3.5 w-3.5" />{t('light')}</>
-              : <><MoonIcon className="h-3.5 w-3.5" />{t('dark')}</>
-            }
-          </button>
+          <Select value={selectedTheme} onValueChange={(value) => setTheme(value as AppTheme)}>
+            <SelectTrigger className="min-w-[9.5rem]" aria-label={t('appearance_label')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {themeOptions.map(({ value, labelKey }) => (
+                <SelectItem key={value} value={value}>
+                  {t(labelKey)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center justify-between gap-4 bg-card/50 px-4 py-4">

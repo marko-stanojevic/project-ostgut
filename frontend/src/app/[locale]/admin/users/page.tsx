@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
+import { useAdminSearch } from '../admin-search-context'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
-import { AdminSearchForm } from '@/components/admin/admin-search-form'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
 import { Button } from '@/components/ui/button'
@@ -38,12 +38,12 @@ interface AdminUser {
 export default function AdminUsersPage() {
   const t = useTranslations('admin')
   const { session, user: currentUser } = useAuth()
+  const { query: search } = useAdminSearch()
+  const [appliedSearch, setAppliedSearch] = useState(search)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(0)
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
   const [error, setError] = useState('')
 
   // Confirmation dialog state
@@ -58,8 +58,8 @@ export default function AdminUsersPage() {
       limit: String(PAGE_SIZE),
       offset: String(page * PAGE_SIZE),
     })
-    if (search) {
-      params.set('q', search)
+    if (appliedSearch) {
+      params.set('q', appliedSearch)
     }
 
     try {
@@ -77,15 +77,14 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false)
     }
-  }, [session?.accessToken, page, search])
+  }, [session?.accessToken, page, appliedSearch])
+
+  useEffect(() => {
+    setPage(0)
+    setAppliedSearch(search)
+  }, [search])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    setSearch(searchInput.trim())
-    setPage(0)
-  }
 
   const confirmToggle = (user: AdminUser) => {
     // Prevent self-demotion
@@ -126,14 +125,6 @@ export default function AdminUsersPage() {
           {t('users_description')}
         </p>
       </div>
-
-      {/* Search */}
-      <AdminSearchForm
-        placeholder={t('search_users')}
-        value={searchInput}
-        onValueChange={setSearchInput}
-        onSubmit={handleSearch}
-      />
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

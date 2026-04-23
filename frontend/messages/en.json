@@ -209,9 +209,11 @@
       "title": "Preferences",
       "description": "Personalise your experience.",
       "appearance_label": "Appearance",
-      "appearance_description": "Switch between light and dark mode.",
+      "appearance_description": "Choose the listening room theme that fits your mood.",
       "light": "Light",
       "dark": "Dark",
+      "sepia": "Sepia",
+      "midnight": "Midnight",
       "language_label": "Language",
       "language_description": "Choose your preferred language."
     },

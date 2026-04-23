@@ -633,7 +633,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return
 
     const initializeCast = () => {
-      if (!window.cast || !window.chrome || castInitializedRef.current) return
+      if (!window.cast || !window.chrome || !cast.framework?.AutoJoinPolicy || castInitializedRef.current) return
 
       const castContext = cast.framework.CastContext.getInstance()
       castContext.setOptions({

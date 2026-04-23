@@ -145,7 +145,7 @@ function CuratedDetailsContent() {
                             {isPlaying && (
                                 <div className="absolute inset-0 flex items-start justify-end p-3">
                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-white backdrop-blur-sm">
-                                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
+                                        <span className="ui-nav-live-dot h-1.5 w-1.5 animate-pulse rounded-full" />
                                         {t('live')}
                                     </span>
                                 </div>
@@ -223,7 +223,7 @@ function CuratedDetailsContent() {
                                     type="button"
                                     title={copied === 'page' ? t('copied') : t('share')}
                                     onClick={handleShare}
-                                    className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${copied === 'page' ? 'border-brand/40 bg-brand/10 text-brand' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
+                                    className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${copied === 'page' ? 'ui-editorial-badge' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
                                 >
                                     <ShareNetworkIcon className="h-5 w-5" />
                                 </button>
@@ -231,7 +231,7 @@ function CuratedDetailsContent() {
                                     type="button"
                                     title={copied === 'stream' ? t('copied') : t('copy_stream')}
                                     onClick={handleCopyStream}
-                                    className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${copied === 'stream' ? 'border-brand/40 bg-brand/10 text-brand' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
+                                    className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${copied === 'stream' ? 'ui-editorial-badge' : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground'}`}
                                 >
                                     <LinkSimpleIcon className="h-5 w-5" />
                                 </button>
@@ -288,9 +288,9 @@ function CuratedDetailsContent() {
                         ) : null}
 
                         {station.editor_notes && (
-                            <div className="mt-6 rounded-xl border border-brand/20 bg-brand/5 p-5">
-                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand/70">{t('editors_note')}</p>
-                                <p className="text-[15px] leading-relaxed text-foreground/90 font-medium">{station.editor_notes}</p>
+                            <div className="ui-editorial-callout mt-6 rounded-xl p-5">
+                                <p className="ui-editorial-eyebrow mb-2 text-[10px] font-semibold uppercase tracking-[0.18em]">{t('editors_note')}</p>
+                                <p className="ui-editorial-text text-[15px] leading-relaxed font-medium">{station.editor_notes}</p>
                             </div>
                         )}
 

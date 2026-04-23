@@ -240,15 +240,15 @@ function ExploreContent() {
                             onClick={() => setActiveCategory(prev => prev === id ? null : id)}
                             className={`relative px-3 py-2 text-base font-medium transition-colors ${
                                 activeCategory === id
-                                    ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:bg-brand'
+                                    ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:ui-nav-underline'
                                     : selected.length > 0
-                                        ? 'text-brand/80 hover:text-foreground'
+                                        ? 'ui-nav-live-text hover:text-foreground'
                                         : 'text-muted-foreground hover:text-foreground'
                             }`}
                         >
                             {label}
                             {selected.length > 0 && (
-                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand/15 px-1 text-[10px] font-semibold text-brand">
+                                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-nav-accent-surface px-1 text-[10px] font-semibold text-nav-accent-text">
                                     {selected.length}
                                 </span>
                             )}
@@ -278,7 +278,7 @@ function ExploreContent() {
                                     className={cn(
                                         'border px-4 py-1.5 text-sm transition-colors',
                                         isSelected
-                                            ? 'border-brand bg-brand font-medium text-black'
+                                            ? 'border-brand bg-nav-accent-text font-medium text-brand-foreground'
                                             : 'border-border/50 text-muted-foreground hover:border-border hover:text-foreground'
                                     )}
                                 >

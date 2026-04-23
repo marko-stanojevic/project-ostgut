@@ -241,7 +241,7 @@ function CuratedContent() {
                         aria-disabled={Boolean(search)}
                         className={`relative px-3 py-2 text-[18px] font-medium transition-colors ${
                             feedView === id
-                                ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:bg-brand'
+                                ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-full after:ui-nav-underline'
                                 : search
                                     ? 'cursor-not-allowed text-muted-foreground/50'
                                     : 'text-muted-foreground hover:text-foreground'
@@ -304,7 +304,7 @@ function CuratedContent() {
                         {(feedView === 'for-you' || feedView === 'staff-picks') && (
                             <div className="mb-10">
                                 <div className="mb-4 flex items-center gap-2">
-                                    <SparkleIcon className="h-3.5 w-3.5 text-brand" />
+                                    <SparkleIcon className="h-3.5 w-3.5 ui-editorial-text" />
                                     <h2 className="ui-section-title">
                                         {feedView === 'staff-picks' ? t('section_staff_picks') : t('section_editors')}
                                     </h2>
@@ -343,7 +343,7 @@ function CuratedContent() {
                         {(feedView === 'for-you' || feedView === 'trending') && (
                             <div>
                                 <div className="mb-4 flex items-center gap-2">
-                                    <TrendUpIcon className="h-3.5 w-3.5 text-brand" />
+                                    <TrendUpIcon className="h-3.5 w-3.5 ui-editorial-text" />
                                     <h2 className="ui-section-title">
                                         {feedView === 'trending' ? t('section_trending_now') : t('section_most_played')}
                                     </h2>

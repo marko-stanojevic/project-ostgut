@@ -26,9 +26,9 @@ export function AuthShell({
   return (
     <div className="relative min-h-screen overflow-hidden bg-background px-4 py-10">
       <div className="absolute inset-0 -z-10 opacity-50">
-        <div className="absolute left-[-12%] top-[10%] h-72 w-72 rounded-full bg-brand/14 blur-3xl" />
-        <div className="absolute right-[-10%] top-[18%] h-80 w-80 rounded-full bg-foreground/6 blur-3xl" />
-        <div className="absolute bottom-[-6%] left-[18%] h-64 w-64 rounded-full bg-brand/10 blur-3xl" />
+        <div className="absolute left-[-12%] top-[10%] h-72 w-72 rounded-full bg-[var(--auth-glow-primary)] blur-3xl" />
+        <div className="absolute right-[-10%] top-[18%] h-80 w-80 rounded-full bg-[var(--auth-glow-secondary)] blur-3xl" />
+        <div className="absolute bottom-[-6%] left-[18%] h-64 w-64 rounded-full bg-[var(--auth-glow-tertiary)] blur-3xl" />
       </div>
 
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center justify-center">
@@ -45,7 +45,7 @@ export function AuthShell({
           <div className="mt-6 space-y-2 text-center">
             {badge ? (
               <div className="flex justify-center">
-                <div className="rounded-full border border-brand/20 bg-brand/8 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-brand">
+                <div className="ui-editorial-badge rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em]">
                   {badge}
                 </div>
               </div>

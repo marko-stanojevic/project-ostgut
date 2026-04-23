@@ -9,7 +9,8 @@ import { useTranslations } from 'next-intl'
 import { AccountMenu } from '@/components/account-menu'
 import { AppSidebarMobile } from '@/components/app-sidebar'
 import { GoogleCastScript } from '@/components/google-cast-script'
-import { MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react'
+import { SearchInput } from '@/components/search-input'
+import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 function getSearchTarget(pathname: string) {
@@ -57,26 +58,12 @@ function ExploreSearchInner() {
   }
 
   return (
-    <div className="relative w-full max-w-lg">
-      <MagnifyingGlassIcon className="absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-muted-foreground" />
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder={t('placeholder')}
-        className="h-10 w-full rounded-full border border-border bg-secondary/60 pl-11 pr-10 text-[15px] text-foreground outline-none transition-all placeholder:text-muted-foreground/70 focus:border-border focus:bg-background focus:shadow-sm focus:ring-2 focus:ring-ring/20"
-      />
-      {value && (
-        <button
-          type="button"
-          onClick={clear}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded text-muted-foreground hover:text-foreground"
-          aria-label={t('clear_aria')}
-        >
-          <XIcon className="h-4.5 w-4.5" />
-        </button>
-      )}
-    </div>
+    <SearchInput
+      value={value}
+      onChange={handleChange}
+      onClear={clear}
+      placeholder={t('placeholder')}
+    />
   )
 }
 
@@ -117,7 +104,7 @@ function TopNav() {
           >
             <span>{label}</span>
             {active && (
-              <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-brand" />
+              <span className="ui-nav-underline absolute bottom-0 left-2 right-2 h-[2px] rounded-full" />
             )}
           </Link>
         )
@@ -131,6 +118,10 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
+  const tNav = useTranslations('nav')
+  const isSettings = pathname === '/settings' || pathname.startsWith('/settings/')
+
   return (
     <>
       <GoogleCastScript />
@@ -147,7 +138,19 @@ export default function DashboardLayout({
             </div>
             <TopNav />
             <div className="flex min-w-0 flex-1 items-center pb-1 md:pb-0 md:py-2.5">
-              <ExploreSearch />
+              {isSettings ? (
+                <div className="hidden md:flex min-w-0 flex-1 justify-end">
+                  <Link
+                    href="/curated"
+                    className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-light text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <ArrowLeftIcon className="h-3.5 w-3.5" />
+                    {tNav('back_to_app')}
+                  </Link>
+                </div>
+              ) : (
+                <ExploreSearch />
+              )}
             </div>
             <div className="hidden items-center gap-3 md:flex">
               <AccountMenu avatarSize={42} />
@@ -158,11 +161,11 @@ export default function DashboardLayout({
         <main className="relative flex-1 overflow-y-auto">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-55 bg-[radial-gradient(52%_42%_at_6%_92%,color-mix(in_oklab,var(--brand)_12%,transparent)_0%,transparent_74%),radial-gradient(48%_38%_at_92%_86%,color-mix(in_oklab,var(--foreground)_7%,transparent)_0%,transparent_76%)] bg-[length:132%_132%,124%_124%] motion-safe:animate-[bg-fade-drift-alt_48s_ease-in-out_infinite_alternate] motion-reduce:animate-none dark:bg-[radial-gradient(52%_42%_at_6%_92%,color-mix(in_oklab,var(--brand)_16%,transparent)_0%,transparent_76%),radial-gradient(48%_38%_at_92%_86%,color-mix(in_oklab,var(--foreground)_10%,transparent)_0%,transparent_78%)]"
+            className="pointer-events-none absolute inset-0 opacity-55 bg-[image:var(--app-shell-overlay-1)] bg-[length:132%_132%,124%_124%] motion-safe:animate-[bg-fade-drift-alt_48s_ease-in-out_infinite_alternate] motion-reduce:animate-none"
           />
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-90 bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_16%,transparent)_0%,transparent_68%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_8%,transparent)_0%,transparent_72%)] bg-[length:118%_118%,112%_112%] motion-safe:animate-[bg-fade-drift_30s_ease-in-out_infinite_alternate] motion-reduce:animate-none dark:bg-[radial-gradient(70%_55%_at_16%_10%,color-mix(in_oklab,var(--brand)_20%,transparent)_0%,transparent_70%),radial-gradient(60%_45%_at_85%_2%,color-mix(in_oklab,var(--foreground)_14%,transparent)_0%,transparent_76%)]"
+            className="pointer-events-none absolute inset-0 opacity-90 bg-[image:var(--app-shell-overlay-2)] bg-[length:118%_118%,112%_112%] motion-safe:animate-[bg-fade-drift_30s_ease-in-out_infinite_alternate] motion-reduce:animate-none"
           />
           <div className="relative p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
             {children}

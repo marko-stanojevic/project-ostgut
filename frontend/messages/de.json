@@ -209,9 +209,11 @@
       "title": "Einstellungen",
       "description": "Personalisiere dein Erlebnis.",
       "appearance_label": "Erscheinungsbild",
-      "appearance_description": "Wechsle zwischen Hell- und Dunkel-Modus.",
+      "appearance_description": "Wähle den Listening-Room-Stil, der zu deiner Stimmung passt.",
       "light": "Hell",
       "dark": "Dunkel",
+      "sepia": "Sepia",
+      "midnight": "Mitternacht",
       "language_label": "Sprache",
       "language_description": "Wähle deine bevorzugte Sprache."
     },

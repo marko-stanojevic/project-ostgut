@@ -5,14 +5,13 @@ import { useSearchParams } from 'next/navigation'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
+import { useAdminSearch } from '../admin-search-context'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
-import { AdminSearchForm } from '@/components/admin/admin-search-form'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -37,7 +36,7 @@ const stationSkeletonCells = [
   { tdClassName: 'px-4 py-3', items: ['h-7 w-7 rounded shrink-0', 'h-4 w-36'] },
   { tdClassName: 'px-4 py-3 hidden md:table-cell', skeletonClassName: 'h-4 w-20' },
   { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-16' },
-  { tdClassName: 'px-4 py-3 hidden xl:table-cell', skeletonClassName: 'h-5 w-10 mx-auto' },
+  { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-20' },
   { tdClassName: 'px-4 py-3', skeletonClassName: 'h-7 w-16 ml-auto' },
 ]
 
@@ -101,15 +100,14 @@ export default function AdminStationsPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved'>(
     normalizeModerationStatus(searchParams.get('status')),
   )
+  const { query: search } = useAdminSearch()
+  const [appliedSearch, setAppliedSearch] = useState(search)
   const [stations, setStations] = useState<AdminStation[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
-  const [updatingStaffPickIDs, setUpdatingStaffPickIDs] = useState<Set<string>>(new Set())
   const [error, setError] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [createLoading, setCreateLoading] = useState(false)
@@ -149,7 +147,7 @@ export default function AdminStationsPage() {
       limit: String(PAGE_SIZE),
       offset: String(page * PAGE_SIZE),
     })
-    if (search) params.set('q', search)
+    if (appliedSearch) params.set('q', appliedSearch)
 
     try {
       const data = await fetchJSONWithAuth<{ stations?: AdminStation[]; count?: number }>(
@@ -165,7 +163,12 @@ export default function AdminStationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [session?.accessToken, activeTab, page, search])
+  }, [session?.accessToken, activeTab, page, appliedSearch])
+
+  useEffect(() => {
+    setPage(0)
+    setAppliedSearch(search)
+  }, [search])
 
   useEffect(() => { fetchStations() }, [fetchStations])
 
@@ -173,15 +176,7 @@ export default function AdminStationsPage() {
     const normalized = normalizeModerationStatus(tab)
     setActiveTab(normalized)
     setPage(0)
-    setSearch('')
-    setSearchInput('')
     router.replace(`/admin/stations?status=${normalized}`)
-  }
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    setSearch(searchInput.trim())
-    setPage(0)
   }
 
   const toggleSelect = (id: string) => {
@@ -219,34 +214,6 @@ export default function AdminStationsPage() {
       setError(err instanceof Error ? err.message : 'Bulk update failed')
     } finally {
       setBulkLoading(false)
-    }
-  }
-
-  const toggleStaffPick = async (stationID: string, nextValue: boolean) => {
-    if (!session?.accessToken) return
-    setError('')
-
-    setUpdatingStaffPickIDs((prev) => new Set(prev).add(stationID))
-    setStations((prev) => prev.map((s) => (s.id === stationID ? { ...s, featured: nextValue } : s)))
-
-    try {
-      await fetchJSONWithAuth(
-        `${API}/admin/stations/${stationID}`,
-        session.accessToken,
-        {
-          method: 'PUT',
-          body: JSON.stringify({ featured: nextValue }),
-        },
-      )
-    } catch (err) {
-      setStations((prev) => prev.map((s) => (s.id === stationID ? { ...s, featured: !nextValue } : s)))
-      setError(err instanceof Error ? err.message : 'Failed to update Staff Pick')
-    } finally {
-      setUpdatingStaffPickIDs((prev) => {
-        const next = new Set(prev)
-        next.delete(stationID)
-        return next
-      })
     }
   }
 
@@ -308,8 +275,6 @@ export default function AdminStationsPage() {
       if (nextStatus !== activeTab) {
         setActiveTab(nextStatus)
         setPage(0)
-        setSearch('')
-        setSearchInput('')
         router.replace(`/admin/stations?status=${nextStatus}`)
       } else {
         await fetchStations()
@@ -333,25 +298,27 @@ export default function AdminStationsPage() {
         <Button onClick={() => setCreateOpen(true)}>{t('add_station')}</Button>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList>
-          {Object.entries(statusConfig).map(([key, { label }]) => (
-            <TabsTrigger key={key} value={key}>{label}</TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      {/* Status selector */}
+      <div className="flex items-center gap-4">
+        {Object.entries(statusConfig).map(([key, { label }]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => handleTabChange(key)}
+            className={`relative px-3 py-2 text-base font-medium transition-colors ${
+              activeTab === key ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+            {activeTab === key && (
+              <span className="ui-nav-underline absolute bottom-0 left-0 right-0 h-[2px] rounded-full" />
+            )}
+          </button>
+        ))}
+      </div>
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <AdminSearchForm
-          placeholder={t('search_stations')}
-          value={searchInput}
-          onValueChange={setSearchInput}
-          onSubmit={handleSearch}
-          className="flex gap-2 w-full sm:w-auto sm:min-w-[18rem]"
-        />
-
         {selected.size > 0 && (
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-sm text-muted-foreground">{t('selected', { count: selected.size })}</span>
@@ -360,7 +327,7 @@ export default function AdminStationsPage() {
               variant="outline"
               disabled={bulkLoading}
               onClick={() => bulkAction('approved')}
-              className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
+              className="ui-admin-status-success-badge hover:brightness-[1.03]"
             >
               <CheckCircleIcon className="h-3.5 w-3.5 mr-1.5" />
               {t('bulk_approve')}
@@ -385,8 +352,8 @@ export default function AdminStationsPage() {
               </th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('col_station')}</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">{t('col_genre')}</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">{t('field_city')}</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">{t('col_country')}</th>
-              <th className="px-4 py-3 text-center font-medium text-muted-foreground hidden xl:table-cell">{t('col_staff_pick')}</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t('col_actions')}</th>
             </tr>
           </thead>
@@ -395,7 +362,7 @@ export default function AdminStationsPage() {
               <AdminTableSkeletonRows cells={stationSkeletonCells} />
             ) : stations.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-16 text-center text-muted-foreground text-sm">
+                <td colSpan={5} className="px-4 py-16 text-center text-muted-foreground text-sm">
                   {t('no_stations')}
                 </td>
               </tr>
@@ -432,27 +399,15 @@ export default function AdminStationsPage() {
                               {s.name.charAt(0)}
                             </div>
                           )}
-                          <div className="flex min-w-0 flex-col gap-0.5">
+                          <div className="min-w-0">
                             <span className="truncate font-medium leading-tight transition-colors hover:text-foreground/80">{s.name}</span>
-                            {s.editor_notes && (
-                              <span className="line-clamp-1 text-xs text-muted-foreground">{s.editor_notes}</span>
-                            )}
                           </div>
                         </div>
                       </Link>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{(s.genres ?? []).join(', ') || '—'}</td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.city || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.country || '—'}</td>
-                    <td className="px-4 py-3 hidden xl:table-cell">
-                      <div className="flex justify-center">
-                        <Switch
-                          checked={s.featured}
-                          disabled={updatingStaffPickIDs.has(s.id)}
-                          onCheckedChange={(checked) => toggleStaffPick(s.id, !!checked)}
-                          aria-label={`Toggle staff pick for ${s.name}`}
-                        />
-                      </div>
-                    </td>
                     <td className="px-4 py-3 text-right">
                       <Link href={`/admin/stations/${s.id}`}>
                         <Button variant="ghost" size="sm" className="h-7 gap-1.5">
