@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
 import { useNowPlaying } from '@/hooks/useNowPlaying'
 import { FullScreenPlayer } from '@/components/full-screen-player'
+import { PlayerDeviceMenu } from '@/components/player-device-menu'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -313,8 +314,9 @@ export function PlayerBar() {
           ) : null}
 
           <PlayerVolumeControl
-            className="hidden w-64 shrink-0 flex-col md:flex"
+            className="hidden w-[19rem] shrink-0 flex-col md:flex"
             iconClassName="h-5.5 w-5.5"
+            utilitySlot={<PlayerDeviceMenu />}
             normalizationEnabled={normalizationEnabled}
             onToggleNormalization={setNormalizationEnabled}
             volume={volume}

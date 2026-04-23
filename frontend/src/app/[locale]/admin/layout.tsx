@@ -116,7 +116,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:gap-10 md:px-5 md:py-0">
           <div className="flex items-center justify-between md:shrink-0">
             <Link href="/admin" className="text-[1.6rem] font-semibold tracking-[-0.04em] text-foreground md:py-3.5">
-              bougie.fm
+              OSTGUT
             </Link>
             <div className="md:hidden">
               <AccountMenu avatarSize={40} />

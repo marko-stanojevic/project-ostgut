@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import {
   SpeakerHighIcon,
   SpeakerXIcon,
@@ -11,6 +12,7 @@ interface PlayerVolumeControlProps {
   iconClassName?: string
   labelClassName?: string
   showPercentage?: boolean
+  utilitySlot?: ReactNode
   normalizationEnabled?: boolean
   onToggleNormalization?: (enabled: boolean) => void
   volume: number
@@ -22,6 +24,7 @@ export function PlayerVolumeControl({
   iconClassName,
   labelClassName,
   showPercentage = false,
+  utilitySlot,
   normalizationEnabled,
   onToggleNormalization,
   volume,
@@ -55,6 +58,8 @@ export function PlayerVolumeControl({
             </TooltipContent>
           </Tooltip>
         ) : null}
+
+        {utilitySlot}
 
         <Tooltip>
           <TooltipTrigger

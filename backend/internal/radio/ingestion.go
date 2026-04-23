@@ -1,5 +1,5 @@
 // Package radio handles station ingestion from Radio Browser API and applies
-// the curation layer that makes bouji.fm feel premium.
+// the curation layer that makes OSTGUT feel premium.
 package radio
 
 import (
@@ -172,7 +172,7 @@ func (s *Syncer) fetch(ctx context.Context) ([]radioBrowserStation, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("User-Agent", "bouji.fm/1.0 (radio@worksfine.app)")
+		req.Header.Set("User-Agent", "OSTGUT/1.0 (radio@worksfine.app)")
 
 		resp, err := s.client.Do(req)
 		if err != nil {

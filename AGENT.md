@@ -1,8 +1,8 @@
-# bouji.fm — Agent Instructions
+# OSTGUT — Agent Instructions
 
 ## What this product is
 
-**bouji.fm** is a premium, curated internet radio platform — "The Listening Room". It is not a radio directory. It is an editorial listening experience where users discover and enjoy high-quality live stations from around the world.
+**OSTGUT** is a premium, curated internet radio platform — "The Listening Room". It is not a radio directory. It is an editorial listening experience where users discover and enjoy high-quality live stations from around the world.
 
 The product feel targets Apple Music / Netflix quality perception applied to live radio. Every design and engineering decision should reinforce: taste, intention, and calm focus over volume and noise.
 

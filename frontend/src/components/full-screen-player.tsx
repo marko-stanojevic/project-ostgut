@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
+import { PlayerDeviceMenu } from '@/components/player-device-menu'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -137,17 +138,20 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
             {isError ? 'Recover' : isLoading ? 'Connecting' : isPlaying ? 'Live' : 'Paused'}
           </span>
         </div>
-        <Tooltip>
-          <TooltipTrigger
-            delay={300}
-            onClick={onClose}
-            aria-label="Close full screen"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
-          >
-            <ArrowsInIcon className="h-5 w-5" />
-          </TooltipTrigger>
-          <TooltipContent>Close full screen</TooltipContent>
-        </Tooltip>
+        <div className="flex items-center gap-3">
+          <PlayerDeviceMenu />
+          <Tooltip>
+            <TooltipTrigger
+              delay={300}
+              onClick={onClose}
+              aria-label="Close full screen"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
+            >
+              <ArrowsInIcon className="h-5 w-5" />
+            </TooltipTrigger>
+            <TooltipContent>Close full screen</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Main content */}

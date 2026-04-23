@@ -5,7 +5,7 @@ import { AuthenticatedHeaderActions, GuestHeaderActions } from '@/components/sit
 import { SiteFooter } from '@/components/site-footer'
 
 export const metadata = {
-  title: 'Refund Policy — bougie.fm',
+  title: 'Refund Policy — OSTGUT',
 }
 
 export default async function RefundsPage() {
@@ -28,7 +28,7 @@ export default async function RefundsPage() {
             <section>
               <h2 className="text-lg font-semibold mb-2">1. Merchant of Record</h2>
               <p>
-                All payments for bougie.fm subscriptions are processed by{' '}
+                All payments for OSTGUT subscriptions are processed by{' '}
                 <a href="https://paddle.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">Paddle</a>,
                 our Merchant of Record. Paddle handles billing, invoicing, tax compliance, and refund processing on our behalf. If you have a billing question or need a receipt, you can also contact Paddle directly at{' '}
                 <a href="https://www.paddle.com/support" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">paddle.com/support</a>.

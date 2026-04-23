@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document defines how bougie.fm should manage image assets for:
+This document defines how OSTGUT should manage image assets for:
 
 - User avatars
 - Station icons

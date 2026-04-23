@@ -12,7 +12,7 @@
   "auth": {
     "login": {
       "title": "Willkommen zurück",
-      "subtitle": "Anmelden, um zu bougie.fm zu gelangen",
+      "subtitle": "Anmelden, um zu OSTGUT zu gelangen",
       "email": "E-Mail",
       "password": "Passwort",
       "forgot_password": "Passwort vergessen?",
@@ -25,7 +25,7 @@
       "sign_up": "Registrieren"
     },
     "signup": {
-      "title": "bougie.fm beitreten",
+      "title": "OSTGUT beitreten",
       "subtitle": "Erstelle dein Konto und betritt den Hörraum.",
       "email": "E-Mail",
       "password": "Passwort",
@@ -168,7 +168,7 @@
     },
     "profile": {
       "title": "Profil",
-      "description": "Deine öffentliche Identität auf bougie.fm.",
+      "description": "Deine öffentliche Identität auf OSTGUT.",
       "avatar_label": "Avatar",
       "avatar_hint": "Quadratische Bilder funktionieren am besten. JPG, PNG oder WebP bis 5 MB.",
       "upload": "Avatar hochladen",

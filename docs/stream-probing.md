@@ -1,6 +1,6 @@
 # Stream Probing
 
-bouji.fm stores two URLs per stream variant: the **source URL** (what the admin entered, or what Radio Browser returned) and a **resolved URL** (the actual playable audio endpoint after following any indirection). Probing is the process that produces the resolved URL and fills in codec, transport, kind, and health metadata.
+OSTGUT stores two URLs per stream variant: the **source URL** (what the admin entered, or what Radio Browser returned) and a **resolved URL** (the actual playable audio endpoint after following any indirection). Probing is the process that produces the resolved URL and fills in codec, transport, kind, and health metadata.
 
 For how probe results feed the station reliability score and how metadata detection is stored separately, see [Reliability And Metadata](./reliability-and-metadata.md).
 
