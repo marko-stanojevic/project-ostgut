@@ -200,6 +200,7 @@ const STATION_SWITCH_RAMP_MS = 360
 const TARGET_LOUDNESS_LUFS = -17
 const MAX_NORMALIZATION_BOOST_DB = 6
 const MAX_NORMALIZATION_CUT_DB = -9
+const TARGET_TRUE_PEAK_DBFS = -1
 
 const PlayerContext = createContext<PlayerContextValue | null>(null)
 
@@ -224,10 +225,19 @@ function getStreamNormalizationOffsetDb(
   if (!normalizationEnabled || !stream) return 0
   if (stream.loudnessMeasurementStatus !== 'measured') return 0
   if (!Number.isFinite(stream.loudnessIntegratedLufs)) return 0
-  return Math.max(
+
+  const loudnessOffsetDb = TARGET_LOUDNESS_LUFS - (stream.loudnessIntegratedLufs ?? TARGET_LOUDNESS_LUFS)
+  let offsetDb = Math.max(
     MAX_NORMALIZATION_CUT_DB,
-    Math.min(MAX_NORMALIZATION_BOOST_DB, TARGET_LOUDNESS_LUFS - (stream.loudnessIntegratedLufs ?? TARGET_LOUDNESS_LUFS)),
+    Math.min(MAX_NORMALIZATION_BOOST_DB, loudnessOffsetDb),
   )
+
+  if (offsetDb > 0 && Number.isFinite(stream.loudnessPeakDbfs)) {
+    const peakLimitedBoostDb = TARGET_TRUE_PEAK_DBFS - (stream.loudnessPeakDbfs ?? TARGET_TRUE_PEAK_DBFS)
+    offsetDb = Math.min(offsetDb, peakLimitedBoostDb)
+  }
+
+  return Math.max(MAX_NORMALIZATION_CUT_DB, offsetDb)
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {

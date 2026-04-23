@@ -18,7 +18,9 @@ export interface StationStream {
     metadataEnabled?: boolean
     metadataType?: string
     metadataSource?: string
-    metadataClientCandidate?: boolean
+    metadataUrl?: string
+    metadataResolver?: 'server' | 'client'
+    metadataResolverCheckedAt?: string
     healthScore: number
     loudnessIntegratedLufs?: number
     loudnessPeakDbfs?: number

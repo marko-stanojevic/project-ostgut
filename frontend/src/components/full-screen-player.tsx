@@ -54,10 +54,11 @@ function getMetadataBadges(
 ): string[] {
   if (!stream?.metadataEnabled) return []
 
-  const badges = ['Metadata: Server']
+  const resolver = nowPlaying?.resolver || stream.metadataResolver
+  const badges: string[] = []
 
-  if (stream.metadataClientCandidate) {
-    badges.push('Metadata: Client Candidate')
+  if (resolver) {
+    badges.push(`Metadata: ${resolver === 'client' ? 'Client' : 'Server'}`)
   }
 
   if (stream.metadataType && stream.metadataType !== 'auto') {

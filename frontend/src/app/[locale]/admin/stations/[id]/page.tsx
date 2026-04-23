@@ -59,10 +59,14 @@ interface AdminStream {
     loudness_measured_at?: string
     loudness_measurement_status?: string
     metadata_enabled: boolean
+    metadata_type: string
     metadata_source?: string
+    metadata_url?: string
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string
+    metadata_resolver?: 'server' | 'client'
+    metadata_resolver_checked_at?: string
     health_score: number
     last_checked_at?: string
     last_error?: string
@@ -473,7 +477,7 @@ export default function StationEditorPage() {
         }
     }
 
-    const handleProbeStream = async (streamID: string, scope: 'quality' | 'metadata' | 'loudness' | 'full') => {
+    const handleProbeStream = async (streamID: string, scope: 'quality' | 'metadata' | 'resolver' | 'loudness' | 'full') => {
         if (!accessToken) return
 
         setProbingAction(`${streamID}:${scope}`)
@@ -547,6 +551,12 @@ export default function StationEditorPage() {
             loudnessSampleDurationSeconds: stream.loudness_sample_duration_seconds,
             loudnessMeasuredAt: stream.loudness_measured_at,
             loudnessMeasurementStatus: stream.loudness_measurement_status,
+            metadataEnabled: stream.metadata_enabled,
+            metadataType: stream.metadata_type,
+            metadataSource: stream.metadata_source,
+            metadataUrl: stream.metadata_url,
+            metadataResolver: stream.metadata_resolver,
+            metadataResolverCheckedAt: stream.metadata_resolver_checked_at,
             lastCheckedAt: stream.last_checked_at,
             lastError: stream.last_error,
         })),
@@ -791,6 +801,27 @@ export default function StationEditorPage() {
                                         </div>
 
                                         {streamDetails[i] && (
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2">
+                                                <div className="space-y-2">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Stream URL</p>
+                                                        <p className="break-all font-mono text-xs text-foreground/80">
+                                                            {stream.url.trim() || 'Not set'}
+                                                        </p>
+                                                    </div>
+                                                    {streamDetails[i].metadata_url && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Metadata URL</p>
+                                                            <p className="break-all font-mono text-xs text-foreground/80">
+                                                                {streamDetails[i].metadata_url}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {streamDetails[i] && (
                                             <div className="grid gap-3 xl:grid-cols-3">
                                                 <div className="flex h-full flex-col rounded-lg border p-3">
                                                     <div className="flex items-start justify-between gap-3">
@@ -876,13 +907,40 @@ export default function StationEditorPage() {
                                                 </div>
 
                                                 <div className="flex h-full flex-col rounded-lg border p-3">
-                                                    <div className="flex items-start justify-between gap-3">
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Metadata status</p>
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                {stream.metadata_enabled ? 'Enabled' : 'Disabled'}
+                                                            </Badge>
+                                                            <Switch
+                                                                checked={stream.metadata_enabled}
+                                                                onCheckedChange={(checked) => setForm((prev) => ({
+                                                                    ...prev,
+                                                                    streams: prev.streams.map((s, idx) =>
+                                                                        idx === i ? { ...s, metadata_enabled: !!checked } : s
+                                                                    ),
+                                                                }))}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3 min-w-0">
                                                         <div className="min-w-0">
-                                                            <p className="text-xs text-muted-foreground">Metadata status</p>
+                                                            <p className="text-xs text-muted-foreground">Metadata type</p>
                                                             <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                {streamDetails[i].metadata_type && (
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                        {streamDetails[i].metadata_type}
+                                                                    </Badge>
+                                                                )}
                                                                 {streamDetails[i].metadata_source && (
                                                                     <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].metadata_source}
+                                                                    </Badge>
+                                                                )}
+                                                                {streamDetails[i].metadata_resolver && (
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                        {streamDetails[i].metadata_resolver}
                                                                     </Badge>
                                                                 )}
                                                                 {streamDetails[i].metadata_error_code && (
@@ -892,21 +950,6 @@ export default function StationEditorPage() {
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <Switch
-                                                            checked={stream.metadata_enabled}
-                                                            onCheckedChange={(checked) => setForm((prev) => ({
-                                                                ...prev,
-                                                                streams: prev.streams.map((s, idx) =>
-                                                                    idx === i ? { ...s, metadata_enabled: !!checked } : s
-                                                                ),
-                                                            }))}
-                                                        />
-                                                    </div>
-                                                    <div className="mt-3 space-y-1">
-                                                        <p className="text-xs text-muted-foreground">Metadata polling</p>
-                                                        <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                            {stream.metadata_enabled ? 'Enabled' : 'Disabled'}
-                                                        </Badge>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Latest metadata check</p>
@@ -922,7 +965,22 @@ export default function StationEditorPage() {
                                                                 : 'Not checked yet'}
                                                         </p>
                                                     </div>
-                                                    <div className="mt-auto pt-4">
+                                                    <div className="mt-auto grid gap-2 pt-4">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 w-full gap-1.5 px-2.5 text-xs"
+                                                            disabled={probingAction === `${streamDetails[i].id}:resolver`}
+                                                            onClick={() => handleProbeStream(streamDetails[i].id, 'resolver')}
+                                                        >
+                                                            {probingAction === `${streamDetails[i].id}:resolver` ? (
+                                                                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
+                                                            ) : (
+                                                                <ArrowsClockwiseIcon className="h-4 w-4" weight="bold" />
+                                                            )}
+                                                            Probe resolver
+                                                        </Button>
                                                         <Button
                                                             type="button"
                                                             size="sm"

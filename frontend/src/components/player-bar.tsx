@@ -55,10 +55,11 @@ function getMetadataBadges(
 ): PlayerStatBadge[] {
   if (!stream?.metadataEnabled) return []
 
-  const badges: PlayerStatBadge[] = [{ label: 'Metadata: Server' }]
+  const resolver = nowPlaying?.resolver || stream.metadataResolver
+  const badges: PlayerStatBadge[] = []
 
-  if (stream.metadataClientCandidate) {
-    badges.push({ label: 'Metadata: Client Candidate' })
+  if (resolver) {
+    badges.push({ label: `Metadata: ${resolver === 'client' ? 'Client' : 'Server'}` })
   }
 
   if (stream.metadataType && stream.metadataType !== 'auto') {
@@ -175,14 +176,15 @@ export function PlayerBar() {
   const isLoading = state === 'loading'
   const isError = state === 'error'
 
-  const { nowPlaying, settled } = useNowPlaying(
-    station?.id,
-    currentStream?.id,
-    (isPlaying || isLoading) && !fullScreen,
-  )
   const displayStream = useMemo(
     () => resolveDisplayStream(station, currentStream),
     [station, currentStream],
+  )
+  const { nowPlaying, settled } = useNowPlaying(
+    station?.id,
+    currentStream?.id,
+    displayStream,
+    (isPlaying || isLoading) && !fullScreen,
   )
   const streamDetailBadges = getStreamDetailBadges(displayStream)
   const metadataBadges = getMetadataBadges(displayStream, nowPlaying)

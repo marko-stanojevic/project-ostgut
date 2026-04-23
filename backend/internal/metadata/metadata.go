@@ -60,8 +60,10 @@ const (
 
 // Config controls how metadata should be fetched for a station.
 type Config struct {
-	Enabled bool
-	Type    string // auto | icy | icecast | shoutcast
+	Enabled     bool
+	Type        string // auto | icy | icecast | shoutcast
+	SourceHint  string // last successful source, if known
+	MetadataURL string // exact successful metadata endpoint, if known
 }
 
 // NowPlaying holds the extracted now-playing information for a stream.
@@ -70,6 +72,7 @@ type NowPlaying struct {
 	Artist    string    `json:"artist,omitempty"`
 	Song      string    `json:"song,omitempty"`
 	Source    string    `json:"source"`    // "icy" | "icecast" | "shoutcast" | ""
+	MetadataURL string  `json:"metadata_url,omitempty"`
 	Supported bool      `json:"supported"` // false when no strategy found metadata
 	Status    string    `json:"status"`    // "ok" | "unsupported" | "disabled" | "error"
 	ErrorCode string    `json:"error_code,omitempty"`
@@ -140,7 +143,15 @@ func (f *Fetcher) runEviction() {
 // Never returns nil.
 func (f *Fetcher) Fetch(ctx context.Context, streamURL string, cfg Config) *NowPlaying {
 	metadataType := normalizeType(cfg.Type)
+	sourceHint := normalizeType(cfg.SourceHint)
+	metadataURLHint := strings.TrimSpace(cfg.MetadataURL)
 	cacheKey := streamURL + "|" + metadataType + "|" + strconv.FormatBool(cfg.Enabled)
+	if sourceHint != "" && sourceHint != TypeAuto {
+		cacheKey += "|" + sourceHint
+	}
+	if metadataURLHint != "" {
+		cacheKey += "|" + metadataURLHint
+	}
 
 	f.mu.Lock()
 	if e, ok := f.cache[cacheKey]; ok && time.Now().Before(e.exp) {
@@ -157,7 +168,7 @@ func (f *Fetcher) Fetch(ctx context.Context, streamURL string, cfg Config) *NowP
 		}
 		f.mu.Unlock()
 
-		np := f.resolve(ctx, streamURL, cfg.Enabled, metadataType)
+		np := f.resolve(ctx, streamURL, cfg.Enabled, metadataType, sourceHint, metadataURLHint)
 
 		ttl := cacheTTLSupported
 		if !np.Supported {
@@ -198,7 +209,7 @@ func normalizeType(raw string) string {
 	}
 }
 
-func (f *Fetcher) resolve(ctx context.Context, streamURL string, enabled bool, metadataType string) *NowPlaying {
+func (f *Fetcher) resolve(ctx context.Context, streamURL string, enabled bool, metadataType string, sourceHint string, metadataURLHint string) *NowPlaying {
 	if !enabled {
 		return &NowPlaying{
 			Source:    "",
@@ -215,11 +226,55 @@ func (f *Fetcher) resolve(ctx context.Context, streamURL string, enabled bool, m
 		streamURL = resolved
 	}
 
+	if hinted := strings.TrimSpace(metadataURLHint); hinted != "" {
+		if np := f.resolveHinted(ctx, streamURL, hinted, sourceHint); np != nil && np.Title != "" {
+			np.Supported = true
+			np.Status = "ok"
+			return np
+		}
+	}
+
 	if metadataType != TypeAuto {
 		return f.resolveConfigured(ctx, streamURL, metadataType)
 	}
 
 	return f.resolveAuto(ctx, streamURL)
+}
+
+func (f *Fetcher) resolveHinted(ctx context.Context, streamURL string, metadataURL string, sourceHint string) *NowPlaying {
+	switch hintedMetadataKind(metadataURL, sourceHint) {
+	case TypeIcecast:
+		iceCtx, iceCancel := context.WithTimeout(ctx, fallbackTimeout)
+		np, err := f.fetchIcecastJSONAt(iceCtx, streamURL, metadataURL)
+		iceCancel()
+		if err == nil && np != nil && np.Title != "" {
+			return np
+		}
+	case TypeShoutcast:
+		scCtx, scCancel := context.WithTimeout(ctx, fallbackTimeout)
+		np, err := f.fetchShoutcastAt(scCtx, metadataURL)
+		scCancel()
+		if err == nil && np != nil && np.Title != "" {
+			return np
+		}
+	default:
+		icyCtx, icyCancel := context.WithTimeout(ctx, icyTimeout)
+		np, err := f.fetchICY(icyCtx, metadataURL)
+		icyCancel()
+		if err == nil && np != nil && np.Title != "" {
+			return np
+		}
+
+		if isICYProtocolError(err) {
+			rawCtx, rawCancel := context.WithTimeout(ctx, icyTimeout)
+			npRaw, rawErr := f.fetchICYRaw(rawCtx, metadataURL)
+			rawCancel()
+			if rawErr == nil && npRaw != nil && npRaw.Title != "" {
+				return npRaw
+			}
+		}
+	}
+	return nil
 }
 
 func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string) *NowPlaying {
@@ -528,6 +583,7 @@ func (f *Fetcher) readICYBlock(r io.Reader, metaint int, streamURL string) (*Now
 	np := &NowPlaying{
 		Title:     title,
 		Source:    "icy",
+		MetadataURL: streamURL,
 		FetchedAt: time.Now(),
 	}
 	np.Artist, np.Song = splitArtistTitle(title)
@@ -560,6 +616,14 @@ func (f *Fetcher) fetchIcecastJSON(ctx context.Context, streamURL string) (*NowP
 	}
 
 	statusURL := (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: "/status-json.xsl"}).String()
+	return f.fetchIcecastJSONAt(ctx, streamURL, statusURL)
+}
+
+func (f *Fetcher) fetchIcecastJSONAt(ctx context.Context, streamURL string, statusURL string) (*NowPlaying, error) {
+	u, err := url.Parse(streamURL)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
 	if err != nil {
 		return nil, err
@@ -618,6 +682,7 @@ func (f *Fetcher) fetchIcecastJSON(ctx context.Context, streamURL string) (*NowP
 	np := &NowPlaying{
 		Title:     best.Title,
 		Source:    "icecast",
+		MetadataURL: statusURL,
 		FetchedAt: time.Now(),
 	}
 	np.Artist, np.Song = splitArtistTitle(best.Title)
@@ -642,6 +707,18 @@ func (f *Fetcher) fetchShoutcast(ctx context.Context, streamURL string) (*NowPla
 
 	// Shoutcast 1: /7.html returns a comma-separated line inside an HTML body.
 	return f.fetchShoutcast7HTML(ctx, base+"/7.html")
+}
+
+func (f *Fetcher) fetchShoutcastAt(ctx context.Context, endpoint string) (*NowPlaying, error) {
+	lower := strings.ToLower(strings.TrimSpace(endpoint))
+	switch {
+	case strings.HasSuffix(lower, "/currentsong"):
+		return f.fetchShoutcastCurrentSong(ctx, endpoint)
+	case strings.HasSuffix(lower, "/7.html"):
+		return f.fetchShoutcast7HTML(ctx, endpoint)
+	default:
+		return nil, fmt.Errorf("unsupported shoutcast endpoint")
+	}
 }
 
 func (f *Fetcher) fetchShoutcastCurrentSong(ctx context.Context, endpoint string) (*NowPlaying, error) {
@@ -670,7 +747,7 @@ func (f *Fetcher) fetchShoutcastCurrentSong(ctx context.Context, endpoint string
 		return nil, fmt.Errorf("empty shoutcast /currentsong body")
 	}
 
-	np := &NowPlaying{Title: title, Source: "shoutcast", FetchedAt: time.Now()}
+	np := &NowPlaying{Title: title, Source: "shoutcast", MetadataURL: endpoint, FetchedAt: time.Now()}
 	np.Artist, np.Song = splitArtistTitle(title)
 	return np, nil
 }
@@ -711,7 +788,7 @@ func (f *Fetcher) fetchShoutcast7HTML(ctx context.Context, endpoint string) (*No
 		return nil, fmt.Errorf("empty title in /7.html")
 	}
 
-	np := &NowPlaying{Title: title, Source: "shoutcast", FetchedAt: time.Now()}
+	np := &NowPlaying{Title: title, Source: "shoutcast", MetadataURL: endpoint, FetchedAt: time.Now()}
 	np.Artist, np.Song = splitArtistTitle(title)
 	return np, nil
 }
@@ -776,6 +853,23 @@ func stripHTML(s string) string {
 		"&#039;", "'",
 	).Replace(b.String())
 	return strings.TrimSpace(result)
+}
+
+func hintedMetadataKind(metadataURL string, sourceHint string) string {
+	switch normalizeType(sourceHint) {
+	case TypeICY, TypeIcecast, TypeShoutcast:
+		return normalizeType(sourceHint)
+	}
+
+	lower := strings.ToLower(strings.TrimSpace(metadataURL))
+	switch {
+	case strings.HasSuffix(lower, "/status-json.xsl"):
+		return TypeIcecast
+	case strings.HasSuffix(lower, "/currentsong"), strings.HasSuffix(lower, "/7.html"):
+		return TypeShoutcast
+	default:
+		return TypeICY
+	}
 }
 
 // isHLSURL reports whether a URL points to an HLS stream (.m3u8).

@@ -81,16 +81,17 @@ func main() {
 			MediaAssetStore:    mediaAssetStore,
 		},
 		handler.Options{
-			Log:                    logger,
-			JWTSecret:              cfg.JWTSecret,
-			PaddleWebhookSecret:    cfg.PaddleWebhookSecret,
-			PaddleClientToken:      cfg.PaddleClientToken,
-			PaddlePriceID:          cfg.PaddlePriceID,
-			MediaUploadBaseURL:     cfg.MediaUploadBaseURL,
-			MediaUploadSecret:      cfg.MediaUploadSigningSecret,
-			MediaStorageAccount:    cfg.MediaStorageAccountName,
-			MediaStorageContainer:  cfg.MediaStorageContainerName,
-			MediaStorageAccountKey: cfg.MediaStorageAccountKey,
+			Log:                         logger,
+			JWTSecret:                   cfg.JWTSecret,
+			PaddleWebhookSecret:         cfg.PaddleWebhookSecret,
+			PaddleClientToken:           cfg.PaddleClientToken,
+			PaddlePriceID:               cfg.PaddlePriceID,
+			MediaUploadBaseURL:          cfg.MediaUploadBaseURL,
+			MediaUploadSecret:           cfg.MediaUploadSigningSecret,
+			MediaStorageAccount:         cfg.MediaStorageAccountName,
+			MediaStorageContainer:       cfg.MediaStorageContainerName,
+			MediaStorageAccountKey:      cfg.MediaStorageAccountKey,
+			BrowserMetadataProbeOrigins: cfg.BrowserMetadataProbeOrigins,
 		},
 	)
 
@@ -101,7 +102,7 @@ func main() {
 	go syncer.Run(syncCtx)
 
 	// Start background stream re-probe (refreshes resolved_url, codec, health).
-	prober := radio.NewProber(stationStreamStore, logger)
+	prober := radio.NewProber(stationStreamStore, logger, cfg.BrowserMetadataProbeOrigins)
 	go prober.Run(syncCtx)
 
 	nrApp, err := newrelic.NewApplication(

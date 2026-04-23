@@ -1,6 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { emitMetadataTelemetry, metadataDebugLog } from '@/lib/metadata-observability'
+import { fetchClientNowPlaying } from '@/lib/now-playing-client'
+import type { StationStream } from '@/types/player'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -10,6 +13,7 @@ const FAST_MS = 30_000
 const SLOW_MS = 3 * 60_000
 // Switch to slow after this many consecutive fast-poll misses.
 const MAX_FAST_MISSES = 3
+const MAX_CLIENT_MISSES = 2
 // After repeated misses, keep a very low-frequency heartbeat to recover when
 // metadata becomes available later in the session.
 const MAX_SLOW_MISSES = 2
@@ -20,9 +24,11 @@ export interface NowPlaying {
   artist?: string
   song?: string
   source: string
+  metadataUrl?: string
   supported: boolean
   status: 'ok' | 'unsupported' | 'disabled' | 'error'
   error?: string
+  resolver?: 'server' | 'client'
 }
 
 /**
@@ -40,17 +46,41 @@ export interface NowPlaying {
 export function useNowPlaying(
   stationId: string | null | undefined,
   streamId: string | null | undefined,
+  stream: StationStream | null,
   active: boolean,
 ): { nowPlaying: NowPlaying | null; settled: boolean } {
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null)
   const [settled, setSettled] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const streamObjectID = stream?.id || ''
+  const streamRawURL = stream?.url || ''
+  const streamURL = stream?.resolvedUrl || stream?.url || ''
+  const streamMetadataType = stream?.metadataType || ''
+  const streamKind = stream?.kind || ''
+  const streamMetadataEnabled = Boolean(stream?.metadataEnabled)
+  const streamMetadataResolver = stream?.metadataResolver || ''
+  const streamSnapshot = useMemo(
+    () =>
+      streamObjectID && streamId
+        ? {
+            id: streamObjectID,
+            url: streamRawURL,
+            resolvedUrl: streamURL,
+            kind: streamKind,
+            metadataEnabled: streamMetadataEnabled,
+            metadataType: streamMetadataType,
+            metadataUrl: stream?.metadataUrl || '',
+            metadataResolver: streamMetadataResolver,
+          }
+        : null,
+    [streamObjectID, streamRawURL, streamURL, streamKind, streamId, streamMetadataEnabled, streamMetadataType, stream?.metadataUrl, streamMetadataResolver],
+  )
 
   // Clear track immediately on station change so stale data never shows.
   useEffect(() => {
     setNowPlaying(null)
     setSettled(false)
-  }, [stationId, streamId])
+  }, [stationId, streamId, streamURL])
 
   useEffect(() => {
     if (!stationId || !active) {
@@ -63,6 +93,8 @@ export function useNowPlaying(
     let fastMisses = 0
     let slowMisses = 0
     let slow = false
+    let clientMisses = 0
+    let degradeClientToServer = false
     let currentController: AbortController | null = null
 
     const clearTimer = () => {
@@ -81,25 +113,161 @@ export function useNowPlaying(
       const controller = new AbortController()
       currentController = controller
       try {
+        if (!streamMetadataEnabled) {
+          setNowPlaying(null)
+          setSettled(true)
+          return
+        }
+
+        const effectiveResolver = degradeClientToServer
+          ? 'server'
+          : (streamMetadataResolver || 'server')
+
+        if (effectiveResolver === 'client' && streamSnapshot) {
+          metadataDebugLog('resolver-client-attempt', {
+            stationId,
+            streamId,
+            url: streamSnapshot.resolvedUrl || streamSnapshot.url,
+            metadataType: streamSnapshot.metadataType || 'auto',
+          })
+          emitMetadataTelemetry('metadata_client_attempt', {
+            stationId,
+            streamId,
+            resolver: 'client',
+            result: 'attempt',
+            metadataType: streamSnapshot.metadataType || 'auto',
+            streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
+          })
+          const clientData = await fetchClientNowPlaying(streamSnapshot, controller.signal)
+          if (cancelled) return
+
+          if (clientData?.status === 'ok' && clientData.title) {
+            metadataDebugLog('resolver-client-win', {
+              stationId,
+              streamId,
+              source: clientData.source,
+              title: clientData.title,
+            })
+            emitMetadataTelemetry('metadata_client_success', {
+              stationId,
+              streamId,
+              resolver: 'client',
+              result: 'success',
+              source: clientData.source,
+              metadataType: streamSnapshot.metadataType || 'auto',
+              streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
+            })
+            fastMisses = 0
+            slowMisses = 0
+            slow = false
+            setNowPlaying(clientData)
+            setSettled(true)
+            schedule(FAST_MS)
+            return
+          }
+
+          clientMisses += 1
+          metadataDebugLog('resolver-client-miss', {
+            stationId,
+            streamId,
+            url: streamSnapshot.resolvedUrl || streamSnapshot.url,
+            misses: clientMisses,
+          })
+          emitMetadataTelemetry('metadata_client_miss', {
+            stationId,
+            streamId,
+            resolver: 'client',
+            result: 'miss',
+            metadataType: streamSnapshot.metadataType || 'auto',
+            streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
+          })
+          if (clientMisses < MAX_CLIENT_MISSES) {
+            setNowPlaying(null)
+            setSettled(true)
+            schedule(FAST_MS)
+            return
+          }
+
+          degradeClientToServer = true
+          metadataDebugLog('resolver-client-downgraded', {
+            stationId,
+            streamId,
+            url: streamSnapshot.resolvedUrl || streamSnapshot.url,
+            misses: clientMisses,
+          })
+          emitMetadataTelemetry('metadata_client_degraded_to_server', {
+            stationId,
+            streamId,
+            resolver: 'client',
+            result: 'fallback',
+            metadataType: streamSnapshot.metadataType || 'auto',
+            streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
+          })
+        }
+
+        if (effectiveResolver !== 'server') {
+          setNowPlaying(null)
+          setSettled(true)
+          schedule(FAST_MS)
+          return
+        }
+
         const params = new URLSearchParams()
         if (streamId) {
           params.set('stream_id', streamId)
         }
         const query = params.toString()
         const url = `${API}/stations/${stationId}/now-playing${query ? `?${query}` : ''}`
+        metadataDebugLog('resolver-server-attempt', { stationId, streamId, url })
+        emitMetadataTelemetry('metadata_server_fallback', {
+          stationId,
+          streamId,
+          resolver: 'server',
+          result: 'fallback',
+          metadataType: streamMetadataType || 'auto',
+          streamUrl: streamURL,
+        })
         const res = await fetch(url, { signal: controller.signal })
         if (cancelled) return
 
         if (!res.ok) {
           // Server error — keep current cadence and retry.
+          metadataDebugLog('resolver-server-bad-status', { stationId, streamId, status: res.status, url })
+          emitMetadataTelemetry('metadata_server_error', {
+            stationId,
+            streamId,
+            resolver: 'server',
+            result: 'miss',
+            metadataType: streamMetadataType || 'auto',
+            streamUrl: streamURL,
+            error: `http_${res.status}`,
+          })
           setNowPlaying(null)
           setSettled(true)
           schedule(slow ? SLOW_MS : FAST_MS)
           return
         }
 
-        const data: NowPlaying = await res.json()
+        const data = { ...((await res.json()) as NowPlaying), resolver: 'server' as const }
         if (cancelled) return
+        metadataDebugLog('resolver-server-result', {
+          stationId,
+          streamId,
+          status: data.status,
+          source: data.source,
+          resolver: data.resolver,
+          title: data.title,
+        })
+        emitMetadataTelemetry('metadata_server_result', {
+          stationId,
+          streamId,
+          resolver: 'server',
+          result: data.status === 'ok' && data.title ? 'success' : 'miss',
+          source: data.source,
+          metadataType: streamMetadataType || 'auto',
+          streamUrl: streamURL,
+          error: data.error,
+        })
 
         if (data.status === 'disabled') {
           // Admin explicitly disabled metadata polling for this station.
@@ -140,6 +308,20 @@ export function useNowPlaying(
         if ((err as { name?: string }).name === 'AbortError') return
         // Network error — keep current cadence.
         if (!cancelled) {
+          metadataDebugLog('resolver-server-fetch-failed', {
+            stationId,
+            streamId,
+            error: formatError(err),
+          })
+          emitMetadataTelemetry('metadata_server_error', {
+            stationId,
+            streamId,
+            resolver: 'server',
+            result: 'miss',
+            metadataType: streamMetadataType || 'auto',
+            streamUrl: streamURL,
+            error: formatError(err),
+          })
           setNowPlaying(null)
           setSettled(true)
           schedule(slow ? SLOW_MS : FAST_MS)
@@ -154,7 +336,23 @@ export function useNowPlaying(
       clearTimer()
       currentController?.abort()
     }
-  }, [stationId, streamId, active])
+  }, [
+    stationId,
+    streamId,
+    streamURL,
+    streamMetadataType,
+    streamMetadataEnabled,
+    streamMetadataResolver,
+    streamSnapshot,
+    active,
+  ])
 
   return { nowPlaying, settled }
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`
+  }
+  return String(error)
 }

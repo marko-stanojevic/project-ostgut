@@ -71,8 +71,10 @@ func (r *MetadataRefresher) RefreshAsync(stream *store.StationStream) {
 			}
 
 			np := r.fetcher.Fetch(ctx, streamURL, metadata.Config{
-				Enabled: true,
-				Type:    snapshot.MetadataType,
+				Enabled:     true,
+				Type:        snapshot.MetadataType,
+				SourceHint:  stringValue(snapshot.MetadataSource),
+				MetadataURL: stringValue(snapshot.MetadataURL),
 			})
 
 			if err := r.streams.UpdateNowPlayingSnapshot(ctx, snapshot.ID, store.NowPlayingSnapshot{
@@ -80,6 +82,7 @@ func (r *MetadataRefresher) RefreshAsync(stream *store.StationStream) {
 				Artist:                np.Artist,
 				Song:                  np.Song,
 				MetadataSource:        normalizeMetadataValue(np.Source),
+				MetadataURL:           normalizeMetadataValue(np.MetadataURL),
 				MetadataError:         normalizeMetadataValue(np.Error),
 				MetadataErrorCode:     normalizeMetadataValue(np.ErrorCode),
 				MetadataLastFetchedAt: normalizeFetchedAt(np.FetchedAt),
@@ -104,4 +107,11 @@ func normalizeFetchedAt(v time.Time) *time.Time {
 		return nil
 	}
 	return &v
+}
+
+func stringValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
 }

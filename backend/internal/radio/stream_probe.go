@@ -43,6 +43,10 @@ type StreamProbeResult struct {
 	LastCheckedAt          time.Time
 }
 
+type StreamProbeOptions struct {
+	IncludeLoudness bool
+}
+
 func LightClassifyStreamURL(rawURL string) StreamProbeResult {
 	now := time.Now().UTC()
 	u, err := url.Parse(strings.TrimSpace(rawURL))
@@ -79,6 +83,12 @@ func LightClassifyStreamURL(rawURL string) StreamProbeResult {
 }
 
 func ProbeStream(ctx context.Context, client *http.Client, rawURL string) StreamProbeResult {
+	return ProbeStreamWithOptions(ctx, client, rawURL, StreamProbeOptions{
+		IncludeLoudness: true,
+	})
+}
+
+func ProbeStreamWithOptions(ctx context.Context, client *http.Client, rawURL string, opts StreamProbeOptions) StreamProbeResult {
 	base := LightClassifyStreamURL(rawURL)
 	base.LastCheckedAt = time.Now().UTC()
 
@@ -122,7 +132,7 @@ func ProbeStream(ctx context.Context, client *http.Client, rawURL string) Stream
 		return nil
 	}
 
-	resolved, err := probeRecursive(ctx, &safeClient, strings.TrimSpace(rawURL), 0)
+	resolved, err := probeRecursive(ctx, &safeClient, strings.TrimSpace(rawURL), 0, opts)
 	if err != nil {
 		msg := err.Error()
 		base.LastError = &msg
@@ -131,7 +141,7 @@ func ProbeStream(ctx context.Context, client *http.Client, rawURL string) Stream
 	return resolved
 }
 
-func probeRecursive(ctx context.Context, client *http.Client, target string, depth int) (StreamProbeResult, error) {
+func probeRecursive(ctx context.Context, client *http.Client, target string, depth int, opts StreamProbeOptions) (StreamProbeResult, error) {
 	const maxDepth = 3
 	if depth > maxDepth {
 		return StreamProbeResult{}, fmt.Errorf("playlist resolution depth exceeded")
@@ -245,12 +255,14 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 					result.Channels = ch
 				}
 			}
-			loudness := MeasureSampleLoudness(ctx, probeBytes, result.Bitrate)
-			result.LoudnessIntegratedLUFS = loudness.IntegratedLUFS
-			result.LoudnessPeakDBFS = loudness.PeakDBFS
-			result.LoudnessSampleDuration = loudness.SampleDuration
-			result.LoudnessMeasuredAt = loudness.MeasuredAt
-			result.LoudnessStatus = loudness.Status
+			if opts.IncludeLoudness {
+				loudness := MeasureSampleLoudness(ctx, probeBytes, result.Bitrate)
+				result.LoudnessIntegratedLUFS = loudness.IntegratedLUFS
+				result.LoudnessPeakDBFS = loudness.PeakDBFS
+				result.LoudnessSampleDuration = loudness.SampleDuration
+				result.LoudnessMeasuredAt = loudness.MeasuredAt
+				result.LoudnessStatus = loudness.Status
+			}
 		}
 		return result, nil
 	}
@@ -271,7 +283,7 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 		return result, fmt.Errorf("playlist contains no playable URL")
 	}
 
-	next, err := probeRecursive(ctx, client, nested, depth+1)
+	next, err := probeRecursive(ctx, client, nested, depth+1, opts)
 	if err != nil {
 		return result, err
 	}

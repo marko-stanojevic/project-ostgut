@@ -25,16 +25,17 @@ type Dependencies struct {
 
 // Options groups runtime settings used by handlers.
 type Options struct {
-	Log                    *slog.Logger
-	JWTSecret              string
-	PaddleWebhookSecret    string
-	PaddleClientToken      string
-	PaddlePriceID          string
-	MediaUploadBaseURL     string
-	MediaUploadSecret      string
-	MediaStorageAccount    string
-	MediaStorageContainer  string
-	MediaStorageAccountKey string
+	Log                         *slog.Logger
+	JWTSecret                   string
+	PaddleWebhookSecret         string
+	PaddleClientToken           string
+	PaddlePriceID               string
+	MediaUploadBaseURL          string
+	MediaUploadSecret           string
+	MediaStorageAccount         string
+	MediaStorageContainer       string
+	MediaStorageAccountKey      string
+	BrowserMetadataProbeOrigins []string
 }
 
 type playerPreferencesStore interface {
@@ -87,12 +88,13 @@ type mediaHandlers struct {
 }
 
 type adminHandlers struct {
-	users             *store.UserStore
-	stations          *store.StationStore
-	streams           *store.StationStreamStore
-	media             *store.MediaAssetStore
-	metaFetcher       *metadata.Fetcher
-	streamProbeClient *http.Client
+	users               *store.UserStore
+	stations            *store.StationStore
+	streams             *store.StationStreamStore
+	media               *store.MediaAssetStore
+	metaFetcher         *metadata.Fetcher
+	streamProbeClient   *http.Client
+	browserProbeOrigins []string
 }
 
 // Handler holds grouped domain dependencies for HTTP handlers.
@@ -152,12 +154,13 @@ func New(deps Dependencies, opts Options) *Handler {
 			},
 		},
 		admin: adminHandlers{
-			users:             deps.UserStore,
-			stations:          deps.StationStore,
-			streams:           deps.StationStreamStore,
-			media:             deps.MediaAssetStore,
-			metaFetcher:       metaFetcher,
-			streamProbeClient: streamProbeClient,
+			users:               deps.UserStore,
+			stations:            deps.StationStore,
+			streams:             deps.StationStreamStore,
+			media:               deps.MediaAssetStore,
+			metaFetcher:         metaFetcher,
+			streamProbeClient:   streamProbeClient,
+			browserProbeOrigins: append([]string(nil), opts.BrowserMetadataProbeOrigins...),
 		},
 		log: opts.Log,
 	}
