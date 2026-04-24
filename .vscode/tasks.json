@@ -25,10 +25,10 @@
       }
     },
     {
-      "label": "Frontend: Build (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run build"],
+      "label": "Frontend: Build (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run build"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -77,10 +77,10 @@
       }
     },
     {
-      "label": "Frontend: Dev Server (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run dev -- --hostname 0.0.0.0"],
+      "label": "Frontend: Dev Server (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run dev -- --hostname 0.0.0.0"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -129,10 +129,10 @@
       }
     },
     {
-      "label": "Frontend: Lint (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; npm run lint"],
+      "label": "Frontend: Lint (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; npm run lint"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -173,10 +173,10 @@
       }
     },
     {
-      "label": "Backend: Build (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "export PATH=\"$HOME/.local/go/bin:$PATH\"; go build -o ./bin/api ./cmd/api"],
+      "label": "Backend: Build (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; go build -o ./bin/api ./cmd/api"],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -213,10 +213,10 @@
       }
     },
     {
-      "label": "Backend: Test (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "export PATH=\"$HOME/.local/go/bin:$PATH\"; set -a; source .env; set +a; go test -v -race ./..."],
+      "label": "Backend: Test (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; set -a; source \"${workspaceFolder}/backend/.env\"; set +a; go test -v -race ./..."],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -287,10 +287,10 @@
       }
     },
     {
-      "label": "Backend: Run (Local, Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "export PATH=\"$HOME/.local/go/bin:$PATH\"; pkill -x api 2>/dev/null || true; set -a; source .env; set +a; go run ./cmd/api"],
+      "label": "Backend: Run (Local, WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; pkill -x api 2>/dev/null || true; set -a; source \"${workspaceFolder}/backend/.env\"; set +a; go run ./cmd/api"],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -334,10 +334,10 @@
       }
     },
     {
-      "label": "Backend: Format Check (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "export PATH=\"$HOME/.local/go/bin:$PATH\"; go fmt ./..."],
+      "label": "Backend: Format Check (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; go fmt ./..."],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -437,10 +437,10 @@
       }
     },
     {
-      "label": "Setup: Frontend Dependencies (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; npm install"],
+      "label": "Setup: Frontend Dependencies (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; npm install"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -469,10 +469,10 @@
       }
     },
     {
-      "label": "Setup: Backend Dependencies (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "export PATH=\"$HOME/.local/go/bin:$PATH\"; go mod download"],
+      "label": "Setup: Backend Dependencies (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; go mod download"],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -494,8 +494,8 @@
       }
     },
     {
-      "label": "All: Build All (Windows)",
-      "dependsOn": ["Frontend: Build (Windows)", "Backend: Build (Windows)"],
+      "label": "All: Build All (WSL)",
+      "dependsOn": ["Frontend: Build (WSL)", "Backend: Build (WSL)"],
       "problemMatcher": [],
       "group": {
         "kind": "build",
@@ -515,8 +515,8 @@
       }
     },
     {
-      "label": "All: Dev (Frontend + Backend, Windows)",
-      "dependsOn": ["DB: Start", "Frontend: Dev Server (Windows)", "Backend: Run (Local, Windows)"],
+      "label": "All: Dev (Frontend + Backend, WSL)",
+      "dependsOn": ["DB: Start", "Frontend: Dev Server (WSL)", "Backend: Run (Local, WSL)"],
       "dependsOrder": "sequence",
       "problemMatcher": [],
       "presentation": {
@@ -566,10 +566,10 @@
       }
     },
     {
-      "label": "Backend: Debug (Windows)",
-      "type": "process",
-      "command": "wsl",
-      "args": ["bash", "-lc", "export PATH=\"$HOME/.local/go/bin:$PATH\"; pkill -x api 2>/dev/null || true; set -a; source .env; set +a; LOG_LEVEL=debug go run ./cmd/api"],
+      "label": "Backend: Debug (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; pkill -x api 2>/dev/null || true; set -a; source \"${workspaceFolder}/backend/.env\"; set +a; LOG_LEVEL=debug go run ./cmd/api"],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -605,8 +605,8 @@
       }
     },
     {
-      "label": "All: Dev (Debug, Windows)",
-      "dependsOn": ["DB: Start", "Frontend: Dev Server (Windows)", "Backend: Debug (Windows)"],
+      "label": "All: Dev (Debug, WSL)",
+      "dependsOn": ["DB: Start", "Frontend: Dev Server (WSL)", "Backend: Debug (WSL)"],
       "dependsOrder": "sequence",
       "problemMatcher": [],
       "presentation": {

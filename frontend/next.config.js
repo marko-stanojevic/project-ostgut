@@ -7,9 +7,6 @@ const output = process.env.NEXT_OUTPUT_MODE === 'standalone' ? 'standalone' : un
 const nextConfig = {
   reactStrictMode: true,
   ...(output ? { output } : {}),
-  experimental: {
-    devtoolSegmentExplorer: false,
-  },
   outputFileTracingIncludes: {
     '/**': ['./node_modules/@swc/helpers/**'],
   },

@@ -1,4 +1,0 @@
-ALTER TABLE station_streams
-  ADD COLUMN IF NOT EXISTS now_playing_title TEXT NOT NULL DEFAULT '',
-  ADD COLUMN IF NOT EXISTS now_playing_artist TEXT NOT NULL DEFAULT '',
-  ADD COLUMN IF NOT EXISTS now_playing_song TEXT NOT NULL DEFAULT '';
