@@ -8,6 +8,8 @@ coverage
 
 # Next.js
 .next
+.next-wsl
+.wsl-cache
 out
 
 # Production

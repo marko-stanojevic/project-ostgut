@@ -10,17 +10,17 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
-	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
 // Dependencies groups the stores required by HTTP handlers.
 type Dependencies struct {
-	UserStore          *store.UserStore
-	SubscriptionStore  *store.SubscriptionStore
-	StationStore       *store.StationStore
-	StationStreamStore *store.StationStreamStore
-	MediaAssetStore    *store.MediaAssetStore
+	UserStore             *store.UserStore
+	SubscriptionStore     *store.SubscriptionStore
+	StationStore          *store.StationStore
+	StationStreamStore    *store.StationStreamStore
+	StreamNowPlayingStore *store.StreamNowPlayingStore
+	MediaAssetStore       *store.MediaAssetStore
 }
 
 // Options groups runtime settings used by handlers.
@@ -67,8 +67,9 @@ type billingHandlers struct {
 type stationHandlers struct {
 	stations          *store.StationStore
 	streams           *store.StationStreamStore
+	nowPlaying        *store.StreamNowPlayingStore
 	metaFetcher       *metadata.Fetcher
-	metaRefresher     *radio.MetadataRefresher
+	metaPoller        *MetadataPoller
 	streamProbeClient *http.Client
 }
 
@@ -91,6 +92,7 @@ type adminHandlers struct {
 	users               *store.UserStore
 	stations            *store.StationStore
 	streams             *store.StationStreamStore
+	nowPlaying          *store.StreamNowPlayingStore
 	media               *store.MediaAssetStore
 	metaFetcher         *metadata.Fetcher
 	streamProbeClient   *http.Client
@@ -115,7 +117,7 @@ type Handler struct {
 func New(deps Dependencies, opts Options) *Handler {
 	streamProbeClient := &http.Client{Timeout: 8 * time.Second}
 	metaFetcher := metadata.NewFetcher(opts.Log)
-	metaRefresher := radio.NewMetadataRefresher(deps.StationStreamStore, metaFetcher, opts.Log)
+	metaPoller := NewMetadataPoller(deps.StationStreamStore, deps.StreamNowPlayingStore, metaFetcher, opts.Log)
 	return &Handler{
 		auth: authHandlers{
 			users:     deps.UserStore,
@@ -137,8 +139,9 @@ func New(deps Dependencies, opts Options) *Handler {
 		station: stationHandlers{
 			stations:          deps.StationStore,
 			streams:           deps.StationStreamStore,
+			nowPlaying:        deps.StreamNowPlayingStore,
 			metaFetcher:       metaFetcher,
-			metaRefresher:     metaRefresher,
+			metaPoller:        metaPoller,
 			streamProbeClient: streamProbeClient,
 		},
 		media: mediaHandlers{
@@ -157,6 +160,7 @@ func New(deps Dependencies, opts Options) *Handler {
 			users:               deps.UserStore,
 			stations:            deps.StationStore,
 			streams:             deps.StationStreamStore,
+			nowPlaying:          deps.StreamNowPlayingStore,
 			media:               deps.MediaAssetStore,
 			metaFetcher:         metaFetcher,
 			streamProbeClient:   streamProbeClient,
@@ -164,4 +168,10 @@ func New(deps Dependencies, opts Options) *Handler {
 		},
 		log: opts.Log,
 	}
+}
+
+// MetadataPoller returns the shared MetadataPoller instance. main.go calls
+// this to start the poller goroutine after the handler is constructed.
+func (h *Handler) MetadataPoller() *MetadataPoller {
+	return h.station.metaPoller
 }

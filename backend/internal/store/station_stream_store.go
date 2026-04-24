@@ -37,14 +37,8 @@ type StationStream struct {
 	MetadataType              string
 	MetadataSource            *string
 	MetadataURL               *string
-	MetadataError             *string
-	MetadataErrorCode         *string
-	MetadataLastFetchedAt     *time.Time
 	MetadataResolver          string
 	MetadataResolverCheckedAt *time.Time
-	NowPlayingTitle           string
-	NowPlayingArtist          string
-	NowPlayingSong            string
 	HealthScore               float64
 	LastCheckedAt             *time.Time
 	LastError                 *string
@@ -75,28 +69,11 @@ type StationStreamInput struct {
 	MetadataType              string
 	MetadataSource            *string
 	MetadataURL               *string
-	MetadataError             *string
-	MetadataErrorCode         *string
-	MetadataLastFetchedAt     *time.Time
 	MetadataResolver          string
 	MetadataResolverCheckedAt *time.Time
-	NowPlayingTitle           string
-	NowPlayingArtist          string
-	NowPlayingSong            string
 	HealthScore               float64
 	LastCheckedAt             *time.Time
 	LastError                 *string
-}
-
-type NowPlayingSnapshot struct {
-	Title                 string
-	Artist                string
-	Song                  string
-	MetadataSource        *string
-	MetadataURL           *string
-	MetadataError         *string
-	MetadataErrorCode     *string
-	MetadataLastFetchedAt *time.Time
 }
 
 type MetadataResolverSnapshot struct {
@@ -142,14 +119,8 @@ func scanStationStreamRow(row Scanner) (*StationStream, error) {
 		&s.MetadataType,
 		&s.MetadataSource,
 		&s.MetadataURL,
-		&s.MetadataError,
-		&s.MetadataErrorCode,
-		&s.MetadataLastFetchedAt,
 		&s.MetadataResolver,
 		&s.MetadataResolverCheckedAt,
-		&s.NowPlayingTitle,
-		&s.NowPlayingArtist,
-		&s.NowPlayingSong,
 		&s.HealthScore,
 		&s.LastCheckedAt,
 		&s.LastError,
@@ -246,14 +217,8 @@ func sanitizeStreamInput(in StationStreamInput, fallbackPriority int) StationStr
 		MetadataType:              metadataType,
 		MetadataSource:            metadataSource,
 		MetadataURL:               metadataURL,
-		MetadataError:             in.MetadataError,
-		MetadataErrorCode:         in.MetadataErrorCode,
-		MetadataLastFetchedAt:     in.MetadataLastFetchedAt,
 		MetadataResolver:          normalizeMetadataResolver(in.MetadataResolver),
 		MetadataResolverCheckedAt: in.MetadataResolverCheckedAt,
-		NowPlayingTitle:           strings.TrimSpace(in.NowPlayingTitle),
-		NowPlayingArtist:          strings.TrimSpace(in.NowPlayingArtist),
-		NowPlayingSong:            strings.TrimSpace(in.NowPlayingSong),
 		HealthScore:               health,
 		LastCheckedAt:             in.LastCheckedAt,
 		LastError:                 in.LastError,
@@ -308,7 +273,7 @@ func normalizeMetadataSource(v *string) *string {
 	}
 	trimmed := strings.ToLower(strings.TrimSpace(*v))
 	switch trimmed {
-	case "icy", "icecast", "shoutcast":
+	case "icy", "icecast", "shoutcast", "id3":
 		return &trimmed
 	default:
 		return nil
@@ -328,7 +293,7 @@ func normalizeMetadataURL(v *string) *string {
 
 func normalizeMetadataResolver(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "server", "client":
+	case "server", "client", "none":
 		return strings.ToLower(strings.TrimSpace(v))
 	default:
 		return ""
@@ -366,7 +331,7 @@ func (s *StationStreamStore) ListByStationID(ctx context.Context, stationID stri
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_error, metadata_error_code, metadata_last_fetched_at, metadata_resolver, metadata_resolver_checked_at, now_playing_title, now_playing_artist, now_playing_song, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE station_id = $1
@@ -398,7 +363,7 @@ func (s *StationStreamStore) ListByStationIDs(ctx context.Context, stationIDs []
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_error, metadata_error_code, metadata_last_fetched_at, metadata_resolver, metadata_resolver_checked_at, now_playing_title, now_playing_artist, now_playing_song, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE station_id = ANY($1::uuid[])
@@ -455,14 +420,14 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 				station_id, url, resolved_url, kind, container, transport,
 				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 				priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
-				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_error, metadata_error_code, metadata_last_fetched_at, metadata_resolver, metadata_resolver_checked_at, now_playing_title, now_playing_artist, now_playing_song, health_score,
+				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
 				last_checked_at, last_error, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
 				$7, $8, $9, $10, $11, $12, $13,
 				$14, $15, $16, $17, $18, $19, $20,
-				$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
-				$34, $35, NOW()
+				$21, $22, $23, $24, $25, $26, $27,
+				$28, $29, NOW()
 			)`,
 			stationID,
 			in.URL,
@@ -488,14 +453,8 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			in.MetadataType,
 			in.MetadataSource,
 			in.MetadataURL,
-			in.MetadataError,
-			in.MetadataErrorCode,
-			in.MetadataLastFetchedAt,
 			in.MetadataResolver,
 			in.MetadataResolverCheckedAt,
-			in.NowPlayingTitle,
-			in.NowPlayingArtist,
-			in.NowPlayingSong,
 			in.HealthScore,
 			in.LastCheckedAt,
 			in.LastError,
@@ -542,14 +501,14 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
-			metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_error, metadata_error_code, metadata_last_fetched_at, metadata_resolver, metadata_resolver_checked_at, now_playing_title, now_playing_artist, now_playing_song, health_score,
+			metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
 			last_checked_at, last_error, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12, $13,
 			1, true, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
-			$32, $33, NOW()
+			$19, $20, $21, $22, $23, $24, $25,
+			$26, $27, NOW()
 		)
 		ON CONFLICT (station_id, priority) DO UPDATE SET
 			url = EXCLUDED.url,
@@ -574,14 +533,8 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			metadata_type = EXCLUDED.metadata_type,
 			metadata_source = EXCLUDED.metadata_source,
 			metadata_url = EXCLUDED.metadata_url,
-			metadata_error = EXCLUDED.metadata_error,
-			metadata_error_code = EXCLUDED.metadata_error_code,
-			metadata_last_fetched_at = EXCLUDED.metadata_last_fetched_at,
 			metadata_resolver = EXCLUDED.metadata_resolver,
 			metadata_resolver_checked_at = EXCLUDED.metadata_resolver_checked_at,
-			now_playing_title = EXCLUDED.now_playing_title,
-			now_playing_artist = EXCLUDED.now_playing_artist,
-			now_playing_song = EXCLUDED.now_playing_song,
 			health_score = EXCLUDED.health_score,
 			last_checked_at = EXCLUDED.last_checked_at,
 			last_error = EXCLUDED.last_error,
@@ -608,14 +561,8 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		n.MetadataType,
 		n.MetadataSource,
 		n.MetadataURL,
-		n.MetadataError,
-		n.MetadataErrorCode,
-		n.MetadataLastFetchedAt,
 		n.MetadataResolver,
 		n.MetadataResolverCheckedAt,
-		n.NowPlayingTitle,
-		n.NowPlayingArtist,
-		n.NowPlayingSong,
 		n.HealthScore,
 		n.LastCheckedAt,
 		n.LastError,
@@ -664,7 +611,7 @@ func (s *StationStreamStore) ListAllActive(ctx context.Context) ([]*StationStrea
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_error, metadata_error_code, metadata_last_fetched_at, metadata_resolver, metadata_resolver_checked_at, now_playing_title, now_playing_artist, now_playing_song, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE is_active = true
@@ -785,69 +732,36 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 	return nil
 }
 
-// UpdateMetadataHealth stores the latest metadata fetch outcome for one stream.
-func (s *StationStreamStore) UpdateNowPlayingSnapshot(
-	ctx context.Context,
-	id string,
-	snapshot NowPlayingSnapshot,
-) error {
-	snapshot.MetadataSource = normalizeMetadataSource(snapshot.MetadataSource)
-	snapshot.MetadataURL = normalizeMetadataURL(snapshot.MetadataURL)
-	_, err := s.pool.Exec(ctx, `
-		UPDATE station_streams
-		SET
-			metadata_source = $1,
-			metadata_url = $2,
-			metadata_error = $3,
-			metadata_error_code = $4,
-			metadata_last_fetched_at = $5,
-			now_playing_title = $6,
-			now_playing_artist = $7,
-			now_playing_song = $8,
-			updated_at = NOW()
-		WHERE id = $9
-		  AND (
-			metadata_source IS DISTINCT FROM $1
-			OR metadata_url IS DISTINCT FROM $2
-			OR metadata_error IS DISTINCT FROM $3
-			OR metadata_error_code IS DISTINCT FROM $4
-			OR metadata_last_fetched_at IS DISTINCT FROM $5
-			OR now_playing_title IS DISTINCT FROM $6
-			OR now_playing_artist IS DISTINCT FROM $7
-			OR now_playing_song IS DISTINCT FROM $8
-		  )`,
-		snapshot.MetadataSource,
-		snapshot.MetadataURL,
-		snapshot.MetadataError,
-		snapshot.MetadataErrorCode,
-		snapshot.MetadataLastFetchedAt,
-		strings.TrimSpace(snapshot.Title),
-		strings.TrimSpace(snapshot.Artist),
-		strings.TrimSpace(snapshot.Song),
-		id,
-	)
-	if err != nil {
-		return fmt.Errorf("update now playing snapshot: %w", err)
-	}
-	return nil
-}
-
-// UpdateMetadataHealth stores the latest metadata fetch outcome for one stream.
-func (s *StationStreamStore) UpdateMetadataHealth(
+// UpdateMetadataDetection writes the detected metadata source + URL hint back
+// to the editorial row. Live now-playing data lives in stream_now_playing and
+// is not touched here.
+func (s *StationStreamStore) UpdateMetadataDetection(
 	ctx context.Context,
 	id string,
 	metadataSource *string,
-	metadataError *string,
-	metadataErrorCode *string,
-	metadataLastFetchedAt *time.Time,
+	metadataURL *string,
 ) error {
-	return s.UpdateNowPlayingSnapshot(ctx, id, NowPlayingSnapshot{
-		MetadataSource:        metadataSource,
-		MetadataURL:           nil,
-		MetadataError:         metadataError,
-		MetadataErrorCode:     metadataErrorCode,
-		MetadataLastFetchedAt: metadataLastFetchedAt,
-	})
+	src := normalizeMetadataSource(metadataSource)
+	url := normalizeMetadataURL(metadataURL)
+	_, err := s.pool.Exec(ctx, `
+		UPDATE station_streams
+		SET
+			metadata_source = COALESCE($1, metadata_source),
+			metadata_url    = COALESCE($2, metadata_url),
+			updated_at      = NOW()
+		WHERE id = $3
+		  AND (
+			($1::text IS NOT NULL AND metadata_source IS DISTINCT FROM $1)
+			OR ($2::text IS NOT NULL AND metadata_url IS DISTINCT FROM $2)
+		  )`,
+		src,
+		url,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("update metadata detection: %w", err)
+	}
+	return nil
 }
 
 func (s *StationStreamStore) UpdateMetadataResolver(

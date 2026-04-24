@@ -19,7 +19,7 @@ type ClientMetadataSupportResult struct {
 
 func ResolveMetadataResolver(metadataEnabled bool, clientSupported bool) string {
 	if !metadataEnabled {
-		return ""
+		return "none"
 	}
 	if clientSupported {
 		return "client"

@@ -58,7 +58,7 @@ function getMetadataBadges(
   const resolver = nowPlaying?.resolver || stream.metadataResolver
   const badges: PlayerStatBadge[] = []
 
-  if (resolver) {
+  if (resolver && resolver !== 'none') {
     badges.push({ label: `Metadata: ${resolver === 'client' ? 'Client' : 'Server'}` })
   }
 

@@ -19,7 +19,7 @@ export interface StationStream {
     metadataType?: string
     metadataSource?: string
     metadataUrl?: string
-    metadataResolver?: 'server' | 'client'
+    metadataResolver?: 'none' | 'server' | 'client'
     metadataResolverCheckedAt?: string
     healthScore: number
     loudnessIntegratedLufs?: number

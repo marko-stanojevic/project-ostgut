@@ -39,8 +39,11 @@
     ]
   },
   "include": [
-    "src",
-    ".next/types/**/*.ts"
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".wsl-cache/frontend-next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

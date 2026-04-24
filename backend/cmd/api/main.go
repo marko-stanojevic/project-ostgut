@@ -71,14 +71,16 @@ func main() {
 	subStore := store.NewSubscriptionStore(pool)
 	stationStore := store.NewStationStore(pool)
 	stationStreamStore := store.NewStationStreamStore(pool)
+	streamNowPlayingStore := store.NewStreamNowPlayingStore(pool)
 	mediaAssetStore := store.NewMediaAssetStore(pool)
 	h := handler.New(
 		handler.Dependencies{
-			UserStore:          userStore,
-			SubscriptionStore:  subStore,
-			StationStore:       stationStore,
-			StationStreamStore: stationStreamStore,
-			MediaAssetStore:    mediaAssetStore,
+			UserStore:             userStore,
+			SubscriptionStore:     subStore,
+			StationStore:          stationStore,
+			StationStreamStore:    stationStreamStore,
+			StreamNowPlayingStore: streamNowPlayingStore,
+			MediaAssetStore:       mediaAssetStore,
 		},
 		handler.Options{
 			Log:                         logger,
@@ -104,6 +106,11 @@ func main() {
 	// Start background stream re-probe (refreshes resolved_url, codec, health).
 	prober := radio.NewProber(stationStreamStore, logger, cfg.BrowserMetadataProbeOrigins)
 	go prober.Run(syncCtx)
+
+	// Start metadata server-poller worker (drives upstream fetches for streams
+	// whose resolver is `server`, with subscriber-driven scheduling).
+	metaPoller := h.MetadataPoller()
+	go metaPoller.Run(syncCtx)
 
 	nrApp, err := newrelic.NewApplication(
 		newrelic.ConfigAppName(cfg.NewRelicAppName),
@@ -149,6 +156,7 @@ func main() {
 	router.GET("/stations/filters", h.GetFilters)
 	router.GET("/stations/:id", h.GetStation)
 	router.GET("/stations/:id/now-playing", h.GetNowPlaying)
+	router.GET("/stations/:id/now-playing/stream", h.StreamNowPlaying)
 	router.GET("/search", h.SearchStations)
 
 	// Paddle webhook (public — signature-verified internally)

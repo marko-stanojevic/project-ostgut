@@ -370,11 +370,25 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			target.MetadataEnabled,
 			target.MetadataType,
 		)
+		hlsID3Supported := false
+		if target.MetadataEnabled && strings.EqualFold(resolvedKind, "hls") {
+			hlsID3Supported = radio.ProbeHLSID3Support(c.Request.Context(), h.admin.streamProbeClient, metadataURL)
+		}
 		nextResolver := radio.ResolveMetadataResolver(target.MetadataEnabled, clientMetadata.Supported)
+		if strings.EqualFold(resolvedKind, "hls") {
+			if hlsID3Supported {
+				nextResolver = "client"
+			} else {
+				nextResolver = "none"
+			}
+		}
 		if shouldPreferClientResolverForAdmin(target, resolvedKind, resolvedContainer, nextResolver) {
 			nextResolver = "client"
 		}
-		nextMetadataURL := normalizeMetadataURLValue(clientMetadata.MetadataURL)
+		nextMetadataURL := optionalString(clientMetadata.MetadataURL)
+		if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolvedKind, "hls") {
+			nextMetadataURL = optionalString(metadataURL)
+		}
 		if shouldKeepExistingClientResolver(target.MetadataEnabled, target.MetadataResolver, nextResolver) {
 			nextResolver = "client"
 			if nextMetadataURL == nil {
@@ -382,18 +396,33 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			}
 		}
 		if scope == "full" || scope == "metadata" {
-			nowPlayingSnapshot := detectNowPlayingSnapshot(
-				h.admin.metaFetcher.Fetch(c.Request.Context(), metadataURL, metadata.Config{
-					Enabled:     target.MetadataEnabled,
-					Type:        target.MetadataType,
-					SourceHint:  valueOrEmpty(target.MetadataSource),
-					MetadataURL: valueOrEmpty(target.MetadataURL),
-				}),
-			)
-			if err := h.admin.streams.UpdateNowPlayingSnapshot(context.WithoutCancel(c.Request.Context()), target.ID, nowPlayingSnapshot); err != nil {
+			np := h.admin.metaFetcher.Fetch(c.Request.Context(), metadataURL, metadata.Config{
+				Enabled:     target.MetadataEnabled,
+				Type:        target.MetadataType,
+				SourceHint:  stringValue(target.MetadataSource),
+				MetadataURL: stringValue(target.MetadataURL),
+			})
+			snap := store.StreamNowPlaying{
+				StreamID:    target.ID,
+				Title:       np.Title,
+				Artist:      np.Artist,
+				Song:        np.Song,
+				Source:      np.Source,
+				MetadataURL: optionalString(np.MetadataURL),
+				Error:       optionalString(np.Error),
+				ErrorCode:   optionalString(np.ErrorCode),
+				FetchedAt:   np.FetchedAt,
+			}
+			if err := h.admin.nowPlaying.Upsert(context.WithoutCancel(c.Request.Context()), snap); err != nil {
 				h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 				return
+			}
+			// Persist discovered source / URL hints back to the editorial row.
+			if np.Source != "" || np.MetadataURL != "" {
+				src := optionalString(np.Source)
+				url := optionalString(np.MetadataURL)
+				_ = h.admin.streams.UpdateMetadataDetection(context.WithoutCancel(c.Request.Context()), target.ID, src, url)
 			}
 		}
 		if err := h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(c.Request.Context()), target.ID, store.MetadataResolverSnapshot{
@@ -738,49 +767,6 @@ func normalizeMetadataType(raw string) string {
 	}
 }
 
-func detectNowPlayingSnapshot(np *metadata.NowPlaying) store.NowPlayingSnapshot {
-	if np == nil {
-		return store.NowPlayingSnapshot{}
-	}
-
-	snapshot := store.NowPlayingSnapshot{
-		Title:  strings.TrimSpace(np.Title),
-		Artist: strings.TrimSpace(np.Artist),
-		Song:   strings.TrimSpace(np.Song),
-	}
-	if v := strings.TrimSpace(np.Source); v != "" {
-		snapshot.MetadataSource = &v
-	}
-	if v := strings.TrimSpace(np.MetadataURL); v != "" {
-		snapshot.MetadataURL = &v
-	}
-	if v := strings.TrimSpace(np.Error); v != "" {
-		snapshot.MetadataError = &v
-	}
-	if v := strings.TrimSpace(np.ErrorCode); v != "" {
-		snapshot.MetadataErrorCode = &v
-	}
-	if !np.FetchedAt.IsZero() {
-		snapshot.MetadataLastFetchedAt = &np.FetchedAt
-	}
-	return snapshot
-}
-
-func valueOrEmpty(v *string) string {
-	if v == nil {
-		return ""
-	}
-	return strings.TrimSpace(*v)
-}
-
-func normalizeMetadataURLValue(raw string) *string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return nil
-	}
-	return &trimmed
-}
-
 func shouldKeepExistingClientResolver(metadataEnabled bool, currentResolver string, nextResolver string) bool {
 	if !metadataEnabled {
 		return false
@@ -953,14 +939,8 @@ func mergeExistingProbeData(inputs []store.StationStreamInput, existing []*store
 		in.LoudnessStatus = cur.LoudnessStatus
 		in.MetadataSource = cur.MetadataSource
 		in.MetadataURL = cur.MetadataURL
-		in.MetadataError = cur.MetadataError
-		in.MetadataErrorCode = cur.MetadataErrorCode
-		in.MetadataLastFetchedAt = cur.MetadataLastFetchedAt
 		in.MetadataResolver = cur.MetadataResolver
 		in.MetadataResolverCheckedAt = cur.MetadataResolverCheckedAt
-		in.NowPlayingTitle = cur.NowPlayingTitle
-		in.NowPlayingArtist = cur.NowPlayingArtist
-		in.NowPlayingSong = cur.NowPlayingSong
 		in.HealthScore = cur.HealthScore
 		in.LastCheckedAt = cur.LastCheckedAt
 		in.LastError = cur.LastError

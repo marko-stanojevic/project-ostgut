@@ -61,9 +61,6 @@ type streamResponse struct {
 	MetadataType              string   `json:"metadata_type"`
 	MetadataSource            *string  `json:"metadata_source,omitempty"`
 	MetadataURL               *string  `json:"metadata_url,omitempty"`
-	MetadataError             *string  `json:"metadata_error,omitempty"`
-	MetadataErrorCode         *string  `json:"metadata_error_code,omitempty"`
-	MetadataLastFetchedAt     *string  `json:"metadata_last_fetched_at,omitempty"`
 	MetadataResolver          string   `json:"metadata_resolver,omitempty"`
 	MetadataResolverCheckedAt *string  `json:"metadata_resolver_checked_at,omitempty"`
 	HealthScore               float64  `json:"health_score"`
@@ -76,11 +73,6 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 	if s.LastCheckedAt != nil {
 		formatted := s.LastCheckedAt.UTC().Format(time.RFC3339)
 		lastCheckedAt = &formatted
-	}
-	var metadataLastFetchedAt *string
-	if s.MetadataLastFetchedAt != nil {
-		formatted := s.MetadataLastFetchedAt.UTC().Format(time.RFC3339)
-		metadataLastFetchedAt = &formatted
 	}
 	var metadataResolverCheckedAt *string
 	if s.MetadataResolverCheckedAt != nil {
@@ -118,9 +110,6 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 		MetadataType:              s.MetadataType,
 		MetadataSource:            s.MetadataSource,
 		MetadataURL:               s.MetadataURL,
-		MetadataError:             s.MetadataError,
-		MetadataErrorCode:         s.MetadataErrorCode,
-		MetadataLastFetchedAt:     metadataLastFetchedAt,
 		MetadataResolver:          metadataResolverForResponse(s),
 		MetadataResolverCheckedAt: metadataResolverCheckedAt,
 		HealthScore:               s.HealthScore,
@@ -157,22 +146,23 @@ func defaultStreamResponseForStation(s *store.Station) []streamResponse {
 		MetadataType:           "auto",
 		MetadataSource:         nil,
 		MetadataURL:            nil,
-		MetadataResolver:       "",
+		MetadataResolver:       "server",
 		HealthScore:            s.ReliabilityScore,
 	}}
 }
 
 func metadataResolverForResponse(s *store.StationStream) string {
 	if s == nil || !s.MetadataEnabled {
-		return ""
+		return "none"
 	}
-	if s.MetadataResolverCheckedAt == nil {
-		return ""
-	}
-	if strings.EqualFold(strings.TrimSpace(s.MetadataResolver), "client") {
+	switch strings.ToLower(strings.TrimSpace(s.MetadataResolver)) {
+	case "client":
 		return "client"
+	case "none":
+		return "none"
+	default:
+		return "server"
 	}
-	return "server"
 }
 
 func isLosslessStream(codec, mimeType, urlValue, resolvedURL string) bool {

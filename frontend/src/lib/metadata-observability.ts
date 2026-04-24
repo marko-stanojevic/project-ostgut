@@ -5,7 +5,7 @@ const emittedEvents = new Set<string>()
 type MetadataTelemetryPayload = {
   stationId?: string | null
   streamId?: string | null
-  resolver?: 'server' | 'client'
+  resolver?: 'none' | 'server' | 'client'
   result?: 'attempt' | 'success' | 'miss' | 'skip' | 'fallback' | 'cache_hit'
   source?: string
   metadataType?: string

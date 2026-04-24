@@ -19,6 +19,7 @@ import {
   normalizeNormalizationEnabled,
   readPersistedPlayerState,
 } from '@/types/player'
+import { emitHlsID3NowPlaying } from '@/lib/hls-id3'
 import { usePlayerStorage } from '@/hooks/usePlayerStorage'
 import { usePlayerSync } from '@/hooks/usePlayerSync'
 import { toStation } from '@/lib/station'
@@ -794,6 +795,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         hlsRef.current = hls
         hls.loadSource(url)
         hls.attachMedia(audio)
+        hls.on(Hls.Events.FRAG_PARSING_METADATA, (_event, data) => {
+          emitHlsID3NowPlaying(url, data.samples ?? [])
+        })
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           audio.play().catch(() => {
             setState('error')

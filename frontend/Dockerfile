@@ -13,6 +13,7 @@ FROM node:20-alpine3.22 AS builder
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_OUTPUT_MODE=standalone
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./

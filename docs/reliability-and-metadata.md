@@ -75,13 +75,13 @@ Radio Browser ingestion still seeds station rows with an initial `reliability_sc
 
 ## Metadata
 
-### Goal
+### Metadata Goal
 
 The metadata system tries to answer: what is playing right now on this stream?
 
 It does **not** determine whether a station is playable. Metadata is a UX enhancement, not a playback prerequisite.
 
-### Data model
+### Metadata Data Model
 
 Per stream variant, we store:
 
@@ -91,24 +91,27 @@ Per stream variant, we store:
 - `metadata_url`
 - `metadata_resolver`
 - `metadata_resolver_checked_at`
-- `metadata_error`
-- `metadata_error_code`
-- `metadata_last_fetched_at`
-- `now_playing_title`
-- `now_playing_artist`
-- `now_playing_song`
+
+Separately, the live snapshot is stored in `stream_now_playing`:
+
+- `title`
+- `artist`
+- `song`
+- `source`
+- `metadata_url`
+- `error`
+- `error_code`
+- `fetched_at`
 
 Meaning:
 
 - `metadata_enabled`: editorial on/off switch
 - `metadata_type`: configured strategy, currently always `auto`
-- `metadata_source`: the strategy that actually succeeded, such as `icy`, `icecast`, or `shoutcast`
+- `metadata_source`: the strategy that actually succeeded, such as `icy`, `icecast`, `shoutcast`, or `id3`
 - `metadata_url`: the exact metadata endpoint that last succeeded, such as the stream URL itself, `/status-json.xsl`, `/currentsong`, or `/7.html`
-- `metadata_resolver`: persisted routing decision, `client` or `server`
+- `metadata_resolver`: persisted routing decision, `client`, `server`, or `none`
 - `metadata_resolver_checked_at`: when the resolver was last verified
-- `metadata_error` / `metadata_error_code`: last known failure state
-- `metadata_last_fetched_at`: timestamp of the last metadata attempt recorded on the stream row
-- `now_playing_*`: the latest cached snapshot served by `GET /stations/:id/now-playing`
+- `stream_now_playing.*`: the latest cached snapshot served by `GET /stations/:id/now-playing` and by SSE fan-out
 
 ### Detection strategies
 
@@ -128,25 +131,26 @@ The frontend metadata resolver is separate. For streams whose stored resolver is
 - Icecast `status-json.xsl`
 - Shoutcast `/currentsong`
 - Shoutcast `/7.html`
+- HLS in-segment ID3 via `hls.js` metadata events
 
-If browser resolution succeeds, the player shows `Metadata: Client`. If not, the hook can temporarily downgrade to server behavior in-session after repeated misses. The persisted resolver remains owned by backend probes.
+If browser resolution succeeds, the player shows `Metadata: Client`. The persisted resolver remains owned by backend probes.
 
 ### Resolver model
 
 OSTGUT stores one authoritative metadata routing decision per stream:
 
 - `client`: the browser should attempt metadata resolution
-- `server`: the browser should skip client metadata resolution and use backend polling
-- empty string: resolver not checked yet
+- `server`: the browser should subscribe to backend SSE fan-out
+- `none`: the stream has no supported metadata path and the client should not poll
 
 Resolver checks run in two places:
 
 - the 12-hour background prober
 - the manual `Probe resolver`, `Probe metadata`, and `Probe full` actions in admin
 
-The backend decides `client` vs `server` by testing realistic browser constraints such as CORS and readable metadata endpoints, using configured app origins.
+The backend decides routing by testing realistic browser constraints such as CORS and readable metadata endpoints, using configured app origins. For HLS streams, the prober also checks whether early media segments expose ID3 tags; HLS streams with detectable ID3 resolve to `client`, while HLS streams without ID3 resolve to `none`.
 
-When a metadata probe or fetch succeeds, OSTGUT also persists the exact winning metadata URL. Both the backend refresher and the frontend client resolver try that stored endpoint first on later polls before falling back to broader discovery.
+When a metadata probe or fetch succeeds, OSTGUT also persists the exact winning metadata URL. Both the backend poller and the frontend client resolver try that stored endpoint first on later polls before falling back to broader discovery.
 
 ### Manual probe behavior
 
@@ -164,25 +168,28 @@ This keeps admin saves fast and predictable while still giving editors precise o
 
 ### Runtime now-playing behavior
 
-`GET /stations/:id/now-playing` is now a cache-backed read endpoint.
+`GET /stations/:id/now-playing` is now a cache-backed read endpoint, and `GET /stations/:id/now-playing/stream` provides SSE fan-out for server-resolved streams.
 
 It no longer performs live upstream metadata discovery inside the request path. Instead, it:
 
 - returns the latest stored now-playing snapshot immediately
-- serves `disabled`, `unsupported`, or `error` states from persisted stream fields
-- schedules an async refresh when the cached snapshot is stale
+- serves `disabled`, `unsupported`, or `error` states from the cached snapshot plus resolver metadata
+- triggers a one-shot async refresh only for stale `server` snapshots when no SSE poll loop is already active
+- uses a shared per-stream background poller for `server` streams, so one upstream fetch fan-outs to all listeners
 
 This removes slow metadata discovery from the playback-critical request path.
 
 Primary implementation lives in:
 
 - `backend/internal/metadata/metadata.go`
-- `backend/internal/handler/nowplaying.go`
-- `backend/internal/radio/metadata_refresher.go`
+- `backend/internal/handler/nowplaying_new.go`
+- `backend/internal/handler/metadata_poller.go`
 - `backend/internal/handler/admin.go`
+- `backend/internal/radio/hls_metadata_probe.go`
 - `backend/internal/radio/client_metadata_support.go`
 - `backend/internal/radio/prober.go`
 - `backend/internal/store/station_stream_store.go`
+- `backend/internal/store/stream_now_playing_store.go`
 
 ### Important separation from reliability
 
@@ -199,7 +206,7 @@ This separation is intentional because playback continuity matters more than now
 
 ## Loudness + Signal Normalization
 
-### Goal
+### Normalization Goal
 
 Signal normalization reduces loudness jumps between stations without changing the station stream itself.
 
@@ -209,7 +216,7 @@ It is a playback-layer adjustment:
 - the backend stores measured loudness data per stream variant
 - the frontend applies a temporary gain offset during playback when leveling is enabled
 
-### Data model
+### Normalization Data Model
 
 Per stream variant, loudness probe data is stored in `station_streams`:
 

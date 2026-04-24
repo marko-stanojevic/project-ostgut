@@ -123,14 +123,30 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 				stream.MetadataType,
 			)
 			resolverCancel()
+			hlsID3Supported := false
+			if stream.MetadataEnabled && strings.EqualFold(resolverKind, "hls") {
+				hlsProbeCtx, hlsCancel := context.WithTimeout(ctx, resolverProbeTimeout)
+				hlsID3Supported = ProbeHLSID3Support(hlsProbeCtx, p.client, resolverURL)
+				hlsCancel()
+			}
 			if !clientMetadata.CheckedAt.IsZero() {
 				resolverCheckedAt = clientMetadata.CheckedAt
 			}
 			nextResolver := ResolveMetadataResolver(stream.MetadataEnabled, clientMetadata.Supported)
+			if strings.EqualFold(resolverKind, "hls") {
+				if hlsID3Supported {
+					nextResolver = "client"
+				} else {
+					nextResolver = "none"
+				}
+			}
 			if shouldPreferClientResolver(stream, resolverKind, resolverContainer, nextResolver) {
 				nextResolver = "client"
 			}
 			nextMetadataURL := normalizeMetadataValue(clientMetadata.MetadataURL)
+			if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolverKind, "hls") {
+				nextMetadataURL = normalizeMetadataValue(resolverURL)
+			}
 			if shouldKeepExistingClientResolver(stream, nextResolver) {
 				nextResolver = "client"
 				if nextMetadataURL == nil {
@@ -209,4 +225,12 @@ func shouldPreferClientResolver(
 		return false
 	}
 	return stream.MetadataSource != nil && strings.EqualFold(strings.TrimSpace(*stream.MetadataSource), "icy")
+}
+
+func normalizeMetadataValue(raw string) *string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
