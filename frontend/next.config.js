@@ -2,13 +2,11 @@ const createNextIntlPlugin = require('next-intl/plugin')
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 const output = process.env.NEXT_OUTPUT_MODE === 'standalone' ? 'standalone' : undefined
-const distDir = process.env.NEXT_DIST_DIR || undefined
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   ...(output ? { output } : {}),
-  ...(distDir ? { distDir } : {}),
   experimental: {
     devtoolSegmentExplorer: false,
   },

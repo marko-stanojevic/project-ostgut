@@ -42,8 +42,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "next-env.d.ts",
-    ".wsl-cache/frontend-next/types/**/*.ts"
+    "next-env.d.ts"
   ],
   "exclude": [
     "node_modules"

@@ -57,13 +57,13 @@ If the new task labels do not appear immediately, reload the VS Code window once
 Frontend:
 
 ```powershell
-wsl bash -lc 'source "$HOME/.nvm/nvm.sh"; nvm use 20 >/dev/null; cd /mnt/c/git/project-ostgut/frontend; mkdir -p /tmp/project-ostgut /tmp/project-ostgut/cache; rm -rf .wsl-cache; ln -s /tmp/project-ostgut/cache .wsl-cache; NEXT_DIST_DIR=.wsl-cache/frontend-next npm run dev -- --hostname 0.0.0.0'
+wsl bash -lc 'source "$HOME/.nvm/nvm.sh"; nvm use 20 >/dev/null; cd /mnt/c/git/project-ostgut/frontend; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run dev -- --hostname 0.0.0.0'
 ```
 
 Frontend production build:
 
 ```powershell
-wsl bash -lc 'source "$HOME/.nvm/nvm.sh"; nvm use 20 >/dev/null; cd /mnt/c/git/project-ostgut/frontend; mkdir -p /tmp/project-ostgut /tmp/project-ostgut/cache; rm -rf .wsl-cache; ln -s /tmp/project-ostgut/cache .wsl-cache; NEXT_DIST_DIR=.wsl-cache/frontend-next npm run build'
+wsl bash -lc 'source "$HOME/.nvm/nvm.sh"; nvm use 20 >/dev/null; cd /mnt/c/git/project-ostgut/frontend; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run build'
 ```
 
 Backend:
@@ -109,18 +109,18 @@ Then start `Backend: Run (Local, Windows)` again.
 Start it with explicit host binding:
 
 ```powershell
-wsl bash -lc 'source "$HOME/.nvm/nvm.sh"; nvm use 20 >/dev/null; cd /mnt/c/git/project-ostgut/frontend; mkdir -p /tmp/project-ostgut /tmp/project-ostgut/cache; rm -rf .wsl-cache; ln -s /tmp/project-ostgut/cache .wsl-cache; NEXT_DIST_DIR=.wsl-cache/frontend-next npm run dev -- --hostname 0.0.0.0'
+wsl bash -lc 'source "$HOME/.nvm/nvm.sh"; nvm use 20 >/dev/null; cd /mnt/c/git/project-ostgut/frontend; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run dev -- --hostname 0.0.0.0'
 ```
 
 ### Frontend shows missing chunks or manifest files on Windows
 
-If you see errors such as missing `.next` chunks, `routes-manifest.json`, or `prerender-manifest.json`, keep the Next.js build artifacts on the WSL filesystem instead of `/mnt/c`:
+If you see errors such as missing `.next` chunks, `routes-manifest.json`, or `prerender-manifest.json`, first stop any running Next.js dev/build processes and clear stale artifacts:
 
 ```powershell
-wsl bash -lc 'cd /mnt/c/git/project-ostgut/frontend; mkdir -p /tmp/project-ostgut /tmp/project-ostgut/cache; rm -rf .wsl-cache; ln -s /tmp/project-ostgut/cache .wsl-cache; ls -ld .wsl-cache'
+wsl bash -lc 'cd /mnt/c/git/project-ostgut/frontend; rm -rf .next .wsl-cache /tmp/project-ostgut/cache/frontend-next tsconfig.tsbuildinfo'
 ```
 
-Then start the frontend with `NEXT_DIST_DIR=.wsl-cache/frontend-next` as shown above.
+Do not point Next.js `distDir` at a symlink into `/tmp`. Generated server files resolve `node_modules` relative to their physical path, and an external dist directory can produce runtime errors such as missing `react/jsx-runtime` or `next/dist/compiled/next-server/app-page.runtime.dev.js`. If `.next` remains unreliable on `/mnt/c`, move the whole checkout into the WSL filesystem and run the frontend there.
 
 ### Docker image pulls fail
 

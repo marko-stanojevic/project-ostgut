@@ -28,7 +28,7 @@
       "label": "Frontend: Build (Windows)",
       "type": "process",
       "command": "wsl",
-      "args": ["bash", "-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; mkdir -p /tmp/project-ostgut /tmp/project-ostgut/cache; rm -rf .wsl-cache; ln -s /tmp/project-ostgut/cache .wsl-cache; NEXT_DIST_DIR=.wsl-cache/frontend-next npm run build"],
+      "args": ["bash", "-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run build"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -80,7 +80,7 @@
       "label": "Frontend: Dev Server (Windows)",
       "type": "process",
       "command": "wsl",
-      "args": ["bash", "-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; mkdir -p /tmp/project-ostgut /tmp/project-ostgut/cache; rm -rf .wsl-cache; ln -s /tmp/project-ostgut/cache .wsl-cache; NEXT_DIST_DIR=.wsl-cache/frontend-next npm run dev -- --hostname 0.0.0.0"],
+      "args": ["bash", "-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run dev -- --hostname 0.0.0.0"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
