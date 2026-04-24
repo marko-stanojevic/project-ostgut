@@ -329,7 +329,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			update.LoudnessStatus = probe.LoudnessStatus
 		}
 
-		if err := h.admin.streams.UpdateProbeResult(c.Request.Context(), target.ID, update); err != nil {
+		if err := h.admin.streams.UpdateProbeResult(context.WithoutCancel(c.Request.Context()), target.ID, update); err != nil {
 			h.log.Error("admin probe stream update probe", "stream_id", target.ID, "scope", scope, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
@@ -390,13 +390,13 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 					MetadataURL: valueOrEmpty(target.MetadataURL),
 				}),
 			)
-			if err := h.admin.streams.UpdateNowPlayingSnapshot(c.Request.Context(), target.ID, nowPlayingSnapshot); err != nil {
+			if err := h.admin.streams.UpdateNowPlayingSnapshot(context.WithoutCancel(c.Request.Context()), target.ID, nowPlayingSnapshot); err != nil {
 				h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 				return
 			}
 		}
-		if err := h.admin.streams.UpdateMetadataResolver(c.Request.Context(), target.ID, store.MetadataResolverSnapshot{
+		if err := h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(c.Request.Context()), target.ID, store.MetadataResolverSnapshot{
 			Resolver:    nextResolver,
 			MetadataURL: nextMetadataURL,
 			CheckedAt:   &clientMetadata.CheckedAt,
@@ -653,6 +653,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return
 		}
+		mergeExistingProbeData(inputs, currentStreams)
 		rebuiltStreams = inputs
 	} else if req.StreamURL != nil {
 		classified := radio.LightClassifyStreamURL(u.StreamURL)
@@ -665,7 +666,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			metadataEnabled = stream.MetadataEnabled
 			break
 		}
-		primaryInput = &store.StationStreamInput{
+		in := store.StationStreamInput{
 			URL:                  u.StreamURL,
 			ResolvedURL:          classified.ResolvedURL,
 			Kind:                 classified.Kind,
@@ -683,6 +684,8 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			MetadataEnabled:      metadataEnabled,
 			MetadataType:         metadata.TypeAuto,
 		}
+		mergeExistingProbeData([]store.StationStreamInput{in}, currentStreams)
+		primaryInput = &in
 	}
 
 	if len(rebuiltStreams) > 0 {
@@ -915,6 +918,56 @@ func (h *Handler) buildStationStreams(
 		})
 	}
 	return inputs, nil
+}
+
+// mergeExistingProbeData copies probe-measured fields from existing DB streams
+// into freshly-built inputs for any stream whose URL matches, so that a save
+// does not erase loudness, codec, metadata resolver, health score, etc.
+// Editorial fields (priority, active, metadata enabled/type, bitrate) are kept
+// from the new input.
+func mergeExistingProbeData(inputs []store.StationStreamInput, existing []*store.StationStream) {
+	byURL := make(map[string]*store.StationStream, len(existing))
+	for _, s := range existing {
+		byURL[strings.ToLower(strings.TrimSpace(s.URL))] = s
+	}
+	for i := range inputs {
+		cur, ok := byURL[strings.ToLower(strings.TrimSpace(inputs[i].URL))]
+		if !ok {
+			continue
+		}
+		in := &inputs[i]
+		in.ResolvedURL = cur.ResolvedURL
+		in.Kind = cur.Kind
+		in.Container = cur.Container
+		in.Transport = cur.Transport
+		in.MimeType = cur.MimeType
+		in.Codec = cur.Codec
+		in.BitDepth = cur.BitDepth
+		in.SampleRateHz = cur.SampleRateHz
+		in.SampleRateConfidence = cur.SampleRateConfidence
+		in.Channels = cur.Channels
+		in.LoudnessIntegratedLUFS = cur.LoudnessIntegratedLUFS
+		in.LoudnessPeakDBFS = cur.LoudnessPeakDBFS
+		in.LoudnessSampleDuration = cur.LoudnessSampleDuration
+		in.LoudnessMeasuredAt = cur.LoudnessMeasuredAt
+		in.LoudnessStatus = cur.LoudnessStatus
+		in.MetadataSource = cur.MetadataSource
+		in.MetadataURL = cur.MetadataURL
+		in.MetadataError = cur.MetadataError
+		in.MetadataErrorCode = cur.MetadataErrorCode
+		in.MetadataLastFetchedAt = cur.MetadataLastFetchedAt
+		in.MetadataResolver = cur.MetadataResolver
+		in.MetadataResolverCheckedAt = cur.MetadataResolverCheckedAt
+		in.NowPlayingTitle = cur.NowPlayingTitle
+		in.NowPlayingArtist = cur.NowPlayingArtist
+		in.NowPlayingSong = cur.NowPlayingSong
+		in.HealthScore = cur.HealthScore
+		in.LastCheckedAt = cur.LastCheckedAt
+		in.LastError = cur.LastError
+		if cur.Bitrate > 0 && in.Bitrate == 0 {
+			in.Bitrate = cur.Bitrate
+		}
+	}
 }
 
 func resolveStreamBitrate(override *int, rawURL string, probe radio.StreamProbeResult) int {

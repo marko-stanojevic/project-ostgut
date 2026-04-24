@@ -91,13 +91,15 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 			INSERT INTO station_streams (
 				station_id, url, resolved_url, kind, container, transport,
 				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-				priority, is_active, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_error, metadata_error_code, metadata_last_fetched_at, metadata_resolver, metadata_resolver_checked_at, now_playing_title, now_playing_artist, now_playing_song, health_score,
+				priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
+				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_error, metadata_error_code, metadata_last_fetched_at, metadata_resolver, metadata_resolver_checked_at, now_playing_title, now_playing_artist, now_playing_song, health_score,
 				last_checked_at, last_error, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
 				$7, $8, $9, $10, $11, $12, $13,
-				$14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
-				$29, $30, NOW()
+				$14, $15, $16, $17, $18, $19, $20,
+				$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
+				$34, $35, NOW()
 			)`,
 			id,
 			in.URL,
@@ -114,6 +116,11 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 			in.Channels,
 			in.Priority,
 			in.IsActive,
+			in.LoudnessIntegratedLUFS,
+			in.LoudnessPeakDBFS,
+			in.LoudnessSampleDuration,
+			in.LoudnessMeasuredAt,
+			in.LoudnessStatus,
 			in.MetadataEnabled,
 			in.MetadataType,
 			in.MetadataSource,
