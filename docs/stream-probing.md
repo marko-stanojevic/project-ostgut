@@ -10,10 +10,10 @@ For how probe results feed the station reliability score and how metadata detect
 
 Every row in `station_streams` has two URL columns:
 
-| column | meaning |
-|--------|---------|
-| `url` | The URL as originally entered — a direct stream, `.pls`, `.m3u`, or `.m3u8`. Never overwritten after the first write. |
-| `resolved_url` | The final playable endpoint after following playlist indirection and HTTP redirects. Updated on every probe. |
+| column         | meaning                                                                                                               |
+|----------------|-----------------------------------------------------------------------------------------------------------------------|
+| `url`          | The URL as originally entered — a direct stream, `.pls`, `.m3u`, or `.m3u8`. Never overwritten after the first write. |
+| `resolved_url` | The final playable endpoint after following playlist indirection and HTTP redirects. Updated on every probe.          |
 
 For a direct audio URL, both columns are the same URL (after redirect following).
 
@@ -53,6 +53,7 @@ The admin station detail page owns the explicit operational probes:
   - refreshes the stored resolver
   - refreshes cached now-playing snapshot in `stream_now_playing`
   - persists detected backend `metadata_source` and `metadata_url` hints back to `station_streams`
+  - updates `metadata_delayed` if the stream needed the extended ICY timeout budget to return metadata
 - `Probe loudness`
   - runs loudness sampling only
   - updates loudness fields without touching resolver or now-playing snapshot

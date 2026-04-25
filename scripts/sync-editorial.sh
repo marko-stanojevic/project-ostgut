@@ -27,7 +27,10 @@
 #   plus all station_streams belonging to those stations.
 #   Manual stations missing from target are inserted. Existing rows update only
 #   when source timestamp is newer than target's. Streams are upserted by
-#   (station_id, priority); operational state (health, errors) is not synced.
+#   (station_id, priority). Synced stream fields include audio format, metadata
+#   routing config (resolver, source, url, delayed flag) and editorial flags.
+#   Operational state (health_score, last_checked_at, last_error, loudness_*,
+#   metadata_resolver_checked_at) is not synced.
 #
 # Dry run (direct and import modes):
 #   DRY_RUN=true ./sync-editorial.sh ...
@@ -132,9 +135,9 @@ SQL
   # ── Streams ─────────────────────────────────────────────────────────────────
   # Sync streams for all editorial stations. Uses a subquery on external_id to
   # resolve station_id on the target, so stations must be inserted first.
-  # Operational state (health_score, last_checked_at, last_error,
-  # metadata_error, metadata_error_code, metadata_last_fetched_at) is excluded
-  # — those are managed by the health checker, not editorial decisions.
+  # Operational state (health_score, last_checked_at, last_error, loudness_*,
+  # metadata_resolver_checked_at) is excluded — managed by the health checker
+  # and background probers, not editorial decisions.
   psql "$src_url" -t -A -q <<'SQL' >> "$out_file"
 SELECT format(
   $f$INSERT INTO station_streams (
@@ -142,7 +145,8 @@ SELECT format(
   url, resolved_url, kind, container, transport,
   mime_type, codec, bitrate, priority, is_active,
   bit_depth, sample_rate_hz, channels, sample_rate_confidence,
-  metadata_enabled, metadata_type,
+  metadata_enabled, metadata_type, metadata_source, metadata_url,
+  metadata_resolver, metadata_delayed,
   created_at, updated_at
 )
 SELECT
@@ -150,7 +154,8 @@ SELECT
   %L, %L, %L, %L, %L,
   %L, %L, %L::int, %L::int, %L::bool,
   %L::int, %L::int, %L::int, %L,
-  %L::bool, %L,
+  %L::bool, %L, %L, %L,
+  %L, %L::bool,
   NOW(), NOW()
 FROM stations s WHERE s.external_id = %L
 ON CONFLICT (station_id, priority) DO UPDATE SET
@@ -169,12 +174,17 @@ ON CONFLICT (station_id, priority) DO UPDATE SET
   sample_rate_confidence = EXCLUDED.sample_rate_confidence,
   metadata_enabled       = EXCLUDED.metadata_enabled,
   metadata_type          = EXCLUDED.metadata_type,
+  metadata_source        = EXCLUDED.metadata_source,
+  metadata_url           = EXCLUDED.metadata_url,
+  metadata_resolver      = EXCLUDED.metadata_resolver,
+  metadata_delayed       = EXCLUDED.metadata_delayed,
   updated_at             = NOW();
 $f$,
   ss.url, ss.resolved_url, ss.kind, ss.container, ss.transport,
   ss.mime_type, ss.codec, ss.bitrate, ss.priority, ss.is_active,
   ss.bit_depth, ss.sample_rate_hz, ss.channels, ss.sample_rate_confidence,
-  ss.metadata_enabled, ss.metadata_type,
+  ss.metadata_enabled, ss.metadata_type, ss.metadata_source, ss.metadata_url,
+  ss.metadata_resolver, ss.metadata_delayed,
   st.external_id
 )
 FROM station_streams ss
@@ -210,7 +220,11 @@ check_schema() {
       ('station_streams', 'channels'),
       ('station_streams', 'sample_rate_confidence'),
       ('station_streams', 'metadata_enabled'),
-      ('station_streams', 'metadata_type')
+      ('station_streams', 'metadata_type'),
+      ('station_streams', 'metadata_source'),
+      ('station_streams', 'metadata_url'),
+      ('station_streams', 'metadata_resolver'),
+      ('station_streams', 'metadata_delayed')
     ) AS required(tbl, col)
     WHERE NOT EXISTS (
       SELECT 1 FROM information_schema.columns c

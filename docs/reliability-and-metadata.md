@@ -91,6 +91,7 @@ Per stream variant, we store:
 - `metadata_url`
 - `metadata_resolver`
 - `metadata_resolver_checked_at`
+- `metadata_delayed`
 
 Separately, the live snapshot is stored in `stream_now_playing`:
 
@@ -102,6 +103,7 @@ Separately, the live snapshot is stored in `stream_now_playing`:
 - `error`
 - `error_code`
 - `fetched_at`
+- `updated_at`
 
 Meaning:
 
@@ -111,6 +113,7 @@ Meaning:
 - `metadata_url`: durable hint for the exact endpoint that most recently succeeded, such as the stream URL itself, `/status-json.xsl`, `/currentsong`, or `/7.html`
 - `metadata_resolver`: persisted routing decision, `client`, `server`, or `none`
 - `metadata_resolver_checked_at`: when the resolver was last verified
+- `metadata_delayed`: durable flag set when a stream is known to need the extended ICY timeout budget (20 s vs 6 s). Future fetches skip the fast-path attempt and go straight to the slow budget, reducing redundant failures on streams with long metadata preambles or ad breaks
 - `stream_now_playing.*`: the high-churn live snapshot served by `GET /stations/:id/now-playing` and by SSE fan-out
 
 The important split after the refactor is:
