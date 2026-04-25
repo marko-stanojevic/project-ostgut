@@ -234,8 +234,10 @@ func curate(raw []radioBrowserStation) []*store.Station {
 		// Parse tags
 		tags := parseTags(r.Tags)
 
-		// Derive genres from tags; Upsert merges them into tags on write
-		genres := matchGenres(tags)
+		// Derive high-level genre tags from raw source tags; the remaining
+		// source tags are preserved as subgenre tags and the store derives
+		// search_tags from the full taxonomy.
+		genreTags := matchGenres(tags)
 
 		// Reliability score: normalised votes weighted 70%, clicks 30%
 		// Both capped at 10 000 to avoid outlier domination.
@@ -249,11 +251,11 @@ func curate(raw []radioBrowserStation) []*store.Station {
 			StreamURL:        r.URL,
 			Homepage:         r.Homepage,
 			Logo:             r.Favicon,
-			Genres:           genres,
+			GenreTags:        genreTags,
+			SubgenreTags:     tags,
 			Language:         primaryLanguage(r.Language, r.LanguageCodes),
 			Country:          r.Country,
 			City:             strings.TrimSpace(r.State),
-			Tags:             tags,
 			Votes:            r.Votes,
 			ClickCount:       r.ClickCount,
 			ReliabilityScore: reliability,

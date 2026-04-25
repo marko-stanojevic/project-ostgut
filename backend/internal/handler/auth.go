@@ -3,14 +3,58 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/authtoken"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
-// Login validates credentials and returns user info.
-// Called by the Auth.js CredentialsProvider authorize function.
+// authResponse is the shared shape of /auth/login, /auth/register, /auth/oauth
+// and /auth/refresh responses. It contains everything a client needs to call
+// the API and to schedule its next refresh.
+type authResponse struct {
+	AccessToken           string    `json:"accessToken"`
+	AccessTokenExpiresAt  time.Time `json:"accessTokenExpiresAt"`
+	RefreshToken          string    `json:"refreshToken"`
+	RefreshTokenExpiresAt time.Time `json:"refreshTokenExpiresAt"`
+	User                  userInfo  `json:"user"`
+}
+
+type userInfo struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	Role  string `json:"role"`
+}
+
+func (h *Handler) issueAccessToken(u *store.User) (token string, expiresAt time.Time, err error) {
+	expiresAt = time.Now().Add(authtoken.DefaultTTL)
+	token, err = authtoken.Issue(h.auth.jwtSecret, u.ID, u.Email, u.Role, authtoken.DefaultTTL)
+	return token, expiresAt, err
+}
+
+// issueAuthResponse mints a new access + refresh token pair for u and returns
+// the response payload. Callers handle JSON encoding and status codes.
+func (h *Handler) issueAuthResponse(c *gin.Context, u *store.User) (*authResponse, error) {
+	accessToken, accessExp, err := h.issueAccessToken(u)
+	if err != nil {
+		return nil, err
+	}
+	refresh, err := h.auth.refresh.Issue(c.Request.Context(), u.ID, store.DefaultRefreshTokenTTL)
+	if err != nil {
+		return nil, err
+	}
+	return &authResponse{
+		AccessToken:           accessToken,
+		AccessTokenExpiresAt:  accessExp,
+		RefreshToken:          refresh.Token,
+		RefreshTokenExpiresAt: refresh.ExpiresAt,
+		User:                  userInfo{ID: u.ID, Email: u.Email, Name: u.Name, Role: string(u.Role)},
+	}, nil
+}
+
+// Login validates credentials and returns an access + refresh token pair.
 // POST /auth/login
 func (h *Handler) Login(c *gin.Context) {
 	var req struct {
@@ -34,14 +78,17 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"id":    u.ID,
-		"email": u.Email,
-		"name":  u.Name,
-	})
+	resp, err := h.issueAuthResponse(c, u)
+	if err != nil {
+		h.log.Error("login: issue tokens", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
-// Register creates a new user account.
+// Register creates a new user account and returns an access + refresh token pair.
 // POST /auth/register
 func (h *Handler) Register(c *gin.Context) {
 	var req struct {
@@ -64,10 +111,14 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"id":    u.ID,
-		"email": u.Email,
-	})
+	resp, err := h.issueAuthResponse(c, u)
+	if err != nil {
+		h.log.Error("register: issue tokens", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
 }
 
 // ForgotPassword generates a password reset token and logs the reset URL.
@@ -103,7 +154,9 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "if that email is registered, a reset link has been sent"})
 }
 
-// ResetPassword updates a user's password using a valid reset token.
+// ResetPassword updates a user's password using a valid reset token and
+// revokes every refresh token belonging to that user — the password change
+// invalidates all existing sessions everywhere.
 // POST /auth/reset-password
 func (h *Handler) ResetPassword(c *gin.Context) {
 	var req struct {
@@ -115,7 +168,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	err := h.auth.users.ResetPassword(c.Request.Context(), req.Token, req.Password)
+	userID, err := h.auth.users.ResetPassword(c.Request.Context(), req.Token, req.Password)
 	if errors.Is(err, store.ErrBadToken) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired reset token"})
 		return
@@ -126,11 +179,16 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	if err := h.auth.refresh.RevokeAllForUser(c.Request.Context(), userID); err != nil {
+		// Log but don't fail the response — password is already changed.
+		h.log.Error("reset-password: revoke refresh tokens", "user_id", userID, "error", err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "password updated"})
 }
 
-// OAuthLogin finds or creates a user for an OAuth provider sign-in.
-// Called by the Auth.js jwt callback after a successful OAuth flow.
+// OAuthLogin finds or creates a user for an OAuth provider sign-in and
+// returns an access + refresh token pair.
 // POST /auth/oauth
 func (h *Handler) OAuthLogin(c *gin.Context) {
 	var req struct {
@@ -151,33 +209,87 @@ func (h *Handler) OAuthLogin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"id":    u.ID,
-		"email": u.Email,
-		"name":  u.Name,
-	})
+	resp, err := h.issueAuthResponse(c, u)
+	if err != nil {
+		h.log.Error("oauth login: issue tokens", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
-// AuthVerify validates a JWT and returns the token subject when valid.
-// POST /auth/verify
-func (h *Handler) AuthVerify(c *gin.Context) {
+// Refresh rotates a refresh token, re-reads the current user role from the
+// database, and returns a fresh access + refresh token pair.
+//
+// Role re-read: this is how privilege changes (admin promotes/demotes a user)
+// take effect — at the next refresh the new role is baked into the access
+// token. Without this, role changes wouldn't propagate until the user
+// re-authenticated.
+//
+// POST /auth/refresh
+func (h *Handler) Refresh(c *gin.Context) {
 	var req struct {
-		Token string `json:"token" binding:"required"`
+		RefreshToken string `json:"refreshToken" binding:"required"`
 	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
-	claims, err := middleware.ValidateJWTToken(req.Token, h.auth.jwtSecret)
+	userID, newRefresh, err := h.auth.refresh.Rotate(c.Request.Context(), req.RefreshToken, store.DefaultRefreshTokenTTL)
+	if errors.Is(err, store.ErrRefreshTokenInvalid) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired refresh token"})
+		return
+	}
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"valid": false, "error": "invalid or expired token"})
+		h.log.Error("refresh: rotate", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"valid": true,
-		"sub":   claims.Sub,
-		"email": claims.Email,
+	u, err := h.auth.users.GetByID(c.Request.Context(), userID)
+	if errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user no longer exists"})
+		return
+	}
+	if err != nil {
+		h.log.Error("refresh: load user", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	accessToken, accessExp, err := h.issueAccessToken(u)
+	if err != nil {
+		h.log.Error("refresh: issue access token", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, authResponse{
+		AccessToken:           accessToken,
+		AccessTokenExpiresAt:  accessExp,
+		RefreshToken:          newRefresh.Token,
+		RefreshTokenExpiresAt: newRefresh.ExpiresAt,
+		User:                  userInfo{ID: u.ID, Email: u.Email, Name: u.Name, Role: string(u.Role)},
 	})
+}
+
+// Logout revokes the supplied refresh token. Idempotent.
+// POST /auth/logout
+func (h *Handler) Logout(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refreshToken"`
+	}
+	// Body is optional — clients without a refresh token can still call this.
+	_ = c.BindJSON(&req)
+
+	if req.RefreshToken != "" {
+		if err := h.auth.refresh.Revoke(c.Request.Context(), req.RefreshToken); err != nil {
+			h.log.Error("logout: revoke refresh", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+	}
+	c.Status(http.StatusNoContent)
 }

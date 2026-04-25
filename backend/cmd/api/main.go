@@ -68,6 +68,7 @@ func main() {
 	}
 
 	userStore := store.NewUserStore(pool)
+	refreshTokenStore := store.NewRefreshTokenStore(pool)
 	subStore := store.NewSubscriptionStore(pool)
 	stationStore := store.NewStationStore(pool)
 	stationStreamStore := store.NewStationStreamStore(pool)
@@ -76,6 +77,7 @@ func main() {
 	h := handler.New(
 		handler.Dependencies{
 			UserStore:             userStore,
+			RefreshTokenStore:     refreshTokenStore,
 			SubscriptionStore:     subStore,
 			StationStore:          stationStore,
 			StationStreamStore:    stationStreamStore,
@@ -147,9 +149,10 @@ func main() {
 	router.POST("/auth/login", h.Login)
 	router.POST("/auth/register", h.Register)
 	router.POST("/auth/oauth", h.OAuthLogin)
+	router.POST("/auth/refresh", h.Refresh)
+	router.POST("/auth/logout", h.Logout)
 	router.POST("/auth/forgot-password", h.ForgotPassword)
 	router.POST("/auth/reset-password", h.ResetPassword)
-	router.POST("/auth/verify", h.AuthVerify)
 
 	// Station routes (public — no auth required)
 	router.GET("/stations", h.ListStations)
@@ -178,10 +181,10 @@ func main() {
 		protected.GET("/media/:id", h.GetMedia)
 	}
 
-	// Admin routes (JWT + is_admin required)
+	// Admin routes (JWT + role=admin required)
 	admin := router.Group("/admin")
 	admin.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
-	admin.Use(middleware.AdminMiddleware(userStore))
+	admin.Use(middleware.RequireRole(store.RoleAdmin))
 	{
 		admin.GET("/overview", h.AdminOverview)
 		admin.GET("/stats", h.AdminStats)
@@ -193,7 +196,7 @@ func main() {
 		admin.GET("/stations/:id/icon", h.AdminGetStationIcon)
 		admin.PUT("/stations/:id", h.AdminUpdateStation)
 		admin.GET("/users", h.AdminListUsers)
-		admin.PUT("/users/:id/admin", h.AdminSetUserAdmin)
+		admin.PUT("/users/:id/role", h.AdminSetUserRole)
 	}
 
 	srv := &http.Server{

@@ -8,7 +8,13 @@ import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -28,11 +34,20 @@ const userSkeletonCells = [
   { tdClassName: 'px-4 py-3 text-right', skeletonClassName: 'h-5 w-10 ml-auto' },
 ]
 
+type Role = 'user' | 'editor' | 'admin'
+
+const ROLE_OPTIONS: Role[] = ['user', 'editor', 'admin']
+
 interface AdminUser {
   id: string
   email: string
   name: string | null
-  is_admin: boolean
+  role: Role
+}
+
+interface PendingRoleChange {
+  user: AdminUser
+  nextRole: Role
 }
 
 export default function AdminUsersPage() {
@@ -47,8 +62,8 @@ export default function AdminUsersPage() {
   const [error, setError] = useState('')
 
   // Confirmation dialog state
-  const [pendingToggle, setPendingToggle] = useState<AdminUser | null>(null)
-  const [toggling, setToggling] = useState(false)
+  const [pendingChange, setPendingChange] = useState<PendingRoleChange | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const fetchUsers = useCallback(async () => {
     if (!session?.accessToken) return
@@ -86,32 +101,33 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
-  const confirmToggle = (user: AdminUser) => {
-    // Prevent self-demotion
-    if (user.email === currentUser?.email && user.is_admin) return
-    setPendingToggle(user)
+  const requestRoleChange = (user: AdminUser, nextRole: Role) => {
+    if (nextRole === user.role) return
+    // Prevent self-demotion: an admin cannot change their own role.
+    if (user.email === currentUser?.email && user.role === 'admin') return
+    setPendingChange({ user, nextRole })
   }
 
-  const executeToggle = async () => {
-    if (!pendingToggle || !session?.accessToken) return
-    setToggling(true)
+  const executeRoleChange = async () => {
+    if (!pendingChange || !session?.accessToken) return
+    setSaving(true)
     setError('')
 
     try {
       await fetchJSONWithAuth(
-        `${API}/admin/users/${pendingToggle.id}/admin`,
+        `${API}/admin/users/${pendingChange.user.id}/role`,
         session.accessToken,
         {
           method: 'PUT',
-          body: JSON.stringify({ is_admin: !pendingToggle.is_admin }),
+          body: JSON.stringify({ role: pendingChange.nextRole }),
         },
       )
-      setPendingToggle(null)
+      setPendingChange(null)
       await fetchUsers()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update admin access')
+      setError(err instanceof Error ? err.message : 'Failed to update role')
     } finally {
-      setToggling(false)
+      setSaving(false)
     }
   }
 
@@ -135,7 +151,7 @@ export default function AdminUsersPage() {
             <tr className="border-b bg-muted/40">
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('col_user')}</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">{t('col_name')}</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t('col_admin')}</th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t('col_role')}</th>
             </tr>
           </thead>
           <tbody>
@@ -150,6 +166,7 @@ export default function AdminUsersPage() {
             ) : (
               users.map((u) => {
                 const isSelf = u.email === currentUser?.email
+                const lockSelfAdmin = isSelf && u.role === 'admin'
                 return (
                   <tr key={u.id} className="border-b hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
@@ -166,15 +183,27 @@ export default function AdminUsersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
-                      {u.name || '—'}
+                      {u.name || '\u2014'}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <Switch
-                        checked={u.is_admin}
-                        onCheckedChange={() => confirmToggle(u)}
-                        disabled={isSelf && u.is_admin}
-                        aria-label={`Toggle admin for ${u.email}`}
-                      />
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end">
+                        <Select
+                          value={u.role}
+                          onValueChange={(value) => requestRoleChange(u, value as Role)}
+                          disabled={lockSelfAdmin}
+                        >
+                          <SelectTrigger size="sm" aria-label={`Role for ${u.email}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ROLE_OPTIONS.map((role) => (
+                              <SelectItem key={role} value={role}>
+                                {t(`role_${role}` as 'role_user' | 'role_editor' | 'role_admin')}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -195,28 +224,31 @@ export default function AdminUsersPage() {
       />
 
       {/* Confirmation dialog */}
-      <Dialog open={!!pendingToggle} onOpenChange={(open) => !open && setPendingToggle(null)}>
+      <Dialog open={!!pendingChange} onOpenChange={(open) => !open && setPendingChange(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {pendingToggle?.is_admin ? t('remove_admin_title') : t('grant_admin_title')}
-            </DialogTitle>
+            <DialogTitle>{t('change_role_title')}</DialogTitle>
             <DialogDescription>
-              {pendingToggle?.is_admin
-                ? t('remove_admin_description', { email: pendingToggle.email })
-                : t('grant_admin_description', { email: pendingToggle?.email ?? '' })}
+              {pendingChange
+                ? t('change_role_description', {
+                    email: pendingChange.user.email,
+                    role: t(
+                      `role_${pendingChange.nextRole}` as 'role_user' | 'role_editor' | 'role_admin',
+                    ),
+                  })
+                : ''}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingToggle(null)}>
+            <Button variant="outline" onClick={() => setPendingChange(null)}>
               {t('cancel')}
             </Button>
             <Button
-              variant={pendingToggle?.is_admin ? 'destructive' : 'default'}
-              onClick={executeToggle}
-              disabled={toggling}
+              variant={pendingChange?.nextRole === 'user' ? 'destructive' : 'default'}
+              onClick={executeRoleChange}
+              disabled={saving}
             >
-              {toggling ? t('saving') : pendingToggle?.is_admin ? t('remove_access') : t('grant_access')}
+              {saving ? t('saving') : t('confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

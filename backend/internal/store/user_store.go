@@ -18,10 +18,31 @@ import (
 
 // Sentinel errors returned by the store.
 var (
-	ErrNotFound   = errors.New("not found")
-	ErrEmailTaken = errors.New("email already in use")
-	ErrBadToken   = errors.New("invalid or expired token")
+	ErrNotFound    = errors.New("not found")
+	ErrEmailTaken  = errors.New("email already in use")
+	ErrBadToken    = errors.New("invalid or expired token")
+	ErrInvalidRole = errors.New("invalid role")
 )
+
+// Role is the authorization tier assigned to a user. Roles are stored as text
+// in the users table and validated by a CHECK constraint plus ParseRole.
+type Role string
+
+const (
+	RoleUser   Role = "user"
+	RoleEditor Role = "editor"
+	RoleAdmin  Role = "admin"
+)
+
+// ParseRole returns the canonical Role for s or ErrInvalidRole.
+func ParseRole(s string) (Role, error) {
+	switch Role(s) {
+	case RoleUser, RoleEditor, RoleAdmin:
+		return Role(s), nil
+	default:
+		return "", ErrInvalidRole
+	}
+}
 
 // User holds a row from the users table.
 type User struct {
@@ -29,7 +50,7 @@ type User struct {
 	Email         string
 	PasswordHash  string
 	Name          string
-	IsAdmin       bool
+	Role          Role
 	AvatarAssetID *string
 }
 
@@ -84,9 +105,9 @@ func (s *UserStore) Create(ctx context.Context, email, password string) (*User, 
 	err = s.pool.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash)
 		 VALUES ($1, $2)
-		 RETURNING id, email, password_hash, name`,
+		 RETURNING id, email, password_hash, name, role`,
 		email, string(hash),
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.Role)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrEmailTaken
@@ -102,9 +123,9 @@ func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error)
 
 	var u User
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, COALESCE(password_hash, ''), name FROM users WHERE email = $1`,
+		`SELECT id, email, COALESCE(password_hash, ''), name, role FROM users WHERE email = $1`,
 		email,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.Role)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -118,9 +139,9 @@ func (s *UserStore) GetByEmail(ctx context.Context, email string) (*User, error)
 func (s *UserStore) GetByID(ctx context.Context, id string) (*User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, COALESCE(password_hash, ''), name, is_admin, avatar_asset_id FROM users WHERE id = $1`,
+		`SELECT id, email, COALESCE(password_hash, ''), name, role, avatar_asset_id FROM users WHERE id = $1`,
 		id,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.IsAdmin, &u.AvatarAssetID)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.Role, &u.AvatarAssetID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -143,10 +164,10 @@ func (s *UserStore) UpsertOAuthUser(ctx context.Context, provider, providerID, e
 
 	// 1. Already linked
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, COALESCE(password_hash, ''), name
+		`SELECT id, email, COALESCE(password_hash, ''), name, role
 		 FROM users WHERE oauth_provider = $1 AND oauth_provider_id = $2`,
 		provider, providerID,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.Role)
 	if err == nil {
 		return &u, nil
 	}
@@ -158,9 +179,9 @@ func (s *UserStore) UpsertOAuthUser(ctx context.Context, provider, providerID, e
 	err = s.pool.QueryRow(ctx,
 		`UPDATE users SET oauth_provider = $1, oauth_provider_id = $2, updated_at = NOW()
 		 WHERE email = $3
-		 RETURNING id, email, COALESCE(password_hash, ''), name`,
+		 RETURNING id, email, COALESCE(password_hash, ''), name, role`,
 		provider, providerID, email,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.Role)
 	if err == nil {
 		return &u, nil
 	}
@@ -172,9 +193,9 @@ func (s *UserStore) UpsertOAuthUser(ctx context.Context, provider, providerID, e
 	err = s.pool.QueryRow(ctx,
 		`INSERT INTO users (email, name, oauth_provider, oauth_provider_id)
 		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, email, COALESCE(password_hash, ''), name`,
+		 RETURNING id, email, COALESCE(password_hash, ''), name, role`,
 		email, name, provider, providerID,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.Role)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrEmailTaken
@@ -192,7 +213,7 @@ func (s *UserStore) ListUsers(ctx context.Context, limit, offset int) ([]*User, 
 	}
 
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, email, COALESCE(name,''), is_admin FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+		`SELECT id, email, COALESCE(name,''), role FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
 		limit, offset,
 	)
 	if err != nil {
@@ -203,7 +224,7 @@ func (s *UserStore) ListUsers(ctx context.Context, limit, offset int) ([]*User, 
 	var users []*User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.IsAdmin); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Role); err != nil {
 			return nil, 0, err
 		}
 		users = append(users, &u)
@@ -309,29 +330,14 @@ func (s *UserStore) UpdatePlayerPreferences(ctx context.Context, id string, pref
 	}, nil
 }
 
-// IsAdmin returns true if the user has the is_admin flag set.
-func (s *UserStore) IsAdmin(ctx context.Context, userID string) (bool, error) {
-	var isAdmin bool
-	err := s.pool.QueryRow(ctx,
-		`SELECT is_admin FROM users WHERE id = $1`, userID,
-	).Scan(&isAdmin)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check admin: %w", err)
-	}
-	return isAdmin, nil
-}
-
-// SetAdmin sets or clears the is_admin flag for a user.
-func (s *UserStore) SetAdmin(ctx context.Context, userID string, isAdmin bool) error {
+// SetRole updates a user's authorization role.
+func (s *UserStore) SetRole(ctx context.Context, userID string, role Role) error {
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE users SET is_admin = $1, updated_at = NOW() WHERE id = $2`,
-		isAdmin, userID,
+		`UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`,
+		string(role), userID,
 	)
 	if err != nil {
-		return fmt.Errorf("set admin: %w", err)
+		return fmt.Errorf("set role: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -371,16 +377,17 @@ func (s *UserStore) CreateResetToken(ctx context.Context, email string) (token s
 }
 
 // ResetPassword validates the token, updates the password, and deletes the token
-// atomically. Returns ErrBadToken if the token is missing or expired.
-func (s *UserStore) ResetPassword(ctx context.Context, token, newPassword string) error {
+// atomically. Returns the userID whose password was reset, or ErrBadToken if
+// the token is missing or expired.
+func (s *UserStore) ResetPassword(ctx context.Context, token, newPassword string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
+		return "", fmt.Errorf("hash password: %w", err)
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+		return "", fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
@@ -392,10 +399,10 @@ func (s *UserStore) ResetPassword(ctx context.Context, token, newPassword string
 		token,
 	).Scan(&userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrBadToken
+		return "", ErrBadToken
 	}
 	if err != nil {
-		return fmt.Errorf("consume reset token: %w", err)
+		return "", fmt.Errorf("consume reset token: %w", err)
 	}
 
 	_, err = tx.Exec(ctx,
@@ -403,10 +410,13 @@ func (s *UserStore) ResetPassword(ctx context.Context, token, newPassword string
 		string(hash), userID,
 	)
 	if err != nil {
-		return fmt.Errorf("update password: %w", err)
+		return "", fmt.Errorf("update password: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return userID, nil
 }
 
 func normalizeEmail(email string) string {

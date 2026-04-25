@@ -47,10 +47,12 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	tags := normalizeTags(u.Tags)
-	styleTags := normalizeTags(u.StyleTags)
-	formatTags := normalizeTags(u.FormatTags)
-	textureTags := normalizeTags(u.TextureTags)
+	genreTags := normalizeTagValues(u.GenreTags)
+	subgenreTags := normalizeTagValues(u.SubgenreTags)
+	styleTags := normalizeTagValues(u.StyleTags)
+	formatTags := normalizeTagValues(u.FormatTags)
+	textureTags := normalizeTagValues(u.TextureTags)
+	searchTags := deriveSearchTags(genreTags, subgenreTags, styleTags, formatTags, textureTags)
 
 	if _, err := tx.Exec(ctx, `
 		UPDATE stations SET
@@ -58,27 +60,29 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 			stream_url            = $2,
 			homepage              = $3,
 			logo                  = $4,
-			genres                = $5,
-			language              = $6,
-			country               = $7,
-			city                  = $8,
-			tags                  = $9,
-			style_tags            = $10,
-			format_tags           = $11,
-			texture_tags          = $12,
-			reliability_score     = $13,
-			status                = $14,
-			editor_notes          = $15,
-			overview              = $16,
-			featured              = $17,
+			genre_tags            = $5,
+			subgenre_tags         = $6,
+			search_tags           = $7,
+			language              = $8,
+			country               = $9,
+			city                  = $10,
+			style_tags            = $11,
+			format_tags           = $12,
+			texture_tags          = $13,
+			reliability_score     = $14,
+			status                = $15,
+			editorial_review      = $16,
+			internal_notes        = $17,
+			overview              = $18,
+			featured              = $19,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $18`,
+		WHERE id = $20`,
 		u.Name, stationStreamURL, u.Homepage, u.Logo,
-		normalizeGenres(u.Genres), u.Language, u.Country, u.City, tags,
+		genreTags, subgenreTags, searchTags, u.Language, u.Country, u.City,
 		styleTags, formatTags, textureTags,
 		deriveStationReliabilityFromStreams(normalized),
-		u.Status, u.EditorNotes, u.Overview, u.Featured, id,
+		u.Status, u.EditorialReview, u.InternalNotes, u.Overview, u.Featured, id,
 	); err != nil {
 		if terr := translateStationWriteErr(err); errors.Is(terr, ErrDuplicateStationName) {
 			return terr

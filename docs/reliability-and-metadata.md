@@ -151,7 +151,7 @@ If browser resolution succeeds, the player shows `Metadata: Client`. The persist
 OSTGUT stores one authoritative metadata routing decision per stream:
 
 - `client`: the browser should attempt metadata resolution
-- `server`: the browser should subscribe to backend SSE fan-out
+- `server`: the browser should subscribe to backend SSE fan-out only when no browser-readable client path is available
 - `none`: the stream has no supported metadata path and the client should not poll
 
 Resolver checks run in two places:
@@ -159,7 +159,7 @@ Resolver checks run in two places:
 - the 12-hour background prober
 - the manual `Probe resolver`, `Probe metadata`, and `Probe full` actions in admin
 
-The backend decides routing by testing realistic browser constraints such as CORS and readable metadata endpoints, using configured app origins. For HLS streams, the prober also checks whether early media segments expose ID3 tags; HLS streams with detectable ID3 resolve to `client`, while HLS streams without ID3 resolve to `none`.
+The backend decides routing by testing realistic browser constraints such as CORS and readable metadata endpoints, using configured app origins. Client-readable metadata is always preferred when available; `server` exists as the fallback path for streams that only the backend can read. For HLS streams, the prober also checks whether early media segments expose ID3 tags; HLS streams with detectable ID3 resolve to `client`, while HLS streams without ID3 resolve to `none`.
 
 When a client-capability check succeeds, OSTGUT persists the resolver plus the winning client-readable `metadata_url`. When a backend metadata fetch succeeds, OSTGUT also persists the detected `metadata_source` and exact winning `metadata_url`. Both the backend poller and later manual probes reuse those hints before falling back to broader discovery.
 

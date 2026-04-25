@@ -88,14 +88,14 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 	}
 
 	type userResp struct {
-		ID      string `json:"id"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		IsAdmin bool   `json:"is_admin"`
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+		Role  string `json:"role"`
 	}
 	resp := make([]userResp, len(users))
 	for i, u := range users {
-		resp[i] = userResp{ID: u.ID, Email: u.Email, Name: u.Name, IsAdmin: u.IsAdmin}
+		resp[i] = userResp{ID: u.ID, Email: u.Email, Name: u.Name, Role: string(u.Role)}
 	}
 	c.JSON(http.StatusOK, gin.H{"users": resp, "total": total})
 }
@@ -140,17 +140,19 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		StreamURL   string   `json:"stream_url" binding:"required"`
 		Homepage    string   `json:"homepage"`
 		Logo        string   `json:"logo"`
-		Genres      []string `json:"genres"`
+		GenreTags   []string `json:"genre_tags"`
+		SubgenreTags []string `json:"subgenre_tags"`
 		Language    string   `json:"language"`
 		Country     string   `json:"country"`
 		City        string   `json:"city"`
-		Tags        []string `json:"tags"`
 		StyleTags   []string `json:"style_tags"`
 		FormatTags  []string `json:"format_tags"`
 		TextureTags []string `json:"texture_tags"`
 		Status      string   `json:"status"`
 		Featured    bool     `json:"featured"`
 		Overview    *string  `json:"overview"`
+		EditorialReview *string `json:"editorial_review"`
+		InternalNotes   *string `json:"internal_notes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
@@ -171,7 +173,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 
 	status := strings.TrimSpace(req.Status)
 	if status == "" {
-		status = "approved"
+		status = "pending"
 	}
 	switch status {
 	case "approved", "rejected", "pending":
@@ -185,17 +187,19 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		StreamURL:   streamURL,
 		Homepage:    strings.TrimSpace(req.Homepage),
 		Logo:        strings.TrimSpace(req.Logo),
-		Genres:      req.Genres,
+		GenreTags:   req.GenreTags,
+		SubgenreTags: req.SubgenreTags,
 		Language:    strings.TrimSpace(req.Language),
 		Country:     strings.TrimSpace(req.Country),
 		City:        strings.TrimSpace(req.City),
-		Tags:        req.Tags,
 		StyleTags:   req.StyleTags,
 		FormatTags:  req.FormatTags,
 		TextureTags: req.TextureTags,
 		Status:      status,
 		Featured:    req.Featured,
 		Overview:    normalizeOptionalText(req.Overview),
+		EditorialReview: normalizeOptionalText(req.EditorialReview),
+		InternalNotes:   normalizeOptionalText(req.InternalNotes),
 	}
 
 	probe := radio.LightClassifyStreamURL(streamURL)
@@ -359,6 +363,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		if metadataURL == "" {
 			metadataURL = target.URL
 		}
+		hintedMetadataURL := stringValue(target.MetadataURL)
 		if scope == "metadata" || scope == "resolver" {
 			classified := radio.LightClassifyStreamURL(metadataURL)
 			if v := strings.TrimSpace(classified.Kind); v != "" {
@@ -373,6 +378,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			h.admin.streamProbeClient,
 			h.admin.browserProbeOrigins,
 			metadataURL,
+			hintedMetadataURL,
 			resolvedKind,
 			resolvedContainer,
 			target.MetadataEnabled,
@@ -382,14 +388,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		if target.MetadataEnabled && strings.EqualFold(resolvedKind, "hls") {
 			hlsID3Supported = radio.ProbeHLSID3Support(c.Request.Context(), h.admin.streamProbeClient, metadataURL)
 		}
-		nextResolver := radio.ResolveMetadataResolver(target.MetadataEnabled, clientMetadata.Supported)
-		if strings.EqualFold(resolvedKind, "hls") {
-			if hlsID3Supported {
-				nextResolver = "client"
-			} else {
-				nextResolver = "none"
-			}
-		}
+		nextResolver := radio.ResolveMetadataResolverForStream(target.MetadataEnabled, resolvedKind, clientMetadata.Supported, hlsID3Supported)
 		nextMetadataURL := optionalString(clientMetadata.MetadataURL)
 		if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolvedKind, "hls") {
 			nextMetadataURL = optionalString(metadataURL)
@@ -426,6 +425,25 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 				nextMetadataDelayed = ev.DelayedICY || nextMetadataDelayed
 				delayed := ev.DelayedICY
 				_ = h.admin.streams.UpdateMetadataDetection(context.WithoutCancel(c.Request.Context()), target.ID, src, url, &delayed)
+				if hinted := strings.TrimSpace(np.MetadataURL); hinted != "" && !strings.EqualFold(hinted, hintedMetadataURL) {
+					hintedMetadataURL = hinted
+					clientMetadata = radio.ProbeClientMetadataSupport(
+						c.Request.Context(),
+						h.admin.streamProbeClient,
+						h.admin.browserProbeOrigins,
+						metadataURL,
+						hintedMetadataURL,
+						resolvedKind,
+						resolvedContainer,
+						target.MetadataEnabled,
+						target.MetadataType,
+					)
+					nextResolver = radio.ResolveMetadataResolverForStream(target.MetadataEnabled, resolvedKind, clientMetadata.Supported, hlsID3Supported)
+					nextMetadataURL = optionalString(clientMetadata.MetadataURL)
+					if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolvedKind, "hls") {
+						nextMetadataURL = optionalString(metadataURL)
+					}
+				}
 			}
 		}
 		if err := h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(c.Request.Context()), target.ID, store.MetadataResolverSnapshot{
@@ -565,17 +583,18 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		Streams     *[]adminStreamRequest `json:"streams"`
 		Website     *string               `json:"website"`
 		Logo        *string               `json:"logo"`
-		Genres      *[]string             `json:"genres"`
+		GenreTags   *[]string             `json:"genre_tags"`
+		SubgenreTags *[]string            `json:"subgenre_tags"`
 		Language    *string               `json:"language"`
 		Country     *string               `json:"country"`
 		City        *string               `json:"city"`
-		Tags        *[]string             `json:"tags"`
 		StyleTags   *[]string             `json:"style_tags"`
 		FormatTags  *[]string             `json:"format_tags"`
 		TextureTags *[]string             `json:"texture_tags"`
 		Status      *string               `json:"status"`
 		Overview    *string               `json:"overview"`
-		EditorNotes *string               `json:"editor_notes"`
+		EditorialReview *string           `json:"editorial_review"`
+		InternalNotes   *string           `json:"internal_notes"`
 		Featured    *bool                 `json:"featured"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -589,16 +608,17 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		StreamURL:   current.StreamURL,
 		Homepage:    current.Homepage,
 		Logo:        current.Logo,
-		Genres:      current.Genres,
+		GenreTags:   current.GenreTags,
+		SubgenreTags: current.SubgenreTags,
 		Language:    current.Language,
 		Country:     current.Country,
 		City:        current.City,
-		Tags:        current.Tags,
 		StyleTags:   current.StyleTags,
 		FormatTags:  current.FormatTags,
 		TextureTags: current.TextureTags,
 		Status:      current.Status,
-		EditorNotes: current.EditorNotes,
+		EditorialReview: current.EditorialReview,
+		InternalNotes:   current.InternalNotes,
 		Featured:    current.Featured,
 	}
 	if req.Name != nil {
@@ -628,8 +648,11 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	if req.Logo != nil {
 		u.Logo = strings.TrimSpace(*req.Logo)
 	}
-	if req.Genres != nil {
-		u.Genres = *req.Genres
+	if req.GenreTags != nil {
+		u.GenreTags = *req.GenreTags
+	}
+	if req.SubgenreTags != nil {
+		u.SubgenreTags = *req.SubgenreTags
 	}
 	if req.Language != nil {
 		u.Language = strings.TrimSpace(*req.Language)
@@ -639,9 +662,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 	if req.City != nil {
 		u.City = strings.TrimSpace(*req.City)
-	}
-	if req.Tags != nil {
-		u.Tags = *req.Tags
 	}
 	if req.StyleTags != nil {
 		u.StyleTags = *req.StyleTags
@@ -665,8 +685,11 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	if req.Overview != nil {
 		u.Overview = normalizeOptionalText(req.Overview)
 	}
-	if req.EditorNotes != nil {
-		u.EditorNotes = req.EditorNotes
+	if req.EditorialReview != nil {
+		u.EditorialReview = normalizeOptionalText(req.EditorialReview)
+	}
+	if req.InternalNotes != nil {
+		u.InternalNotes = normalizeOptionalText(req.InternalNotes)
 	}
 	if req.Featured != nil {
 		u.Featured = *req.Featured
@@ -1006,28 +1029,34 @@ func inferBitrateFromURL(raw string) int {
 	return 0
 }
 
-// AdminSetUserAdmin handles PUT /admin/users/:id/admin
-// Body: { "is_admin": true|false }
-func (h *Handler) AdminSetUserAdmin(c *gin.Context) {
+// AdminSetUserRole handles PUT /admin/users/:id/role
+// Body: { "role": "user" | "editor" | "admin" }
+func (h *Handler) AdminSetUserRole(c *gin.Context) {
 	userID := c.Param("id")
 
 	var req struct {
-		IsAdmin bool `json:"is_admin"`
+		Role string `json:"role" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
-	if err := h.admin.users.SetAdmin(c.Request.Context(), userID, req.IsAdmin); err != nil {
+	role, err := store.ParseRole(req.Role)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be one of: user, editor, admin"})
+		return
+	}
+
+	if err := h.admin.users.SetRole(c.Request.Context(), userID, role); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
-		h.log.Error("admin set user admin", "error", err)
+		h.log.Error("admin set user role", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"user_id": userID, "is_admin": req.IsAdmin})
+	c.JSON(http.StatusOK, gin.H{"user_id": userID, "role": string(role)})
 }

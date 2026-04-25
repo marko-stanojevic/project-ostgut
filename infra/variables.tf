@@ -80,7 +80,13 @@ variable "db_admin_password" {
 
 variable "jwt_secret" {
   type        = string
-  description = "Shared secret for Auth.js HS256 tokens (must match AUTH_SECRET in frontend)."
+  description = "Backend HS256 signing secret used to issue access tokens. Independent of frontend AUTH_SECRET."
+  sensitive   = true
+}
+
+variable "auth_secret" {
+  type        = string
+  description = "NextAuth cookie/JWE encryption secret used by the frontend. Independent of backend JWT_SECRET."
   sensitive   = true
 }
 

@@ -27,11 +27,25 @@ func ResolveMetadataResolver(metadataEnabled bool, clientSupported bool) string 
 	return "server"
 }
 
+func ResolveMetadataResolverForStream(metadataEnabled bool, kind string, clientSupported bool, hlsID3Supported bool) string {
+	if !metadataEnabled {
+		return "none"
+	}
+	if strings.EqualFold(strings.TrimSpace(kind), "hls") {
+		if hlsID3Supported {
+			return "client"
+		}
+		return "none"
+	}
+	return ResolveMetadataResolver(metadataEnabled, clientSupported)
+}
+
 func ProbeClientMetadataSupport(
 	ctx context.Context,
 	client *http.Client,
 	origins []string,
 	streamURL string,
+	hintedMetadataURL string,
 	kind string,
 	container string,
 	metadataEnabled bool,
@@ -65,6 +79,12 @@ func ProbeClientMetadataSupport(
 		return result
 	}
 
+	if supported, metadataURL := probeHintedClientMetadataSupport(ctx, client, origins, streamURL, hintedMetadataURL); supported {
+		result.Supported = true
+		result.MetadataURL = metadataURL
+		return result
+	}
+
 	switch strings.ToLower(strings.TrimSpace(metadataType)) {
 	case "icy":
 		result.Supported, result.MetadataURL = probeClientICYSupport(ctx, client, origins, streamURL)
@@ -87,6 +107,24 @@ func ProbeClientMetadataSupport(
 	}
 
 	return result
+}
+
+func probeHintedClientMetadataSupport(ctx context.Context, client *http.Client, origins []string, streamURL string, hintedMetadataURL string) (bool, string) {
+	hintedMetadataURL = strings.TrimSpace(hintedMetadataURL)
+	if hintedMetadataURL == "" || strings.EqualFold(hintedMetadataURL, strings.TrimSpace(streamURL)) {
+		return false, ""
+	}
+
+	switch inferHintedMetadataType(hintedMetadataURL) {
+	case "icecast":
+		return probeClientIcecastEndpoint(ctx, client, origins, hintedMetadataURL)
+	case "shoutcast-currentsong":
+		return probeClientShoutcastCurrentSongEndpoint(ctx, client, origins, hintedMetadataURL)
+	case "shoutcast-7html":
+		return probeClientShoutcastHTMLEndpoint(ctx, client, origins, hintedMetadataURL)
+	default:
+		return false, ""
+	}
 }
 
 func probeClientICYSupport(ctx context.Context, client *http.Client, origins []string, streamURL string) (bool, string) {
@@ -164,7 +202,12 @@ func probeClientIcecastSupport(ctx context.Context, client *http.Client, origins
 		return false, ""
 	}
 	endpoint := fmt.Sprintf("%s/status-json.xsl", base)
+	return probeClientIcecastEndpoint(ctx, client, origins, endpoint)
 
+}
+
+
+func probeClientIcecastEndpoint(ctx context.Context, client *http.Client, origins []string, endpoint string) (bool, string) {
 	for _, origin := range origins {
 		body, ok := fetchCORSReadableBody(ctx, client, endpoint, origin)
 		if !ok {
@@ -195,20 +238,42 @@ func probeClientShoutcastSupport(ctx context.Context, client *http.Client, origi
 
 	for _, origin := range origins {
 		currentSongURL := fmt.Sprintf("%s/currentsong", base)
-		if body, ok := fetchCORSReadableBody(ctx, client, fmt.Sprintf("%s/currentsong", base), origin); ok {
-			if title := strings.TrimSpace(string(body)); !isPlaceholderMetadataTitle(title) {
-				return true, currentSongURL
-			}
+		if supported, metadataURL := probeClientShoutcastCurrentSongEndpoint(ctx, client, []string{origin}, currentSongURL); supported {
+			return true, metadataURL
 		}
 
 		htmlURL := fmt.Sprintf("%s/7.html", base)
-		if body, ok := fetchCORSReadableBody(ctx, client, fmt.Sprintf("%s/7.html", base), origin); ok {
-			if title, ok := parseShoutcastHTMLTitle(string(body)); ok && !isPlaceholderMetadataTitle(title) {
-				return true, htmlURL
-			}
+		if supported, metadataURL := probeClientShoutcastHTMLEndpoint(ctx, client, []string{origin}, htmlURL); supported {
+			return true, metadataURL
 		}
 	}
 
+	return false, ""
+}
+
+func probeClientShoutcastCurrentSongEndpoint(ctx context.Context, client *http.Client, origins []string, endpoint string) (bool, string) {
+	for _, origin := range origins {
+		body, ok := fetchCORSReadableBody(ctx, client, endpoint, origin)
+		if !ok {
+			continue
+		}
+		if title := strings.TrimSpace(string(body)); !isPlaceholderMetadataTitle(title) {
+			return true, endpoint
+		}
+	}
+	return false, ""
+}
+
+func probeClientShoutcastHTMLEndpoint(ctx context.Context, client *http.Client, origins []string, endpoint string) (bool, string) {
+	for _, origin := range origins {
+		body, ok := fetchCORSReadableBody(ctx, client, endpoint, origin)
+		if !ok {
+			continue
+		}
+		if title, ok := parseShoutcastHTMLTitle(string(body)); ok && !isPlaceholderMetadataTitle(title) {
+			return true, endpoint
+		}
+	}
 	return false, ""
 }
 
@@ -261,6 +326,24 @@ func metadataBaseURL(streamURL string) (string, error) {
 		return "", fmt.Errorf("unsupported scheme")
 	}
 	return fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Host), nil
+}
+
+func inferHintedMetadataType(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	path := strings.ToLower(strings.TrimSpace(parsed.Path))
+	switch {
+	case strings.HasSuffix(path, "/status-json.xsl"):
+		return "icecast"
+	case strings.HasSuffix(path, "/currentsong"):
+		return "shoutcast-currentsong"
+	case strings.HasSuffix(path, "/7.html"):
+		return "shoutcast-7html"
+	default:
+		return ""
+	}
 }
 
 func allowsOrigin(headers http.Header, origin string) bool {

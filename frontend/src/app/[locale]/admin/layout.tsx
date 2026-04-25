@@ -6,7 +6,6 @@ import { AdminSearchContext, useAdminSearch } from './admin-search-context'
 import { useTranslations } from 'next-intl'
 import { SquaresFourIcon, RadioIcon, UsersIcon, ArrowLeftIcon } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
-import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { AccountMenu } from '@/components/account-menu'
 import { SearchInput } from '@/components/search-input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -143,9 +142,7 @@ function AdminSearchInput({ className }: { className?: string }) {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { session, loading: authLoading } = useAuth()
-  const { isAdmin, loading: adminLoading } = useAdminStatus()
-  const loading = authLoading || adminLoading
+  const { session, loading, isAdmin } = useAuth()
   const tNav = useTranslations('nav')
 
   const [query, setQuery] = useState('')
@@ -156,10 +153,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const showSearch = pathname.startsWith('/admin/stations') || pathname.startsWith('/admin/users')
 
   useEffect(() => {
-    if (!loading && isAdmin === false) {
+    if (!loading && session && !isAdmin) {
       router.replace('/')
     }
-  }, [loading, isAdmin, router])
+  }, [loading, session, isAdmin, router])
 
   if (loading || !session) {
     return (

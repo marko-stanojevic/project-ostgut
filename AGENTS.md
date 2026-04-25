@@ -200,7 +200,8 @@ project-ostgut/
 | Var | Where | Purpose |
 |-----|-------|---------|
 | `DATABASE_URL` | backend | `postgres://` scheme (auto-converted to `pgx5://` for migrations) |
-| `JWT_SECRET` | backend + frontend (`AUTH_SECRET`) | shared HS256 signing key |
+| `JWT_SECRET` | backend | HS256 secret used to sign backend access tokens (independent of frontend) |
+| `AUTH_SECRET` | frontend | NextAuth cookie/JWE encryption secret (independent of backend) |
 | `ALLOWED_ORIGINS` | backend | comma-separated CORS origins |
 | `NEXT_PUBLIC_API_URL` | frontend build arg | backend base URL |
 

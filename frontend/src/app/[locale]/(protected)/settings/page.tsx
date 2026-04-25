@@ -42,7 +42,7 @@ type ProfileResponse = {
   id: string
   email: string
   name: string
-  is_admin: boolean
+  role: 'user' | 'editor' | 'admin'
   avatar?: MediaAssetResponse | null
 }
 

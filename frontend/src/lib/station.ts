@@ -39,7 +39,7 @@ export function toStation(s: ApiStation): Station {
             lastError: st.last_error,
         })),
         logo: s.logo,
-        genres: s.genres ?? [],
+        genres: s.genre_tags ?? [],
         country: s.country,
         city: s.city,
         bitrate: s.bitrate,

@@ -107,8 +107,10 @@ On fatal playback error (source unreachable, codec unsupported), the player trie
 For metadata specifically:
 
 - `metadata_resolver = client` means the frontend attempts metadata directly in the browser
-- `metadata_resolver = server` means the frontend consumes cached snapshots and SSE updates from the backend
+- `metadata_resolver = server` means the frontend consumes cached snapshots and SSE updates from the backend only when no browser-readable client path is available
 - `metadata_resolver = none` means the player should not attempt metadata polling for that stream
+
+Client resolution is the preferred route whenever the browser can read metadata directly. `server` is a fallback for streams whose metadata is not browser-readable under real browser constraints such as CORS or missing client-readable metadata endpoints.
 
 ---
 

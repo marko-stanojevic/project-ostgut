@@ -401,7 +401,7 @@ resource "azurerm_container_app" "frontend" {
 
   secret {
     name  = "auth-secret"
-    value = var.jwt_secret
+    value = var.auth_secret
   }
   secret {
     name  = "auth-github-id"

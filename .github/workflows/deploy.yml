@@ -162,6 +162,7 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="db_admin_password=${{ secrets.DB_ADMIN_PASSWORD }}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="auth_secret=${{ secrets.AUTH_SECRET }}" \
             -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}" \
             -var="api_url=${{ vars.API_URL }}" \
             -var="auth_url=${{ vars.FRONTEND_URL }}" \
@@ -367,6 +368,7 @@ jobs:
             -var="environment=${{ env.ENVIRONMENT }}" \
             -var="db_admin_password=${{ secrets.DB_ADMIN_PASSWORD }}" \
             -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="auth_secret=${{ secrets.AUTH_SECRET }}" \
             -var="allowed_origins=${{ vars.ALLOWED_ORIGINS }}" \
             -var="api_url=${{ vars.API_URL }}" \
             -var="auth_url=${{ vars.FRONTEND_URL }}" \

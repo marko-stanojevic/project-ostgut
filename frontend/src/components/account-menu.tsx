@@ -15,7 +15,6 @@ import {
     PaletteIcon,
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
-import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
 import { cn } from '@/lib/utils'
@@ -69,8 +68,7 @@ function Avatar({ name, image, size = 32 }: { name?: string | null; image?: stri
 
 export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
     const router = useRouter()
-    const { user, session, signOut } = useAuth()
-    const { isAdmin } = useAdminStatus()
+    const { user, session, signOut, isAdmin } = useAuth()
     const [mounted, setMounted] = useState(false)
     const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.image ?? null)
     const t = useTranslations('account_menu')
