@@ -382,18 +382,9 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 				nextResolver = "none"
 			}
 		}
-		if shouldPreferClientResolverForAdmin(target, resolvedKind, resolvedContainer, nextResolver) {
-			nextResolver = "client"
-		}
 		nextMetadataURL := optionalString(clientMetadata.MetadataURL)
 		if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolvedKind, "hls") {
 			nextMetadataURL = optionalString(metadataURL)
-		}
-		if shouldKeepExistingClientResolver(target.MetadataEnabled, target.MetadataResolver, nextResolver) {
-			nextResolver = "client"
-			if nextMetadataURL == nil {
-				nextMetadataURL = target.MetadataURL
-			}
 		}
 		if scope == "full" || scope == "metadata" {
 			np := h.admin.metaFetcher.Fetch(c.Request.Context(), metadataURL, metadata.Config{
@@ -765,29 +756,6 @@ func normalizeMetadataType(raw string) string {
 	default:
 		return ""
 	}
-}
-
-func shouldKeepExistingClientResolver(metadataEnabled bool, currentResolver string, nextResolver string) bool {
-	if !metadataEnabled {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(currentResolver), "client") {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(nextResolver), "server")
-}
-
-func shouldPreferClientResolverForAdmin(target *store.StationStream, kind string, container string, nextResolver string) bool {
-	if target == nil || !target.MetadataEnabled {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(nextResolver), "server") {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(kind), "direct") || !strings.EqualFold(strings.TrimSpace(container), "none") {
-		return false
-	}
-	return target.MetadataSource != nil && strings.EqualFold(strings.TrimSpace(*target.MetadataSource), "icy")
 }
 
 func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []adminStreamRequest {

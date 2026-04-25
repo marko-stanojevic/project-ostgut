@@ -140,18 +140,9 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 					nextResolver = "none"
 				}
 			}
-			if shouldPreferClientResolver(stream, resolverKind, resolverContainer, nextResolver) {
-				nextResolver = "client"
-			}
 			nextMetadataURL := normalizeMetadataValue(clientMetadata.MetadataURL)
 			if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolverKind, "hls") {
 				nextMetadataURL = normalizeMetadataValue(resolverURL)
-			}
-			if shouldKeepExistingClientResolver(stream, nextResolver) {
-				nextResolver = "client"
-				if nextMetadataURL == nil {
-					nextMetadataURL = stream.MetadataURL
-				}
 			}
 			nextHealth := nextProbeHealthScore(stream.HealthScore, result.LastError == nil)
 
@@ -197,34 +188,6 @@ func nextProbeHealthScore(current float64, success bool) float64 {
 		return math.Min(1, current+0.08)
 	}
 	return math.Max(0, current-0.2)
-}
-
-func shouldKeepExistingClientResolver(stream *store.StationStream, nextResolver string) bool {
-	if stream == nil || !stream.MetadataEnabled {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(stream.MetadataResolver), "client") {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(nextResolver), "server")
-}
-
-func shouldPreferClientResolver(
-	stream *store.StationStream,
-	kind string,
-	container string,
-	nextResolver string,
-) bool {
-	if stream == nil || !stream.MetadataEnabled {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(nextResolver), "server") {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(kind), "direct") || !strings.EqualFold(strings.TrimSpace(container), "none") {
-		return false
-	}
-	return stream.MetadataSource != nil && strings.EqualFold(strings.TrimSpace(*stream.MetadataSource), "icy")
 }
 
 func normalizeMetadataValue(raw string) *string {
