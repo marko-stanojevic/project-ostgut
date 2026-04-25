@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import Hls from 'hls.js'
+import type HlsType from 'hls.js'
 import { useAuth } from '@/context/AuthContext'
 import {
   type Station,
@@ -28,6 +28,19 @@ import type { ApiStation } from '@/types/station'
 // Re-export Station so existing consumers don't need to change their imports.
 export type { Station } from '@/types/player'
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+type HlsCtor = typeof import('hls.js').default
+
+let hlsCtorPromise: Promise<HlsCtor | null> | null = null
+
+async function loadHlsCtor(): Promise<HlsCtor | null> {
+  if (typeof window === 'undefined') return null
+  if (!hlsCtorPromise) {
+    hlsCtorPromise = import('hls.js')
+      .then((module) => module.default)
+      .catch(() => null)
+  }
+  return hlsCtorPromise
+}
 
 interface PlayerContextValue {
   station: Station | null
@@ -83,7 +96,10 @@ function detectPlaybackCapabilities(): PlaybackCapabilities {
   const audio = new Audio()
   const canPlay = (mime: string) => audio.canPlayType(mime) !== ''
   const flac = canPlay('audio/flac') || canPlay('audio/x-flac')
-  const hls = Hls.isSupported() || canPlay('application/vnd.apple.mpegurl') || canPlay('application/x-mpegURL')
+  const hls =
+    typeof MediaSource !== 'undefined' ||
+    canPlay('application/vnd.apple.mpegurl') ||
+    canPlay('application/x-mpegURL')
   return { flac, hls }
 }
 
@@ -262,7 +278,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [airPlayActive, setAirPlayActive] = useState(false)
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const hlsRef = useRef<Hls | null>(null)
+  const hlsRef = useRef<HlsType | null>(null)
   const castContextRef = useRef<cast.framework.CastContext | null>(null)
   const castPlayerRef = useRef<cast.framework.RemotePlayer | null>(null)
   const castControllerRef = useRef<cast.framework.RemotePlayerController | null>(null)
@@ -499,6 +515,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [normalizationEnabled])
 
   useEffect(() => {
+    void loadHlsCtor()
+  }, [])
+
+  useEffect(() => {
     const playbackKey = currentStream?.id ?? station?.id ?? ''
     const didSwitchPlayback = previousPlaybackKeyRef.current !== playbackKey
     previousPlaybackKeyRef.current = playbackKey
@@ -565,6 +585,53 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       hlsRef.current = null
     }
   }, [])
+
+  const startHlsPlayback = useCallback(async (audio: HTMLAudioElement, url: string) => {
+    const Hls = await loadHlsCtor()
+    if (audioRef.current !== audio || streamVariantURLRef.current !== url) return
+
+    if (Hls?.isSupported()) {
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: true })
+      hlsRef.current = hls
+      hls.loadSource(url)
+      hls.attachMedia(audio)
+      hls.on(Hls.Events.FRAG_PARSING_METADATA, (_event, data) => {
+        emitHlsID3NowPlaying(url, data.samples ?? [])
+      })
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        audio.play().catch(() => {
+          setState('error')
+          tryNextVariantRef.current?.()
+        })
+      })
+
+      let mediaRecoveryAttempted = false
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !mediaRecoveryAttempted) {
+          mediaRecoveryAttempted = true
+          hls.recoverMediaError()
+          return
+        }
+        setState('error')
+        tryNextVariantRef.current?.()
+      })
+      return
+    }
+
+    if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+      audio.src = url
+      audio.load()
+      audio.play().catch(() => {
+        setState('error')
+        tryNextVariantRef.current?.()
+      })
+      return
+    }
+
+    setState('error')
+    tryNextVariantRef.current?.()
+  }, [setState])
 
   const loadStationOnCast = useCallback(async (s: Station) => {
     if (!window.cast || !window.chrome) return false
@@ -790,46 +857,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     streamVariantURLRef.current = url
 
     if (kind === 'hls') {
-      if (Hls.isSupported()) {
-        const hls = new Hls({ enableWorker: true, lowLatencyMode: true })
-        hlsRef.current = hls
-        hls.loadSource(url)
-        hls.attachMedia(audio)
-        hls.on(Hls.Events.FRAG_PARSING_METADATA, (_event, data) => {
-          emitHlsID3NowPlaying(url, data.samples ?? [])
-        })
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          audio.play().catch(() => {
-            setState('error')
-            tryNextVariantRef.current?.()
-          })
-        })
-
-        let mediaRecoveryAttempted = false
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (!data.fatal) return
-          // For MEDIA_ERROR, HLS.js can often recover by reinitialising the
-          // codec. Try once before falling back to the failover path.
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !mediaRecoveryAttempted) {
-            mediaRecoveryAttempted = true
-            hls.recoverMediaError()
-            return
-          }
-          setState('error')
-          tryNextVariantRef.current?.()
-        })
-      } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari supports HLS natively.
-        audio.src = url
-        audio.load()
-        audio.play().catch(() => {
-          setState('error')
-          tryNextVariantRef.current?.()
-        })
-      } else {
-        setState('error')
-        tryNextVariantRef.current?.()
-      }
+      void startHlsPlayback(audio, url)
     } else {
       audio.src = url
       audio.load()

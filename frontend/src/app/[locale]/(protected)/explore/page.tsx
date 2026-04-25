@@ -19,10 +19,11 @@ const LIST_RETURN_KEY = 'explore:list:return'
 const LIST_SCROLL_KEY = 'explore:list:scrollY'
 
 interface FiltersResponse {
-    genres?: string[]
-    styles?: string[]
-    formats?: string[]
-    textures?: string[]
+    genre_tags?: string[]
+    subgenre_tags?: string[]
+    style_tags?: string[]
+    format_tags?: string[]
+    texture_tags?: string[]
 }
 
 function formatFilterLabel(value: string) {
@@ -47,6 +48,7 @@ function ExploreContent() {
     const [stationsError, setStationsError] = useState(false)
     const [filtersError, setFiltersError] = useState(false)
     const [genres, setGenres] = useState<string[]>([])
+    const [subgenres, setSubgenres] = useState<string[]>([])
     const [styles, setStyles] = useState<string[]>([])
     const [formats, setFormats] = useState<string[]>([])
     const [textures, setTextures] = useState<string[]>([])
@@ -54,26 +56,29 @@ function ExploreContent() {
     const query = searchParams.get('q')?.trim() ?? ''
     const searchQuery = searchParams.toString()
     const genreFilter = searchParams.getAll('genre')
+    const subgenreFilter = searchParams.getAll('subgenre')
     const styleFilter = searchParams.getAll('style')
     const formatFilter = searchParams.getAll('format')
     const textureFilter = searchParams.getAll('texture')
 
     // Stable string keys for effect dependencies — array refs change every render
     const genreKey = genreFilter.join('\0')
+    const subgenreKey = subgenreFilter.join('\0')
     const styleKey = styleFilter.join('\0')
     const formatKey = formatFilter.join('\0')
     const textureKey = textureFilter.join('\0')
 
-    type FilterCategory = 'genre' | 'style' | 'format' | 'texture'
+    type FilterCategory = 'genre' | 'subgenre' | 'style' | 'format' | 'texture'
     const [activeCategory, setActiveCategory] = useState<FilterCategory | null>(null)
 
     const categoryConfig = useMemo(() => [
         { id: 'genre' as FilterCategory, label: t('filter_genre'), options: genres, selected: genreFilter, getValue: (o: string) => o.toLowerCase() },
+        { id: 'subgenre' as FilterCategory, label: 'Subgenre', options: subgenres, selected: subgenreFilter, getValue: (o: string) => o.toLowerCase() },
         { id: 'style' as FilterCategory, label: t('filter_style'), options: styles, selected: styleFilter, getValue: (o: string) => o },
         { id: 'format' as FilterCategory, label: t('filter_format'), options: formats, selected: formatFilter, getValue: (o: string) => o },
         { id: 'texture' as FilterCategory, label: t('filter_texture'), options: textures, selected: textureFilter, getValue: (o: string) => o },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [t, genres, genreKey, styles, styleKey, formats, formatKey, textures, textureKey])
+    ], [t, genres, genreKey, subgenres, subgenreKey, styles, styleKey, formats, formatKey, textures, textureKey])
 
     const activeCategoryConfig = categoryConfig.find(c => c.id === activeCategory) ?? null
     const stationsQueue = useMemo(() => stations.map(toStation), [stations])
@@ -81,11 +86,12 @@ function ExploreContent() {
 
     const activeChips = useMemo(() => [
         ...genreFilter.map(v => ({ key: 'genre', value: v })),
+        ...subgenreFilter.map(v => ({ key: 'subgenre', value: v })),
         ...styleFilter.map(v => ({ key: 'style', value: v })),
         ...formatFilter.map(v => ({ key: 'format', value: v })),
         ...textureFilter.map(v => ({ key: 'texture', value: v })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [genreKey, styleKey, formatKey, textureKey])
+    ], [genreKey, subgenreKey, styleKey, formatKey, textureKey])
 
     useEffect(() => {
         if (searchParams.get('featured') !== 'true') return
@@ -102,13 +108,15 @@ function ExploreContent() {
         fetch(`${API}/stations/filters`)
             .then((r) => r.json())
             .then((data: FiltersResponse) => {
-                setGenres(data.genres ?? [])
-                setStyles(data.styles ?? [])
-                setFormats(data.formats ?? [])
-                setTextures(data.textures ?? [])
+                setGenres(data.genre_tags ?? [])
+                setSubgenres(data.subgenre_tags ?? [])
+                setStyles(data.style_tags ?? [])
+                setFormats(data.format_tags ?? [])
+                setTextures(data.texture_tags ?? [])
             })
             .catch(() => {
                 setGenres([])
+                setSubgenres([])
                 setStyles([])
                 setFormats([])
                 setTextures([])
@@ -125,6 +133,7 @@ function ExploreContent() {
         params.set('offset', '0')
         if (query) params.set('q', query)
         genreFilter.forEach(v => params.append('genre', v))
+        subgenreFilter.forEach(v => params.append('subgenre', v))
         styleFilter.forEach(v => params.append('style', v))
         formatFilter.forEach(v => params.append('format', v))
         textureFilter.forEach(v => params.append('texture', v))
@@ -155,7 +164,7 @@ function ExploreContent() {
             controller.abort()
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [query, genreKey, styleKey, formatKey, textureKey])
+    }, [query, genreKey, subgenreKey, styleKey, formatKey, textureKey])
 
     useScrollRestoration({
         pathname,

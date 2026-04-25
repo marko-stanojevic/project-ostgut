@@ -21,12 +21,13 @@ type stationResponse struct {
 	Website          string           `json:"website,omitempty"`
 	Overview         *string          `json:"overview,omitempty"`
 	Description      *string          `json:"description,omitempty"`
-	EditorNotes      *string          `json:"editor_notes,omitempty"`
-	Genres           []string         `json:"genres"`
+	EditorialReview  *string          `json:"editorial_review,omitempty"`
+	GenreTags        []string         `json:"genre_tags"`
+	SubgenreTags     []string         `json:"subgenre_tags"`
 	Language         string           `json:"language"`
 	Country          string           `json:"country"`
 	City             string           `json:"city"`
-	Tags             []string         `json:"tags"`
+	SearchTags       []string         `json:"search_tags"`
 	StyleTags        []string         `json:"style_tags"`
 	FormatTags       []string         `json:"format_tags"`
 	TextureTags      []string         `json:"texture_tags"`
@@ -188,43 +189,12 @@ func toStationResponse(s *store.Station, streams []streamResponse) stationRespon
 		}
 		return in
 	}
+	genreTags := normSlice(s.GenreTags)
+	subgenreTags := normSlice(s.SubgenreTags)
+	searchTags := normSlice(s.SearchTags)
 	styleTags := normSlice(s.StyleTags)
 	formatTags := normSlice(s.FormatTags)
 	textureTags := normSlice(s.TextureTags)
-
-	// genres: normalised lowercase, empty strings dropped
-	genres := make([]string, 0, len(s.Genres))
-	for _, g := range s.Genres {
-		if v := strings.ToLower(strings.TrimSpace(g)); v != "" {
-			genres = append(genres, v)
-		}
-	}
-
-	// tags = genres + editorial tag categories, deduped
-	seen := make(map[string]struct{}, len(genres)+len(styleTags)+len(formatTags)+len(textureTags))
-	combined := make([]string, 0, len(genres)+len(styleTags)+len(formatTags)+len(textureTags))
-	addTag := func(v string) {
-		v = strings.ToLower(strings.TrimSpace(v))
-		if v == "" {
-			return
-		}
-		if _, ok := seen[v]; !ok {
-			seen[v] = struct{}{}
-			combined = append(combined, v)
-		}
-	}
-	for _, g := range genres {
-		addTag(g)
-	}
-	for _, t := range styleTags {
-		addTag(t)
-	}
-	for _, t := range formatTags {
-		addTag(t)
-	}
-	for _, t := range textureTags {
-		addTag(t)
-	}
 
 	return stationResponse{
 		ID:               s.ID,
@@ -234,12 +204,13 @@ func toStationResponse(s *store.Station, streams []streamResponse) stationRespon
 		Website:          s.Homepage,
 		Overview:         s.Overview,
 		Description:      s.Overview,
-		EditorNotes:      s.EditorNotes,
-		Genres:           genres,
+		EditorialReview:  s.EditorialReview,
+		GenreTags:        genreTags,
+		SubgenreTags:     subgenreTags,
 		Language:         s.Language,
 		Country:          s.Country,
 		City:             s.City,
-		Tags:             combined,
+		SearchTags:       searchTags,
 		StyleTags:        styleTags,
 		FormatTags:       formatTags,
 		TextureTags:      textureTags,
@@ -282,6 +253,7 @@ func (h *Handler) ListStations(c *gin.Context) {
 	f := store.StationFilter{
 		Search:       strings.TrimSpace(c.Query("q")),
 		Genres:       lowerAll(c.QueryArray("genre")),
+		Subgenres:    lowerAll(c.QueryArray("subgenre")),
 		Country:      strings.ToLower(strings.TrimSpace(c.Query("country"))),
 		Language:     strings.ToLower(c.Query("language")),
 		MinBitrate:   queryInt(c, "min_bitrate", 0),
@@ -395,9 +367,16 @@ func (h *Handler) SearchStations(c *gin.Context) {
 func (h *Handler) GetFilters(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	genres, err := h.station.stations.Genres(ctx)
+	genreTags, err := h.station.stations.GenreTags(ctx)
 	if err != nil {
 		h.log.Error("get genres", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	subgenreTags, err := h.station.stations.SubgenreTags(ctx)
+	if err != nil {
+		h.log.Error("get subgenres", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -423,8 +402,11 @@ func (h *Handler) GetFilters(c *gin.Context) {
 		return
 	}
 
-	if genres == nil {
-		genres = []string{}
+	if genreTags == nil {
+		genreTags = []string{}
+	}
+	if subgenreTags == nil {
+		subgenreTags = []string{}
 	}
 	if styles == nil {
 		styles = []string{}
@@ -436,10 +418,11 @@ func (h *Handler) GetFilters(c *gin.Context) {
 		textures = []string{}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"genres":   genres,
-		"styles":   styles,
-		"formats":  formats,
-		"textures": textures,
+		"genre_tags":    genreTags,
+		"subgenre_tags": subgenreTags,
+		"style_tags":    styles,
+		"format_tags":   formats,
+		"texture_tags":  textures,
 	})
 }
 

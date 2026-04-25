@@ -36,8 +36,8 @@ export function StationCard({
     }
 
     const meta = showCountry
-        ? [(s.genres ?? []).join(', ') || 'Unknown genre', s.country].filter(Boolean).join(' · ')
-        : (s.genres ?? []).join(', ') || 'Unknown genre'
+        ? [(s.genre_tags ?? []).join(', ') || 'Unknown genre', s.country].filter(Boolean).join(' · ')
+        : (s.genre_tags ?? []).join(', ') || 'Unknown genre'
 
     return (
         <article className="group relative rounded-xl p-1.5 text-left transition-all duration-200 hover:bg-muted/50">

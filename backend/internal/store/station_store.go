@@ -38,11 +38,12 @@ type Station struct {
 	StreamURL        string
 	Homepage         string
 	Logo             string
-	Genres           []string
+	GenreTags        []string
+	SubgenreTags     []string
+	SearchTags       []string
 	Language         string
 	Country          string
 	City             string
-	Tags             []string
 	StyleTags        []string
 	FormatTags       []string
 	TextureTags      []string
@@ -54,14 +55,16 @@ type Station struct {
 	Status           string // pending | approved | rejected
 	CustomWebsite    *string
 	Overview         *string
-	EditorNotes      *string
+	EditorialReview  *string
+	InternalNotes    *string
 	LastCheckedAt    *time.Time
 	LastSyncedAt     time.Time
 }
 
 // StationFilter holds optional query parameters for listing stations.
 type StationFilter struct {
-	Genres       []string // OR filter across genres array
+	Genres       []string // OR filter across genre_tags array
+	Subgenres    []string // OR filter across subgenre_tags array
 	Country      string
 	Language     string
 	MinBitrate   int
@@ -82,17 +85,18 @@ type EnrichmentUpdate struct {
 	StreamURL   string
 	Homepage    string
 	Logo        string
-	Genres      []string
+	GenreTags   []string
+	SubgenreTags []string
 	Language    string
 	Country     string
 	City        string
-	Tags        []string
 	StyleTags   []string
 	FormatTags  []string
 	TextureTags []string
 	Status      string
 	Overview    *string
-	EditorNotes *string
+	EditorialReview *string
+	InternalNotes   *string
 	Featured    bool
 }
 
@@ -102,17 +106,19 @@ type ManualStationInput struct {
 	StreamURL   string
 	Homepage    string
 	Logo        string
-	Genres      []string
+	GenreTags   []string
+	SubgenreTags []string
 	Language    string
 	Country     string
 	City        string
-	Tags        []string
 	StyleTags   []string
 	FormatTags  []string
 	TextureTags []string
 	Status      string
 	Featured    bool
 	Overview    *string
+	EditorialReview *string
+	InternalNotes   *string
 }
 
 // StationStore executes queries against the stations table.
@@ -127,22 +133,22 @@ func NewStationStore(pool *pgxpool.Pool) *StationStore {
 
 const stationColumns = `
 	id, external_id, name, custom_name, stream_url, homepage, logo,
-	genres, language, country, city, tags,
+	genre_tags, subgenre_tags, search_tags, language, country, city,
 	style_tags, format_tags, texture_tags,
 	votes, click_count, reliability_score,
 	is_active, featured, status,
-	custom_website, overview, editor_notes,
+	custom_website, overview, editorial_review, internal_notes,
 	last_checked_at, last_synced_at`
 
 func scanStation(row pgx.Row) (*Station, error) {
 	var s Station
 	err := row.Scan(
 		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Logo,
-		&s.Genres, &s.Language, &s.Country, &s.City, &s.Tags,
+		&s.GenreTags, &s.SubgenreTags, &s.SearchTags, &s.Language, &s.Country, &s.City,
 		&s.StyleTags, &s.FormatTags, &s.TextureTags,
 		&s.Votes, &s.ClickCount, &s.ReliabilityScore,
 		&s.IsActive, &s.Featured, &s.Status,
-		&s.CustomWebsite, &s.Overview, &s.EditorNotes,
+		&s.CustomWebsite, &s.Overview, &s.EditorialReview, &s.InternalNotes,
 		&s.LastCheckedAt, &s.LastSyncedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -154,29 +160,35 @@ func scanStation(row pgx.Row) (*Station, error) {
 	return &s, nil
 }
 
-func normalizeTags(tags []string) []string {
-	if tags == nil {
+func normalizeTagValues(values []string) []string {
+	if values == nil {
 		return []string{}
 	}
-	return tags
-}
 
-// normalizeGenres trims, lowercases, and removes empty/duplicate genre values.
-func normalizeGenres(genres []string) []string {
-	seen := make(map[string]struct{}, len(genres))
-	out := make([]string, 0, len(genres))
-	for _, g := range genres {
-		v := strings.ToLower(strings.TrimSpace(g))
-		if v == "" {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		if normalized == "" {
 			continue
 		}
-		if _, dup := seen[v]; dup {
+		if _, dup := seen[normalized]; dup {
 			continue
 		}
-		seen[v] = struct{}{}
-		out = append(out, v)
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
 	}
 	return out
+}
+
+func deriveSearchTags(genreTags, subgenreTags, styleTags, formatTags, textureTags []string) []string {
+	combined := make([]string, 0, len(genreTags)+len(subgenreTags)+len(styleTags)+len(formatTags)+len(textureTags))
+	combined = append(combined, genreTags...)
+	combined = append(combined, subgenreTags...)
+	combined = append(combined, styleTags...)
+	combined = append(combined, formatTags...)
+	combined = append(combined, textureTags...)
+	return normalizeTagValues(combined)
 }
 
 type stationQueryParts struct {
@@ -227,7 +239,10 @@ func buildStationFilterClause(f StationFilter, builder *stationQueryBuilder) (st
 	where := "is_active = true AND status = $1"
 
 	if len(f.Genres) > 0 {
-		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) = ANY($%d))", builder.addArg(f.Genres))
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(genre_tags) g WHERE lower(g) = ANY($%d))", builder.addArg(f.Genres))
+	}
+	if len(f.Subgenres) > 0 {
+		where += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM unnest(subgenre_tags) g WHERE lower(g) = ANY($%d))", builder.addArg(f.Subgenres))
 	}
 	if f.Country != "" {
 		where += fmt.Sprintf(" AND lower(country) = $%d", builder.addArg(f.Country))
@@ -266,13 +281,13 @@ func buildStationFilterClause(f StationFilter, builder *stationQueryBuilder) (st
 			searchClauses = append(searchClauses, fmt.Sprintf(`
 				(
 					name ILIKE $%[1]d OR
-					EXISTS (SELECT 1 FROM unnest(genres) g WHERE g ILIKE $%[2]d) OR
+					EXISTS (SELECT 1 FROM unnest(genre_tags) g WHERE g ILIKE $%[2]d) OR
 					language ILIKE $%[3]d OR
 					country ILIKE $%[4]d OR
 					city ILIKE $%[5]d OR
 					EXISTS (
 						SELECT 1
-						FROM unnest(tags) AS tag
+						FROM unnest(search_tags) AS tag
 						WHERE tag ILIKE $%[6]d
 					)
 				)`, namePlaceholder, genrePlaceholder, languagePlaceholder, countryPlaceholder, cityPlaceholder, tagPlaceholder))
@@ -318,10 +333,10 @@ func buildStationOrderClause(f StationFilter, builder *stationQueryBuilder) stri
 			WHEN lower(name) LIKE $%d THEN 2
 			WHEN EXISTS (
 				SELECT 1
-				FROM unnest(tags) AS tag
+				FROM unnest(search_tags) AS tag
 				WHERE lower(tag) = $%d
 			) THEN 3
-			WHEN EXISTS (SELECT 1 FROM unnest(genres) g WHERE lower(g) LIKE $%d) THEN 4
+			WHEN EXISTS (SELECT 1 FROM unnest(genre_tags) g WHERE lower(g) LIKE $%d) THEN 4
 			WHEN lower(city) LIKE $%d OR lower(country) LIKE $%d OR lower(language) LIKE $%d THEN 5
 			ELSE 6
 		END,
@@ -411,17 +426,23 @@ func (s *StationStore) ListAllByStatus(ctx context.Context, status string) ([]*S
 // On conflict it updates operational sync fields while preserving core station
 // metadata, so admin edits to original station fields are not overwritten.
 func (s *StationStore) Upsert(ctx context.Context, st *Station) (string, error) {
-	tags := normalizeTags(st.Tags)
+	genreTags := normalizeTagValues(st.GenreTags)
+	subgenreTags := normalizeTagValues(st.SubgenreTags)
+	styleTags := normalizeTagValues(st.StyleTags)
+	formatTags := normalizeTagValues(st.FormatTags)
+	textureTags := normalizeTagValues(st.TextureTags)
+	searchTags := deriveSearchTags(genreTags, subgenreTags, styleTags, formatTags, textureTags)
 
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, logo,
-			genres, language, country, city, tags,
+			genre_tags, subgenre_tags, search_tags, language, country, city,
+			style_tags, format_tags, texture_tags,
 			votes, click_count, reliability_score,
 			is_active, status, last_synced_at, updated_at
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending',NOW(),NOW()
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'pending',NOW(),NOW()
 		)
 		ON CONFLICT (external_id) DO UPDATE SET
 			votes             = EXCLUDED.votes,
@@ -430,12 +451,12 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) (string, error) 
 			is_active         = EXCLUDED.is_active,
 			last_synced_at    = NOW(),
 			updated_at        = NOW()
-			-- NOTE: name, stream_url, homepage, logo, genres, language,
-			-- country, tags, status,
-			-- editor_notes, featured are intentionally NOT updated
+			-- NOTE: name, stream_url, homepage, logo, taxonomy,
+			-- editorial copy, and moderation state are intentionally not updated
 		RETURNING id`,
 		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Logo,
-		normalizeGenres(st.Genres), st.Language, st.Country, st.City, tags,
+		genreTags, subgenreTags, searchTags, st.Language, st.Country, st.City,
+		styleTags, formatTags, textureTags,
 		st.Votes, st.ClickCount, st.ReliabilityScore,
 		st.IsActive,
 	).Scan(&id)
@@ -448,36 +469,38 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) (string, error) 
 // CreateManual inserts a new station from admin input and returns the created row.
 func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) (*Station, error) {
 	if in.Status == "" {
-		in.Status = "approved"
+		in.Status = "pending"
 	}
-	tags := normalizeTags(in.Tags)
-	styleTags := normalizeTags(in.StyleTags)
-	formatTags := normalizeTags(in.FormatTags)
-	textureTags := normalizeTags(in.TextureTags)
+	genreTags := normalizeTagValues(in.GenreTags)
+	subgenreTags := normalizeTagValues(in.SubgenreTags)
+	styleTags := normalizeTagValues(in.StyleTags)
+	formatTags := normalizeTagValues(in.FormatTags)
+	textureTags := normalizeTagValues(in.TextureTags)
+	searchTags := deriveSearchTags(genreTags, subgenreTags, styleTags, formatTags, textureTags)
 
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
 			external_id, name, stream_url, homepage, logo,
-			genres, language, country, city, tags,
+			genre_tags, subgenre_tags, search_tags, language, country, city,
 			style_tags, format_tags, texture_tags,
 			votes, click_count, reliability_score,
-			is_active, featured, status, overview,
+			is_active, featured, status, overview, editorial_review, internal_notes,
 			last_editor_action_at, last_synced_at, updated_at
 		) VALUES (
 			'manual:' || gen_random_uuid()::text,
 			$1, $2, $3, $4,
-			$5, $6, $7, $8, $9,
-			$10, $11, $12,
+			$5, $6, $7, $8, $9, $10,
+			$11, $12, $13,
 			0, 0, 0,
-			true, $13, $14, $15,
+			true, $14, $15, $16, $17, $18,
 			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
 		in.Name, in.StreamURL, in.Homepage, in.Logo,
-		normalizeGenres(in.Genres), in.Language, in.Country, in.City, tags,
+		genreTags, subgenreTags, searchTags, in.Language, in.Country, in.City,
 		styleTags, formatTags, textureTags,
-		in.Featured, in.Status, in.Overview,
+		in.Featured, in.Status, in.Overview, in.EditorialReview, in.InternalNotes,
 	).Scan(&id)
 	if err != nil {
 		if terr := translateStationWriteErr(err); errors.Is(terr, ErrDuplicateStationName) {
@@ -495,10 +518,12 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 
 // UpdateEnrichment saves editable station fields for a station.
 func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u EnrichmentUpdate) error {
-	tags := normalizeTags(u.Tags)
-	styleTags := normalizeTags(u.StyleTags)
-	formatTags := normalizeTags(u.FormatTags)
-	textureTags := normalizeTags(u.TextureTags)
+	genreTags := normalizeTagValues(u.GenreTags)
+	subgenreTags := normalizeTagValues(u.SubgenreTags)
+	styleTags := normalizeTagValues(u.StyleTags)
+	formatTags := normalizeTagValues(u.FormatTags)
+	textureTags := normalizeTagValues(u.TextureTags)
+	searchTags := deriveSearchTags(genreTags, subgenreTags, styleTags, formatTags, textureTags)
 
 	_, err := s.pool.Exec(ctx, `
 		UPDATE stations SET
@@ -506,25 +531,27 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 			stream_url        = $2,
 			homepage          = $3,
 			logo              = $4,
-			genres            = $5,
-			language          = $6,
-			country           = $7,
-			city              = $8,
-			tags              = $9,
-			style_tags        = $10,
-			format_tags       = $11,
-			texture_tags      = $12,
-			status            = $13,
-			editor_notes      = $14,
-			overview          = $15,
-			featured          = $16,
+			genre_tags        = $5,
+			subgenre_tags     = $6,
+			search_tags       = $7,
+			language          = $8,
+			country           = $9,
+			city              = $10,
+			style_tags        = $11,
+			format_tags       = $12,
+			texture_tags      = $13,
+			status            = $14,
+			editorial_review  = $15,
+			internal_notes    = $16,
+			overview          = $17,
+			featured          = $18,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $17`,
+		WHERE id = $19`,
 		u.Name, u.StreamURL, u.Homepage, u.Logo,
-		normalizeGenres(u.Genres), u.Language, u.Country, u.City, tags,
+		genreTags, subgenreTags, searchTags, u.Language, u.Country, u.City,
 		styleTags, formatTags, textureTags,
-		u.Status, u.EditorNotes, u.Overview, u.Featured, id,
+		u.Status, u.EditorialReview, u.InternalNotes, u.Overview, u.Featured, id,
 	)
 	return translateStationWriteErr(err)
 }
@@ -584,10 +611,10 @@ func (s *StationStore) BulkUpdateStatus(ctx context.Context, ids []string, statu
 	return int(tag.RowsAffected()), nil
 }
 
-// Genres returns the distinct non-empty genres present in approved stations.
-func (s *StationStore) Genres(ctx context.Context) ([]string, error) {
+// GenreTags returns the distinct non-empty genre tags present in approved stations.
+func (s *StationStore) GenreTags(ctx context.Context) ([]string, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT lower(g) FROM stations, unnest(genres) g
+		SELECT DISTINCT lower(g) FROM stations, unnest(genre_tags) g
 		WHERE is_active = true AND status = 'approved' AND g != ''
 		ORDER BY 1`)
 	if err != nil {
@@ -603,6 +630,11 @@ func (s *StationStore) Genres(ctx context.Context) ([]string, error) {
 		genres = append(genres, g)
 	}
 	return genres, rows.Err()
+}
+
+// SubgenreTags returns the distinct non-empty subgenre tags present in approved stations.
+func (s *StationStore) SubgenreTags(ctx context.Context) ([]string, error) {
+	return s.distinctTagValues(ctx, "subgenre_tags")
 }
 
 // Languages returns distinct non-empty languages present in approved stations.

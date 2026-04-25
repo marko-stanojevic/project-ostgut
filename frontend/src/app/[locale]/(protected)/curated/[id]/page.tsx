@@ -18,8 +18,6 @@ interface ApiStationDetail extends ApiStation {
     website?: string
     overview?: string
     description?: string
-    editor_notes?: string
-    tags: string[]
 }
 
 function CuratedDetailsContent() {
@@ -92,7 +90,7 @@ function CuratedDetailsContent() {
             { label: t('stat_country'), value: station.country || 'Unknown' },
             { label: t('stat_city'), value: station.city || '—' },
             { label: t('stat_language'), value: station.language || '—' },
-            { label: t('stat_genre'), value: (station.genres ?? []).join(', ') || '—' },
+            { label: t('stat_genre'), value: (station.genre_tags ?? []).join(', ') || '—' },
         ]
     }, [station, t])
 
@@ -189,10 +187,10 @@ function CuratedDetailsContent() {
                             ))}
                         </div>
 
-                        {station.tags?.length ? (
+                        {station.search_tags?.length ? (
                             <div className="mt-4 hidden lg:block">
                                 <div className="flex flex-wrap gap-1.5">
-                                    {station.tags.slice(0, 24).map((tag) => (
+                                    {station.search_tags.slice(0, 24).map((tag) => (
                                         <span key={tag} className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-0.5 text-xs text-muted-foreground">
                                             {tag}
                                         </span>
@@ -275,10 +273,10 @@ function CuratedDetailsContent() {
                             ))}
                         </div>
 
-                        {station.tags?.length ? (
+                        {station.search_tags?.length ? (
                             <div className="mt-6 lg:hidden">
                                 <div className="flex flex-wrap gap-1.5">
-                                    {station.tags.slice(0, 24).map((tag) => (
+                                    {station.search_tags.slice(0, 24).map((tag) => (
                                         <span key={tag} className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-0.5 text-xs text-muted-foreground">
                                             {tag}
                                         </span>
@@ -287,10 +285,10 @@ function CuratedDetailsContent() {
                             </div>
                         ) : null}
 
-                        {station.editor_notes && (
+                        {station.editorial_review && (
                             <div className="ui-editorial-callout mt-6 rounded-xl p-5">
-                                <p className="ui-editorial-eyebrow mb-2 text-[10px] font-semibold uppercase tracking-[0.18em]">{t('editors_note')}</p>
-                                <p className="ui-editorial-text text-[15px] leading-relaxed font-medium">{station.editor_notes}</p>
+                                <p className="ui-editorial-eyebrow mb-2 text-[10px] font-semibold uppercase tracking-[0.18em]">Editorial Review</p>
+                                <p className="ui-editorial-text text-[15px] leading-relaxed font-medium">{station.editorial_review}</p>
                             </div>
                         )}
 

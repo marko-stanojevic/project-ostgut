@@ -44,25 +44,30 @@ interface AdminStation {
   id: string
   name: string
   logo?: string
-  genres: string[]
+  genre_tags: string[]
   country: string
   city: string
   featured: boolean
   status: string
-  editor_notes?: string
+  editorial_review?: string
 }
 
 interface CreateStationForm {
   name: string
   stream_url: string
-  genre: string
+  genre_tags: string
+  subgenre_tags: string
   country: string
   city: string
   language: string
   logo: string
   homepage: string
-  tags: string
+  style_tags: string
+  format_tags: string
+  texture_tags: string
   overview: string
+  editorial_review: string
+  internal_notes: string
   status: 'pending' | 'approved'
   featured: boolean
 }
@@ -115,15 +120,20 @@ export default function AdminStationsPage() {
   const [createForm, setCreateForm] = useState<CreateStationForm>({
     name: '',
     stream_url: '',
-    genre: '',
+    genre_tags: '',
+    subgenre_tags: '',
     country: '',
     city: '',
     language: '',
     logo: '',
     homepage: '',
-    tags: '',
+    style_tags: '',
+    format_tags: '',
+    texture_tags: '',
     overview: '',
-    status: 'approved',
+    editorial_review: '',
+    internal_notes: '',
+    status: 'pending',
     featured: false,
   })
 
@@ -238,17 +248,19 @@ export default function AdminStationsPage() {
           body: JSON.stringify({
             name: createForm.name.trim(),
             stream_url: createForm.stream_url.trim(),
-            genres: createForm.genre.split(',').map((g) => g.trim()).filter(Boolean),
+            genre_tags: createForm.genre_tags.split(',').map((g) => g.trim()).filter(Boolean),
+            subgenre_tags: createForm.subgenre_tags.split(',').map((g) => g.trim()).filter(Boolean),
             country: createForm.country.trim(),
             city: createForm.city.trim(),
             language: createForm.language.trim(),
             logo: createForm.logo.trim(),
             homepage: createForm.homepage.trim(),
-            tags: createForm.tags
-              .split(',')
-              .map((v) => v.trim())
-              .filter(Boolean),
+            style_tags: createForm.style_tags.split(',').map((v) => v.trim()).filter(Boolean),
+            format_tags: createForm.format_tags.split(',').map((v) => v.trim()).filter(Boolean),
+            texture_tags: createForm.texture_tags.split(',').map((v) => v.trim()).filter(Boolean),
             overview: createForm.overview.trim() || null,
+            editorial_review: createForm.editorial_review.trim() || null,
+            internal_notes: createForm.internal_notes.trim() || null,
             status: createForm.status,
             featured: createForm.featured,
           }),
@@ -259,15 +271,20 @@ export default function AdminStationsPage() {
       setCreateForm({
         name: '',
         stream_url: '',
-        genre: '',
+        genre_tags: '',
+        subgenre_tags: '',
         country: '',
         city: '',
         language: '',
         logo: '',
         homepage: '',
-        tags: '',
+        style_tags: '',
+        format_tags: '',
+        texture_tags: '',
         overview: '',
-        status: 'approved',
+        editorial_review: '',
+        internal_notes: '',
+        status: 'pending',
         featured: false,
       })
 
@@ -405,7 +422,7 @@ export default function AdminStationsPage() {
                         </div>
                       </Link>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{(s.genres ?? []).join(', ') || '—'}</td>
+                    <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{(s.genre_tags ?? []).join(', ') || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.city || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.country || '—'}</td>
                     <td className="px-4 py-3 text-right">
@@ -476,8 +493,12 @@ export default function AdminStationsPage() {
                 )}
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">{t('field_genre')}</label>
-                <Input value={createForm.genre} onChange={(e) => setCreateForm((p) => ({ ...p, genre: e.target.value }))} />
+                <label className="text-xs text-muted-foreground">Genre tags</label>
+                <Input value={createForm.genre_tags} onChange={(e) => setCreateForm((p) => ({ ...p, genre_tags: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Subgenre tags</label>
+                <Input value={createForm.subgenre_tags} onChange={(e) => setCreateForm((p) => ({ ...p, subgenre_tags: e.target.value }))} />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">{t('field_language')}</label>
@@ -524,8 +545,16 @@ export default function AdminStationsPage() {
                 )}
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs text-muted-foreground">{t('field_tags')}</label>
-                <Input value={createForm.tags} onChange={(e) => setCreateForm((p) => ({ ...p, tags: e.target.value }))} />
+                <label className="text-xs text-muted-foreground">Style tags</label>
+                <Input value={createForm.style_tags} onChange={(e) => setCreateForm((p) => ({ ...p, style_tags: e.target.value }))} />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Format tags</label>
+                <Input value={createForm.format_tags} onChange={(e) => setCreateForm((p) => ({ ...p, format_tags: e.target.value }))} />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Texture tags</label>
+                <Input value={createForm.texture_tags} onChange={(e) => setCreateForm((p) => ({ ...p, texture_tags: e.target.value }))} />
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">{t('field_overview')}</label>
@@ -534,6 +563,24 @@ export default function AdminStationsPage() {
                   value={createForm.overview}
                   onChange={(e) => setCreateForm((p) => ({ ...p, overview: e.target.value }))}
                   placeholder={t('field_overview_placeholder')}
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Editorial review</label>
+                <Textarea
+                  rows={3}
+                  value={createForm.editorial_review}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, editorial_review: e.target.value }))}
+                  placeholder="Public editorial review shown on station details"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Internal notes</label>
+                <Textarea
+                  rows={3}
+                  value={createForm.internal_notes}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, internal_notes: e.target.value }))}
+                  placeholder="Private editorial notes for internal use"
                 />
               </div>
               <div className="space-y-1">

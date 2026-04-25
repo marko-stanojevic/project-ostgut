@@ -112,11 +112,16 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 
 			resolverCheckedAt := time.Now().UTC()
 			resolverProbeCtx, resolverCancel := context.WithTimeout(ctx, resolverProbeTimeout)
+			hintedMetadataURL := ""
+			if stream.MetadataURL != nil {
+				hintedMetadataURL = strings.TrimSpace(*stream.MetadataURL)
+			}
 			clientMetadata := ProbeClientMetadataSupport(
 				resolverProbeCtx,
 				p.client,
 				p.browserProbeOrigins,
 				resolverURL,
+				hintedMetadataURL,
 				resolverKind,
 				resolverContainer,
 				stream.MetadataEnabled,
@@ -132,14 +137,7 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 			if !clientMetadata.CheckedAt.IsZero() {
 				resolverCheckedAt = clientMetadata.CheckedAt
 			}
-			nextResolver := ResolveMetadataResolver(stream.MetadataEnabled, clientMetadata.Supported)
-			if strings.EqualFold(resolverKind, "hls") {
-				if hlsID3Supported {
-					nextResolver = "client"
-				} else {
-					nextResolver = "none"
-				}
-			}
+			nextResolver := ResolveMetadataResolverForStream(stream.MetadataEnabled, resolverKind, clientMetadata.Supported, hlsID3Supported)
 			nextMetadataURL := normalizeMetadataValue(clientMetadata.MetadataURL)
 			if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolverKind, "hls") {
 				nextMetadataURL = normalizeMetadataValue(resolverURL)

@@ -41,7 +41,13 @@ export interface ApiStation {
     stream_url: string
     streams?: ApiStream[]
     logo?: string
-    genres: string[]
+    genre_tags: string[]
+    subgenre_tags?: string[]
+    search_tags?: string[]
+    style_tags?: string[]
+    format_tags?: string[]
+    texture_tags?: string[]
+    editorial_review?: string
     language?: string
     country: string
     city: string

@@ -20,8 +20,6 @@ import { Separator } from '@/components/ui/separator'
 import {
     RadioIcon,
     ArrowSquareOutIcon,
-    CheckCircleIcon,
-    ClockIcon,
     ArrowLeftIcon,
     ArrowsClockwiseIcon,
     FloppyDiskIcon,
@@ -80,11 +78,12 @@ interface AdminStation {
     streams?: AdminStream[]
     logo?: string
     website?: string
-    genres: string[]
+    genre_tags: string[]
+    subgenre_tags: string[]
+    search_tags: string[]
     language: string
     country: string
     city: string
-    tags: string[]
     style_tags: string[]
     format_tags: string[]
     texture_tags: string[]
@@ -92,7 +91,8 @@ interface AdminStation {
     featured: boolean
     status: string
     overview?: string
-    editor_notes?: string
+    editorial_review?: string
+    internal_notes?: string
 }
 
 interface StreamFormEntry {
@@ -107,7 +107,8 @@ interface StationForm {
     streams: StreamFormEntry[]
     logo: string
     website: string
-    genre: string
+    genre_tags: string
+    subgenre_tags: string
     language: string
     country: string
     city: string
@@ -117,7 +118,8 @@ interface StationForm {
     overview: string
     status: 'pending' | 'approved'
     featured: boolean
-    editor_notes: string
+    editorial_review: string
+    internal_notes: string
 }
 
 type UploadIntentResponse = {
@@ -134,11 +136,6 @@ type UploadIntentResponse = {
 type CompleteUploadResponse = {
     status: string
     asset: MediaAssetResponse
-}
-
-const statusConfig = {
-    pending: { label: 'Pending', icon: ClockIcon, className: 'ui-admin-status-pending' },
-    approved: { label: 'Approved', icon: CheckCircleIcon, className: 'ui-admin-status-success' },
 }
 
 const ADMIN_TAG_BADGE_CLASS = 'ui-admin-tag-badge rounded-none border-transparent font-medium text-[10px] uppercase tracking-wide'
@@ -242,7 +239,8 @@ function toStationForm(station: AdminStation): StationForm {
             : [{ ...createEmptyStream(1), url: station.stream_url }],
         logo: station.logo ?? '',
         website: station.website ?? '',
-        genre: (station.genres ?? []).join(', '),
+        genre_tags: (station.genre_tags ?? []).join(', '),
+        subgenre_tags: (station.subgenre_tags ?? []).join(', '),
         language: station.language,
         country: station.country,
         city: station.city ?? '',
@@ -252,7 +250,8 @@ function toStationForm(station: AdminStation): StationForm {
         overview: station.overview ?? '',
         status: station.status === 'approved' ? 'approved' : 'pending',
         featured: !!station.featured,
-        editor_notes: station.editor_notes ?? '',
+        editorial_review: station.editorial_review ?? '',
+        internal_notes: station.internal_notes ?? '',
     }
 }
 
@@ -279,7 +278,8 @@ export default function StationEditorPage() {
         streams: [createEmptyStream(1)],
         logo: '',
         website: '',
-        genre: '',
+        genre_tags: '',
+        subgenre_tags: '',
         language: '',
         country: '',
         city: '',
@@ -289,7 +289,8 @@ export default function StationEditorPage() {
         overview: '',
         status: 'pending',
         featured: false,
-        editor_notes: '',
+        editorial_review: '',
+        internal_notes: '',
     })
 
     const accessToken = session?.accessToken
@@ -450,7 +451,8 @@ export default function StationEditorPage() {
                 }),
             logo: logoURL,
             website: websiteURL,
-            genres: form.genre.split(',').map((g) => g.trim()).filter(Boolean),
+            genre_tags: form.genre_tags.split(',').map((g) => g.trim()).filter(Boolean),
+            subgenre_tags: form.subgenre_tags.split(',').map((g) => g.trim()).filter(Boolean),
             language: form.language.trim(),
             country: form.country.trim(),
             city: form.city.trim(),
@@ -460,7 +462,8 @@ export default function StationEditorPage() {
             overview: form.overview.trim() || null,
             status: form.status,
             featured: form.featured,
-            editor_notes: form.editor_notes.trim() || null,
+            editorial_review: form.editorial_review.trim() || null,
+            internal_notes: form.internal_notes.trim() || null,
         }
 
         try {
@@ -519,12 +522,12 @@ export default function StationEditorPage() {
         return <p className="text-destructive">Station not found</p>
     }
 
-    const cfg = statusConfig[form.status as keyof typeof statusConfig]
     const currentStyleTags = form.style_tags.split(',').map((t) => t.trim()).filter(Boolean)
     const currentFormatTags = form.format_tags.split(',').map((t) => t.trim()).filter(Boolean)
     const currentTextureTags = form.texture_tags.split(',').map((t) => t.trim()).filter(Boolean)
-    const currentGenreTags = form.genre.split(',').map((g) => g.trim().toLowerCase()).filter(Boolean)
-    const allCurrentTags = [...new Set([...currentGenreTags, ...currentStyleTags, ...currentFormatTags, ...currentTextureTags])]
+    const currentGenreTags = form.genre_tags.split(',').map((g) => g.trim().toLowerCase()).filter(Boolean)
+    const currentSubgenreTags = form.subgenre_tags.split(',').map((g) => g.trim().toLowerCase()).filter(Boolean)
+    const allCurrentTags = [...new Set([...currentGenreTags, ...currentSubgenreTags, ...currentStyleTags, ...currentFormatTags, ...currentTextureTags])]
     const iconUrl = getPreferredMediaUrl(stationIcon) || logoURL
     const streamDetails = [...(station.streams ?? [])].sort((a, b) => a.priority - b.priority)
     const previewStation: PlayerStation | null = station ? {
@@ -586,15 +589,6 @@ export default function StationEditorPage() {
                     </button>
                     <div>
                         <h1 className="text-2xl font-semibold tracking-tight">{trimmedName || station.name}</h1>
-                        <div className="mt-1 flex items-center gap-2">
-                            {cfg && (
-                                <span className={`flex items-center gap-1 text-xs font-medium ${cfg.className}`}>
-                                    <cfg.icon className="h-3.5 w-3.5" />
-                                    {cfg.label}
-                                </span>
-                            )}
-                            {form.featured && <Badge variant="default" className="text-xs">Staff Pick</Badge>}
-                        </div>
                     </div>
                 </div>
 
@@ -628,14 +622,14 @@ export default function StationEditorPage() {
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium">{trimmedName || '-'}</p>
-                                    <p className="text-xs text-muted-foreground">{form.genre || '-'} · {[form.city, form.country].filter(Boolean).join(', ') || '-'}</p>
+                                    <p className="text-xs text-muted-foreground">{form.genre_tags || '-'} · {[form.city, form.country].filter(Boolean).join(', ') || '-'}</p>
                                 </div>
                             </div>
 
                             <Separator />
 
                             <div className="grid grid-cols-2 gap-3">
-                                <SourceField label="Genre" value={form.genre} />
+                                <SourceField label="Genre tags" value={form.genre_tags} />
                                 <SourceField label="Language" value={form.language} />
                                 <SourceField label="Country" value={form.country} />
                                 <SourceField label="City" value={form.city} />
@@ -698,6 +692,11 @@ export default function StationEditorPage() {
                                     <div className="flex flex-wrap gap-1.5">
                                         {currentGenreTags.map((t) => (
                                             <Badge key={`genre-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                {t}
+                                            </Badge>
+                                        ))}
+                                        {currentSubgenreTags.map((t) => (
+                                            <Badge key={`subgenre-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                 {t}
                                             </Badge>
                                         ))}
@@ -1169,8 +1168,12 @@ export default function StationEditorPage() {
 
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="genre">Genre</Label>
-                                    <Input id="genre" value={form.genre} onChange={(e) => setForm((prev) => ({ ...prev, genre: e.target.value }))} />
+                                    <Label htmlFor="genre-tags">Genre tags</Label>
+                                    <Input id="genre-tags" value={form.genre_tags} onChange={(e) => setForm((prev) => ({ ...prev, genre_tags: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="subgenre-tags">Subgenre tags</Label>
+                                    <Input id="subgenre-tags" value={form.subgenre_tags} onChange={(e) => setForm((prev) => ({ ...prev, subgenre_tags: e.target.value }))} />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="language">Language</Label>
@@ -1210,12 +1213,23 @@ export default function StationEditorPage() {
                             </div>
 
                             <div className="space-y-1.5">
-                                <Label htmlFor="editor-notes">Editor Notes</Label>
+                                <Label htmlFor="editorial-review">Editorial review</Label>
                                 <Textarea
-                                    id="editor-notes"
-                                    placeholder="Editorial notes shown publicly in station details"
-                                    value={form.editor_notes}
-                                    onChange={(e) => setForm((prev) => ({ ...prev, editor_notes: e.target.value }))}
+                                    id="editorial-review"
+                                    placeholder="Public editorial review shown in station details"
+                                    value={form.editorial_review}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, editorial_review: e.target.value }))}
+                                    rows={3}
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label htmlFor="internal-notes">Internal notes</Label>
+                                <Textarea
+                                    id="internal-notes"
+                                    placeholder="Private editorial notes for internal use"
+                                    value={form.internal_notes}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, internal_notes: e.target.value }))}
                                     rows={3}
                                 />
                             </div>
