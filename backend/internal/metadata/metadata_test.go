@@ -90,6 +90,7 @@ func TestSplitArtistTitle(t *testing.T) {
 		{"  Artist  -  Song  ", "Artist", "Song"}, // whitespace trimmed
 		// Multiple " - " separators: first occurrence wins.
 		{"A - B - C", "A", "B - C"},
+		{"Variety Mix - Greta Rose -", "", "Variety Mix - Greta Rose -"},
 		{"\"Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude\" by Johnny Gandelsman on Currents on WFMU", "Johnny Gandelsman", "Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude"},
 	}
 

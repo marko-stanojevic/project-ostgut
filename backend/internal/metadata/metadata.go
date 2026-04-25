@@ -832,6 +832,9 @@ func extractICYField(meta, key string) string {
 // Returns ("", fullTitle) when no recognised delimiter is found.
 func splitArtistTitle(s string) (artist, song string) {
 	s = strings.TrimSpace(s)
+	if strings.HasSuffix(s, "-") || strings.HasSuffix(s, "–") || strings.HasSuffix(s, "—") {
+		return "", s
+	}
 	if parsedArtist, parsedSong, ok := parseQuotedBylineTitle(s); ok {
 		return parsedArtist, parsedSong
 	}
