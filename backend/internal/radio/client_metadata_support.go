@@ -58,7 +58,7 @@ func ProbeClientMetadataSupport(
 	}
 
 	if client == nil {
-		client = &http.Client{Timeout: 8 * time.Second}
+		client = &http.Client{Timeout: 15 * time.Second}
 	}
 	origins = normalizeOrigins(origins)
 	if len(origins) == 0 {
@@ -108,6 +108,7 @@ func allowICYPreflight(ctx context.Context, client *http.Client, target string, 
 	}
 	req.Close = true
 	req.Header.Set("Origin", origin)
+	req.Header.Set("User-Agent", streamProbeUserAgent)
 	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
 	req.Header.Set("Access-Control-Request-Headers", "Icy-Metadata")
 
@@ -139,7 +140,12 @@ func allowICYRead(ctx context.Context, client *http.Client, target string, origi
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	// Drain a tiny bit then close so the connection can be released without
+	// waiting on an infinite audio stream.
+	go func() {
+		_, _ = io.CopyN(io.Discard, resp.Body, 64)
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return false
