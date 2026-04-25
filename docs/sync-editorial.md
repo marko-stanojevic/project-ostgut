@@ -1,6 +1,6 @@
 # Syncing Editorial Data — Local → Staging / Production
 
-Sync editorial station decisions (status, featured, city, tags, custom fields, editor notes)
+Sync editorial station decisions (status, featured, taxonomy tags, custom fields, editorial review, internal notes)
 from your local database to staging or production.
 
 ## Prerequisites
@@ -16,7 +16,7 @@ from your local database to staging or production.
 The sync script only imports stations where `last_editor_action_at IS NOT NULL`, and only
 overwrites a row on the target if the source timestamp is **newer** than what's already there.
 
-If you've made schema-level changes (e.g. added city/tags to existing stations without going
+If you've made schema-level changes (e.g. updated taxonomy tags or editorial notes on existing stations without going
 through the admin UI), bump the timestamps first so the import treats them as updated:
 
 ```bash
@@ -76,6 +76,13 @@ Go to **Actions → Sync Editorial Stations → Run workflow** and set:
 | `dry_run` | `true` to preview, `false` to apply |
 
 Run with `dry_run: true` first to verify the SQL before applying.
+
+The export/import payload now includes:
+
+- `genre_tags`, `subgenre_tags`, and derived `search_tags`
+- `style_tags`, `format_tags`, and `texture_tags`
+- `editorial_review` and `internal_notes`
+- stream metadata routing fields such as `metadata_source`, `metadata_url`, `metadata_resolver`, and `metadata_delayed`
 
 ---
 

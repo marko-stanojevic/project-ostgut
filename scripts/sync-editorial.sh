@@ -27,8 +27,10 @@
 #   plus all station_streams belonging to those stations.
 #   Manual stations missing from target are inserted. Existing rows update only
 #   when source timestamp is newer than target's. Streams are upserted by
-#   (station_id, priority). Synced stream fields include audio format, metadata
-#   routing config (resolver, source, url, delayed flag) and editorial flags.
+#   (station_id, priority). Synced station fields include taxonomy tags,
+#   editorial review, internal notes, and moderation flags. Synced stream
+#   fields include audio format and metadata routing config (resolver, source,
+#   url, delayed flag).
 #   Operational state (health_score, last_checked_at, last_error, loudness_*,
 #   metadata_resolver_checked_at) is not synced.
 #
@@ -75,45 +77,50 @@ do_export() {
 SELECT format(
   $f$INSERT INTO stations (
   external_id, name, stream_url, homepage, logo,
-  genres, language, country, country_code, city, tags,
+  genre_tags, subgenre_tags, search_tags, language, country, city,
   style_tags, format_tags, texture_tags,
   reliability_score,
   is_active, status, featured,
-  custom_name, custom_website, overview, editor_notes,
+  custom_name, custom_website, overview, editorial_review, internal_notes,
   last_editor_action_at, last_synced_at, updated_at
 ) VALUES (
   %L, %L, %L, %L, %L,
-  %L::text[], %L, %L, %L, %L, %L::text[],
+  %L::text[], %L::text[], %L::text[], %L, %L, %L,
   %L::text[], %L::text[], %L::text[],
   %L::float8,
   true, %L, %L::bool,
-  %L, %L, %L, %L,
+  %L, %L, %L, %L, %L,
   %L::timestamptz, NOW(), NOW()
 )
 ON CONFLICT (external_id) DO UPDATE SET
   status                = EXCLUDED.status,
   featured              = EXCLUDED.featured,
   logo                  = EXCLUDED.logo,
+  genre_tags            = EXCLUDED.genre_tags,
+  subgenre_tags         = EXCLUDED.subgenre_tags,
+  search_tags           = EXCLUDED.search_tags,
+  language              = EXCLUDED.language,
+  country               = EXCLUDED.country,
   city                  = EXCLUDED.city,
-  tags                  = EXCLUDED.tags,
   style_tags            = EXCLUDED.style_tags,
   format_tags           = EXCLUDED.format_tags,
   texture_tags          = EXCLUDED.texture_tags,
   custom_name           = EXCLUDED.custom_name,
   custom_website        = EXCLUDED.custom_website,
   overview              = EXCLUDED.overview,
-  editor_notes          = EXCLUDED.editor_notes,
+  editorial_review      = EXCLUDED.editorial_review,
+  internal_notes        = EXCLUDED.internal_notes,
   last_editor_action_at = EXCLUDED.last_editor_action_at,
   updated_at            = NOW()
 WHERE stations.last_editor_action_at IS NULL
    OR stations.last_editor_action_at < EXCLUDED.last_editor_action_at;
 $f$,
   external_id, name, stream_url, homepage, logo,
-  genres, language, country, country_code, city, tags,
+  genre_tags, subgenre_tags, search_tags, language, country, city,
   style_tags, format_tags, texture_tags,
   reliability_score,
   status, featured,
-  custom_name, custom_website, overview, editor_notes,
+  custom_name, custom_website, overview, editorial_review, internal_notes,
   last_editor_action_at
 )
 FROM stations
@@ -211,9 +218,14 @@ check_schema() {
     FROM (VALUES
       ('stations',        'custom_name'),
       ('stations',        'overview'),
+      ('stations',        'genre_tags'),
+      ('stations',        'subgenre_tags'),
+      ('stations',        'search_tags'),
       ('stations',        'style_tags'),
       ('stations',        'format_tags'),
       ('stations',        'texture_tags'),
+      ('stations',        'editorial_review'),
+      ('stations',        'internal_notes'),
       ('stations',        'last_editor_action_at'),
       ('station_streams', 'bit_depth'),
       ('station_streams', 'sample_rate_hz'),

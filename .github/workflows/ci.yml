@@ -4,17 +4,23 @@ on:
   push:
     branches: ["main"]
     paths:
+      - ".github/workflows/**"
       - "backend/**"
+      - "docs/sync-editorial.md"
       - "frontend/**"
       - "infra/**"
       - "GitVersion.yml"
+      - "scripts/**"
   pull_request:
     branches: ["main"]
     paths:
+      - ".github/workflows/**"
       - "backend/**"
+      - "docs/sync-editorial.md"
       - "frontend/**"
       - "infra/**"
       - "GitVersion.yml"
+      - "scripts/**"
 
 permissions:
   contents: read
@@ -42,6 +48,9 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Check editorial scripts syntax
+        run: bash -n ../scripts/sync-editorial.sh ../scripts/export-and-upload-editorial.sh
 
       - name: Vet
         run: go vet ./...
