@@ -62,6 +62,7 @@ interface AdminStream {
     metadata_type: string
     metadata_source?: string
     metadata_url?: string
+    metadata_delayed?: boolean
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string
@@ -141,6 +142,8 @@ const statusConfig = {
 }
 
 const ADMIN_TAG_BADGE_CLASS = 'ui-admin-tag-badge rounded-none border-transparent font-medium text-[10px] uppercase tracking-wide'
+const METADATA_WAIT_SECONDS_NORMAL = 6
+const METADATA_WAIT_SECONDS_DELAYED = 20
 
 function SourceField({ label, value }: { label: string; value?: string }) {
     if (!value) {
@@ -557,6 +560,7 @@ export default function StationEditorPage() {
             metadataUrl: stream.metadata_url,
             metadataResolver: stream.metadata_resolver,
             metadataResolverCheckedAt: stream.metadata_resolver_checked_at,
+            metadataDelayed: stream.metadata_delayed,
             lastCheckedAt: stream.last_checked_at,
             lastError: stream.last_error,
         })),
@@ -943,6 +947,11 @@ export default function StationEditorPage() {
                                                                         {streamDetails[i].metadata_resolver}
                                                                     </Badge>
                                                                 )}
+                                                                {streamDetails[i].metadata_delayed ? (
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                        delayed metadata
+                                                                    </Badge>
+                                                                ) : null}
                                                                 {streamDetails[i].metadata_error_code && (
                                                                     <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].metadata_error_code}
@@ -950,6 +959,20 @@ export default function StationEditorPage() {
                                                                 )}
                                                             </div>
                                                         </div>
+                                                    </div>
+                                                    <div className="mt-3 space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Metadata timing</p>
+                                                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                {streamDetails[i].metadata_delayed ? 'delayed' : 'normal'}
+                                                            </Badge>
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                {streamDetails[i].metadata_delayed ? METADATA_WAIT_SECONDS_DELAYED : METADATA_WAIT_SECONDS_NORMAL} seconds
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Server-side ICY metadata budget.
+                                                        </p>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Latest metadata check</p>

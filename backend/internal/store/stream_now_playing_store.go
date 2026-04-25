@@ -65,6 +65,49 @@ func (s *StreamNowPlayingStore) Get(ctx context.Context, streamID string) (*Stre
 	return &np, nil
 }
 
+// ListByStreamIDs returns a stream_id => snapshot map for the requested streams.
+func (s *StreamNowPlayingStore) ListByStreamIDs(ctx context.Context, streamIDs []string) (map[string]*StreamNowPlaying, error) {
+	result := make(map[string]*StreamNowPlaying, len(streamIDs))
+	if len(streamIDs) == 0 {
+		return result, nil
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT stream_id, title, artist, song, source, metadata_url,
+		       error, error_code, fetched_at, updated_at
+		FROM stream_now_playing
+		WHERE stream_id = ANY($1::uuid[])`, streamIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list stream now playing: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var np StreamNowPlaying
+		if err := rows.Scan(
+			&np.StreamID,
+			&np.Title,
+			&np.Artist,
+			&np.Song,
+			&np.Source,
+			&np.MetadataURL,
+			&np.Error,
+			&np.ErrorCode,
+			&np.FetchedAt,
+			&np.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan stream now playing: %w", err)
+		}
+		copy := np
+		result[np.StreamID] = &copy
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // Upsert writes a fresh snapshot. Conflict-free: always overwrites.
 func (s *StreamNowPlayingStore) Upsert(ctx context.Context, snapshot StreamNowPlaying) error {
 	if strings.TrimSpace(snapshot.StreamID) == "" {

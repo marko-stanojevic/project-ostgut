@@ -19,6 +19,7 @@ export interface StationStream {
     metadataType?: string
     metadataSource?: string
     metadataUrl?: string
+    metadataDelayed?: boolean
     metadataResolver?: 'none' | 'server' | 'client'
     metadataResolverCheckedAt?: string
     healthScore: number

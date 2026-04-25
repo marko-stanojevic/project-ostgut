@@ -90,7 +90,8 @@ func TestSplitArtistTitle(t *testing.T) {
 		{"  Artist  -  Song  ", "Artist", "Song"}, // whitespace trimmed
 		// Multiple " - " separators: first occurrence wins.
 		{"A - B - C", "A", "B - C"},
-		{"Variety Mix - Greta Rose -", "", "Variety Mix - Greta Rose -"},
+		{"Variety Mix - Greta Rose -", "Variety Mix", "Greta Rose"},
+		{"Warn Yuh - Jah Lil -", "Warn Yuh", "Jah Lil"},
 		{"\"Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude\" by Johnny Gandelsman on Currents on WFMU", "Johnny Gandelsman", "Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude"},
 	}
 
@@ -305,7 +306,7 @@ func TestFetcherCachesResult(t *testing.T) {
 	// Manually insert into cache to test Fetch() cache path.
 	f.mu.Lock()
 	key := srv.URL + "/s"
-	cacheKey := key + "|" + TypeAuto + "|true"
+	cacheKey := key + "|" + TypeAuto + "|true|delayed=false|detect-delayed=false"
 	f.cache[cacheKey] = cachedEntry{
 		np:  &NowPlaying{Title: "Cached Track", Source: "icecast"},
 		exp: time.Now().Add(cacheTTLSupported),
@@ -447,7 +448,7 @@ func TestFetchICYFromStream(t *testing.T) {
 	defer srv.Close()
 
 	f := NewFetcher(slog.Default())
-	np, err := f.fetchICY(t.Context(), srv.URL)
+	np, _, err := f.fetchICY(t.Context(), srv.URL, maxICYMetadataBlocksFast)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -489,7 +490,7 @@ func TestFetchICYFromStreamSkipsEmptyPrerollBlocks(t *testing.T) {
 	defer srv.Close()
 
 	f := NewFetcher(slog.Default())
-	np, err := f.fetchICY(t.Context(), srv.URL)
+	np, _, err := f.fetchICY(t.Context(), srv.URL, maxICYMetadataBlocksFast)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -498,5 +499,46 @@ func TestFetchICYFromStreamSkipsEmptyPrerollBlocks(t *testing.T) {
 	}
 	if np.Artist != "Kaitlyn Aurelia Smith" {
 		t.Errorf("got artist %q; want %q", np.Artist, "Kaitlyn Aurelia Smith")
+	}
+}
+
+func TestFetchConfiguredICYDetectsDelayedMetadata(t *testing.T) {
+	const metaint = 64
+	delayedTitle := "KEXP - Live from Seattle"
+	delayedMeta := "StreamTitle='" + delayedTitle + "';"
+
+	padBlock := func(raw string) string {
+		padded := raw
+		if rem := len(raw) % 16; rem != 0 {
+			padded += strings.Repeat("\x00", 16-rem)
+		}
+		return string([]byte{byte(len(padded) / 16)}) + padded
+	}
+
+	body := strings.Builder{}
+	for i := 0; i < maxICYMetadataBlocksFast; i++ {
+		body.WriteString(strings.Repeat("a", metaint))
+		body.WriteString(padBlock("StreamTitle='';"))
+	}
+	body.WriteString(strings.Repeat("b", metaint))
+	body.WriteString(padBlock(delayedMeta))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Icy-Metaint", strconv.Itoa(metaint))
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Write([]byte(body.String()))
+	}))
+	defer srv.Close()
+
+	f := NewFetcher(slog.Default())
+	np := f.Fetch(t.Context(), srv.URL, Config{Enabled: true, Type: TypeICY, DetectDelayedICY: true})
+	if np.Title != delayedTitle {
+		t.Fatalf("got title %q; want %q", np.Title, delayedTitle)
+	}
+	if !np.DelayedICY {
+		t.Fatalf("expected delayed icy flag to be true")
+	}
+	if np.Status != "ok" {
+		t.Fatalf("got status %q; want ok", np.Status)
 	}
 }

@@ -24,6 +24,7 @@ export interface ApiStream {
     metadata_type: string
     metadata_source?: string
     metadata_url?: string
+    metadata_delayed?: boolean
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string

@@ -367,6 +367,28 @@ func (s *StationStore) List(ctx context.Context, f StationFilter) ([]*Station, e
 	return result, rows.Err()
 }
 
+// ListAllByStatus returns all active stations for one moderation status.
+func (s *StationStore) ListAllByStatus(ctx context.Context, status string) ([]*Station, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+stationColumns+` FROM stations
+		WHERE is_active = true AND status = $1
+		ORDER BY featured DESC, reliability_score DESC, name ASC`, status)
+	if err != nil {
+		return nil, fmt.Errorf("list stations by status: %w", err)
+	}
+	defer rows.Close()
+
+	var result []*Station
+	for rows.Next() {
+		st, err := scanStation(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, st)
+	}
+	return result, rows.Err()
+}
+
 // Upsert inserts or updates a station by external_id.
 // On conflict it updates operational sync fields while preserving core station
 // metadata, so admin edits to original station fields are not overwritten.

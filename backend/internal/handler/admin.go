@@ -386,12 +386,15 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolvedKind, "hls") {
 			nextMetadataURL = optionalString(metadataURL)
 		}
+		nextMetadataDelayed := target.MetadataDelayed
 		if scope == "full" || scope == "metadata" {
 			np := h.admin.metaFetcher.Fetch(c.Request.Context(), metadataURL, metadata.Config{
-				Enabled:     target.MetadataEnabled,
-				Type:        target.MetadataType,
-				SourceHint:  stringValue(target.MetadataSource),
-				MetadataURL: stringValue(target.MetadataURL),
+				Enabled:          target.MetadataEnabled,
+				Type:             target.MetadataType,
+				SourceHint:       stringValue(target.MetadataSource),
+				MetadataURL:      stringValue(target.MetadataURL),
+				DelayedICY:       target.MetadataDelayed,
+				DetectDelayedICY: true,
 			})
 			snap := store.StreamNowPlaying{
 				StreamID:    target.ID,
@@ -413,13 +416,16 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			if np.Source != "" || np.MetadataURL != "" {
 				src := optionalString(np.Source)
 				url := optionalString(np.MetadataURL)
-				_ = h.admin.streams.UpdateMetadataDetection(context.WithoutCancel(c.Request.Context()), target.ID, src, url)
+				nextMetadataDelayed = np.DelayedICY || nextMetadataDelayed
+				delayed := &np.DelayedICY
+				_ = h.admin.streams.UpdateMetadataDetection(context.WithoutCancel(c.Request.Context()), target.ID, src, url, delayed)
 			}
 		}
 		if err := h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(c.Request.Context()), target.ID, store.MetadataResolverSnapshot{
 			Resolver:    nextResolver,
 			MetadataURL: nextMetadataURL,
 			CheckedAt:   &clientMetadata.CheckedAt,
+			Delayed:     &nextMetadataDelayed,
 		}); err != nil {
 			h.log.Error("admin probe stream update metadata resolver", "stream_id", target.ID, "scope", scope, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

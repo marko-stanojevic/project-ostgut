@@ -197,6 +197,7 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 		Type:        stream.MetadataType,
 		SourceHint:  stringValue(stream.MetadataSource),
 		MetadataURL: stringValue(stream.MetadataURL),
+		DelayedICY:  stream.MetadataDelayed,
 	})
 
 	persistCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -221,7 +222,8 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 	if np.Source != "" || np.MetadataURL != "" {
 		src := optionalString(np.Source)
 		url := optionalString(np.MetadataURL)
-		if err := p.streams.UpdateMetadataDetection(persistCtx, stream.ID, src, url); err != nil {
+		delayed := &np.DelayedICY
+		if err := p.streams.UpdateMetadataDetection(persistCtx, stream.ID, src, url, delayed); err != nil {
 			p.log.Warn("metadata poller: update detection failed", "stream_id", stream.ID, "error", err)
 		}
 	}

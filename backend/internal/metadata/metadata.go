@@ -33,13 +33,15 @@ import (
 )
 
 const (
-	icyTimeout           = 20 * time.Second // budget to connect + survive longer prerolls before title appears
-	fallbackTimeout      = 5 * time.Second  // budget for lightweight JSON / text endpoints
-	cacheTTLSupported    = 30 * time.Second // stream returned metadata
-	cacheTTLUnsupported  = 3 * time.Minute  // stream returned nothing — don't hammer it
-	maxMetaint           = 65536            // reject streams with implausibly large metadata intervals
-	maxICYMetadataBlocks = 64               // tolerate longer ad/empty prerolls before giving up
-	userAgent            = "OSTGUT/1.0 (radio@worksfine.app)"
+	icyTimeoutFast         = 6 * time.Second  // default ICY budget for normal streams
+	icyTimeoutDelayed      = 20 * time.Second // extended ICY budget for streams known to delay metadata
+	fallbackTimeout        = 5 * time.Second  // budget for lightweight JSON / text endpoints
+	cacheTTLSupported      = 30 * time.Second // stream returned metadata
+	cacheTTLUnsupported    = 3 * time.Minute  // stream returned nothing — don't hammer it
+	maxMetaint             = 65536            // reject streams with implausibly large metadata intervals
+	maxICYMetadataBlocksFast = 8              // default empty/preroll tolerance before giving up
+	maxICYMetadataBlocksSlow = 64             // extended empty/preroll tolerance for delayed streams
+	userAgent              = "OSTGUT/1.0 (radio@worksfine.app)"
 )
 
 const (
@@ -65,6 +67,8 @@ type Config struct {
 	Type        string // auto | icy | icecast | shoutcast
 	SourceHint  string // last successful source, if known
 	MetadataURL string // exact successful metadata endpoint, if known
+	DelayedICY  bool   // stream has previously needed the extended ICY budget
+	DetectDelayedICY bool // probe mode: retry with the extended ICY budget to learn if the stream is delayed
 }
 
 // NowPlaying holds the extracted now-playing information for a stream.
@@ -78,6 +82,7 @@ type NowPlaying struct {
 	Status    string    `json:"status"`    // "ok" | "unsupported" | "disabled" | "error"
 	ErrorCode string    `json:"error_code,omitempty"`
 	Error     string    `json:"error,omitempty"`
+	DelayedICY bool     `json:"-"`
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
@@ -153,6 +158,8 @@ func (f *Fetcher) Fetch(ctx context.Context, streamURL string, cfg Config) *NowP
 	if metadataURLHint != "" {
 		cacheKey += "|" + metadataURLHint
 	}
+	cacheKey += "|delayed=" + strconv.FormatBool(cfg.DelayedICY)
+	cacheKey += "|detect-delayed=" + strconv.FormatBool(cfg.DetectDelayedICY)
 
 	f.mu.Lock()
 	if e, ok := f.cache[cacheKey]; ok && time.Now().Before(e.exp) {
@@ -169,7 +176,14 @@ func (f *Fetcher) Fetch(ctx context.Context, streamURL string, cfg Config) *NowP
 		}
 		f.mu.Unlock()
 
-		np := f.resolve(ctx, streamURL, cfg.Enabled, metadataType, sourceHint, metadataURLHint)
+		np := f.resolve(ctx, streamURL, Config{
+			Enabled:          cfg.Enabled,
+			Type:             metadataType,
+			SourceHint:       sourceHint,
+			MetadataURL:      metadataURLHint,
+			DelayedICY:       cfg.DelayedICY,
+			DetectDelayedICY: cfg.DetectDelayedICY,
+		})
 
 		ttl := cacheTTLSupported
 		if !np.Supported {
@@ -210,8 +224,8 @@ func normalizeType(raw string) string {
 	}
 }
 
-func (f *Fetcher) resolve(ctx context.Context, streamURL string, enabled bool, metadataType string, sourceHint string, metadataURLHint string) *NowPlaying {
-	if !enabled {
+func (f *Fetcher) resolve(ctx context.Context, streamURL string, cfg Config) *NowPlaying {
+	if !cfg.Enabled {
 		return &NowPlaying{
 			Source:    "",
 			Supported: false,
@@ -227,23 +241,23 @@ func (f *Fetcher) resolve(ctx context.Context, streamURL string, enabled bool, m
 		streamURL = resolved
 	}
 
-	if hinted := strings.TrimSpace(metadataURLHint); hinted != "" {
-		if np := f.resolveHinted(ctx, streamURL, hinted, sourceHint); np != nil && np.Title != "" {
+	if hinted := strings.TrimSpace(cfg.MetadataURL); hinted != "" {
+		if np := f.resolveHinted(ctx, streamURL, hinted, cfg); np != nil && np.Title != "" {
 			np.Supported = true
 			np.Status = "ok"
 			return np
 		}
 	}
 
-	if metadataType != TypeAuto {
-		return f.resolveConfigured(ctx, streamURL, metadataType)
+	if cfg.Type != TypeAuto {
+		return f.resolveConfigured(ctx, streamURL, cfg)
 	}
 
-	return f.resolveAuto(ctx, streamURL)
+	return f.resolveAuto(ctx, streamURL, cfg)
 }
 
-func (f *Fetcher) resolveHinted(ctx context.Context, streamURL string, metadataURL string, sourceHint string) *NowPlaying {
-	switch hintedMetadataKind(metadataURL, sourceHint) {
+func (f *Fetcher) resolveHinted(ctx context.Context, streamURL string, metadataURL string, cfg Config) *NowPlaying {
+	switch hintedMetadataKind(metadataURL, cfg.SourceHint) {
 	case TypeIcecast:
 		iceCtx, iceCancel := context.WithTimeout(ctx, fallbackTimeout)
 		np, err := f.fetchIcecastJSONAt(iceCtx, streamURL, metadataURL)
@@ -259,26 +273,15 @@ func (f *Fetcher) resolveHinted(ctx context.Context, streamURL string, metadataU
 			return np
 		}
 	default:
-		icyCtx, icyCancel := context.WithTimeout(ctx, icyTimeout)
-		np, err := f.fetchICY(icyCtx, metadataURL)
-		icyCancel()
+		np, err := f.fetchICYAdaptive(ctx, metadataURL, cfg)
 		if err == nil && np != nil && np.Title != "" {
 			return np
-		}
-
-		if isICYProtocolError(err) {
-			rawCtx, rawCancel := context.WithTimeout(ctx, icyTimeout)
-			npRaw, rawErr := f.fetchICYRaw(rawCtx, metadataURL)
-			rawCancel()
-			if rawErr == nil && npRaw != nil && npRaw.Title != "" {
-				return npRaw
-			}
 		}
 	}
 	return nil
 }
 
-func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string) *NowPlaying {
+func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string, cfg Config) *NowPlaying {
 	var lastErr error
 
 	var np *NowPlaying
@@ -287,10 +290,9 @@ func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string) *NowPlaying
 	// HLS streams can't carry ICY in-stream metadata — skip straight to the
 	// server-side JSON/text endpoints which may still be available.
 	if !isHLSURL(streamURL) {
-		// Strategy 1: ICY in-stream via http.Client.
-		icyCtx, icyCancel := context.WithTimeout(ctx, icyTimeout)
-		np, err = f.fetchICY(icyCtx, streamURL)
-		icyCancel()
+		// Strategy 1: ICY in-stream via http.Client, with extended budgets only
+		// for streams already known to delay metadata or for explicit detection probes.
+		np, err = f.fetchICYAdaptive(ctx, streamURL, cfg)
 		if err == nil && np.Title != "" {
 			np.Supported = true
 			np.Status = "ok"
@@ -298,23 +300,6 @@ func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string) *NowPlaying
 		}
 		lastErr = err
 		f.log.Debug("metadata: icy http failed", "url", streamURL, "error", err)
-
-		// Legacy Shoutcast 1 servers reply with "ICY 200 OK" instead of a valid
-		// HTTP status line, which Go's net/http rejects. Retry via raw TCP.
-		if isICYProtocolError(err) {
-			rawCtx, rawCancel := context.WithTimeout(ctx, icyTimeout)
-			np2, err2 := f.fetchICYRaw(rawCtx, streamURL)
-			rawCancel()
-			if err2 == nil && np2.Title != "" {
-				np2.Supported = true
-				np2.Status = "ok"
-				return np2
-			}
-			if err2 != nil {
-				lastErr = err2
-			}
-			f.log.Debug("metadata: icy raw failed", "url", streamURL, "error", err2)
-		}
 	}
 
 	// Strategy 2: Icecast JSON status endpoint.
@@ -349,29 +334,15 @@ func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string) *NowPlaying
 	return &NowPlaying{Source: "", Supported: false, Status: "unsupported", ErrorCode: ErrorCodeNoMeta, FetchedAt: time.Now()}
 }
 
-func (f *Fetcher) resolveConfigured(ctx context.Context, streamURL, metadataType string) *NowPlaying {
+func (f *Fetcher) resolveConfigured(ctx context.Context, streamURL string, cfg Config) *NowPlaying {
 	var (
 		np  *NowPlaying
 		err error
 	)
 
-	switch metadataType {
+	switch cfg.Type {
 	case TypeICY:
-		icyCtx, icyCancel := context.WithTimeout(ctx, icyTimeout)
-		np, err = f.fetchICY(icyCtx, streamURL)
-		icyCancel()
-
-		if isICYProtocolError(err) {
-			rawCtx, rawCancel := context.WithTimeout(ctx, icyTimeout)
-			npRaw, rawErr := f.fetchICYRaw(rawCtx, streamURL)
-			rawCancel()
-			if rawErr == nil && npRaw.Title != "" {
-				npRaw.Supported = true
-				npRaw.Status = "ok"
-				return npRaw
-			}
-			err = rawErr
-		}
+		np, err = f.fetchICYAdaptive(ctx, streamURL, cfg)
 	case TypeIcecast:
 		iceCtx, iceCancel := context.WithTimeout(ctx, fallbackTimeout)
 		np, err = f.fetchIcecastJSON(iceCtx, streamURL)
@@ -381,7 +352,7 @@ func (f *Fetcher) resolveConfigured(ctx context.Context, streamURL, metadataType
 		np, err = f.fetchShoutcast(scCtx, streamURL)
 		scCancel()
 	default:
-		return f.resolveAuto(ctx, streamURL)
+		return f.resolveAuto(ctx, streamURL, cfg)
 	}
 
 	if err == nil && np != nil && np.Title != "" {
@@ -396,7 +367,7 @@ func (f *Fetcher) resolveConfigured(ctx context.Context, streamURL, metadataType
 	}
 
 	return &NowPlaying{
-		Source:    metadataType,
+		Source:    cfg.Type,
 		Supported: false,
 		Status:    "error",
 		ErrorCode: errorCodeFromErr(err),
@@ -430,44 +401,99 @@ func errorCodeFromErr(err error) string {
 	}
 }
 
+type icyBudget struct {
+	timeout   time.Duration
+	maxBlocks int
+	delayed   bool
+}
+
+func icyBudgets(cfg Config) []icyBudget {
+	if cfg.DelayedICY {
+		return []icyBudget{{timeout: icyTimeoutDelayed, maxBlocks: maxICYMetadataBlocksSlow, delayed: true}}
+	}
+	budgets := []icyBudget{{timeout: icyTimeoutFast, maxBlocks: maxICYMetadataBlocksFast, delayed: false}}
+	if cfg.DetectDelayedICY {
+		budgets = append(budgets, icyBudget{timeout: icyTimeoutDelayed, maxBlocks: maxICYMetadataBlocksSlow, delayed: true})
+	}
+	return budgets
+}
+
+func shouldRetryWithDelayedBudget(err error) bool {
+	if err == nil {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || strings.Contains(msg, "no stream title found") || strings.Contains(msg, "empty metadata") || strings.Contains(msg, "skip audio bytes") || strings.Contains(msg, "read metadata block") || strings.Contains(msg, "read meta length")
+}
+
+func (f *Fetcher) fetchICYAdaptive(ctx context.Context, streamURL string, cfg Config) (*NowPlaying, error) {
+	var lastErr error
+	for index, budget := range icyBudgets(cfg) {
+		icyCtx, icyCancel := context.WithTimeout(ctx, budget.timeout)
+		np, blocksRead, err := f.fetchICY(icyCtx, streamURL, budget.maxBlocks)
+		icyCancel()
+		if err == nil && np != nil && np.Title != "" {
+			np.DelayedICY = budget.delayed || blocksRead > maxICYMetadataBlocksFast
+			return np, nil
+		}
+		lastErr = err
+
+		if isICYProtocolError(err) {
+			rawCtx, rawCancel := context.WithTimeout(ctx, budget.timeout)
+			npRaw, rawBlocksRead, rawErr := f.fetchICYRaw(rawCtx, streamURL, budget.maxBlocks)
+			rawCancel()
+			if rawErr == nil && npRaw != nil && npRaw.Title != "" {
+				npRaw.DelayedICY = budget.delayed || rawBlocksRead > maxICYMetadataBlocksFast
+				return npRaw, nil
+			}
+			lastErr = rawErr
+		}
+
+		if index == len(icyBudgets(cfg))-1 || !cfg.DetectDelayedICY || !shouldRetryWithDelayedBudget(lastErr) {
+			break
+		}
+	}
+	return nil, lastErr
+}
+
 // ---------------------------------------------------------------------------
 // Strategy 1a — ICY via http.Client
 // ---------------------------------------------------------------------------
 
-func (f *Fetcher) fetchICY(ctx context.Context, streamURL string) (*NowPlaying, error) {
+func (f *Fetcher) fetchICY(ctx context.Context, streamURL string, maxBlocks int) (*NowPlaying, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("Icy-Metadata", "1")
 	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := f.icyClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
 	metaintStr := resp.Header.Get("Icy-Metaint")
 	if metaintStr == "" {
-		return nil, fmt.Errorf("no icy-metaint header")
+		return nil, 0, fmt.Errorf("no icy-metaint header")
 	}
 	metaint, err := strconv.Atoi(metaintStr)
 	if err != nil || metaint <= 0 || metaint > maxMetaint {
-		return nil, fmt.Errorf("invalid icy-metaint: %q", metaintStr)
+		return nil, 0, fmt.Errorf("invalid icy-metaint: %q", metaintStr)
 	}
 
-	return f.readICYBlock(resp.Body, metaint, streamURL)
+	return f.readICYBlock(resp.Body, metaint, streamURL, maxBlocks)
 }
 
 // ---------------------------------------------------------------------------
 // Strategy 1b — ICY via raw TCP (handles "ICY 200 OK" status lines)
 // ---------------------------------------------------------------------------
 
-func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string) (*NowPlaying, error) {
+func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string, maxBlocks int) (*NowPlaying, int, error) {
 	u, err := url.Parse(streamURL)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	host := u.Host
@@ -481,7 +507,7 @@ func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string) (*NowPlayin
 
 	netConn, err := (&net.Dialer{}).DialContext(ctx, "tcp", host)
 	if err != nil {
-		return nil, fmt.Errorf("dial: %w", err)
+		return nil, 0, fmt.Errorf("dial: %w", err)
 	}
 
 	var conn net.Conn = netConn
@@ -489,7 +515,7 @@ func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string) (*NowPlayin
 		tlsConn := tls.Client(netConn, &tls.Config{ServerName: u.Hostname()})
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
 			netConn.Close()
-			return nil, fmt.Errorf("tls handshake: %w", err)
+			return nil, 0, fmt.Errorf("tls handshake: %w", err)
 		}
 		conn = tlsConn
 	}
@@ -506,7 +532,7 @@ func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string) (*NowPlayin
 		u.RequestURI(), u.Hostname(), userAgent,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("write request: %w", err)
+		return nil, 0, fmt.Errorf("write request: %w", err)
 	}
 
 	r := bufio.NewReader(conn)
@@ -514,11 +540,11 @@ func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string) (*NowPlayin
 	// Read and accept both "HTTP/1.x 200 OK" and "ICY 200 OK" status lines.
 	statusLine, err := r.ReadString('\n')
 	if err != nil {
-		return nil, fmt.Errorf("read status line: %w", err)
+		return nil, 0, fmt.Errorf("read status line: %w", err)
 	}
 	statusLine = strings.TrimRight(statusLine, "\r\n")
 	if !strings.Contains(statusLine, " 200") {
-		return nil, fmt.Errorf("non-200 status: %q", statusLine)
+		return nil, 0, fmt.Errorf("non-200 status: %q", statusLine)
 	}
 
 	// Read response headers until blank line.
@@ -526,7 +552,7 @@ func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string) (*NowPlayin
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil {
-			return nil, fmt.Errorf("read headers: %w", err)
+			return nil, 0, fmt.Errorf("read headers: %w", err)
 		}
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
@@ -542,28 +568,28 @@ func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string) (*NowPlayin
 	}
 
 	if metaintStr == "" {
-		return nil, fmt.Errorf("no icy-metaint in raw response")
+		return nil, 0, fmt.Errorf("no icy-metaint in raw response")
 	}
 	metaint, err := strconv.Atoi(metaintStr)
 	if err != nil || metaint <= 0 || metaint > maxMetaint {
-		return nil, fmt.Errorf("invalid icy-metaint: %q", metaintStr)
+		return nil, 0, fmt.Errorf("invalid icy-metaint: %q", metaintStr)
 	}
 
-	return f.readICYBlock(r, metaint, streamURL)
+	return f.readICYBlock(r, metaint, streamURL, maxBlocks)
 }
 
 // readICYBlock skips `metaint` audio bytes and scans a few metadata blocks so
 // preroll ads or empty blocks do not mask a later real track title.
-func (f *Fetcher) readICYBlock(r io.Reader, metaint int, streamURL string) (*NowPlaying, error) {
-	for attempt := 0; attempt < maxICYMetadataBlocks; attempt++ {
+func (f *Fetcher) readICYBlock(r io.Reader, metaint int, streamURL string, maxBlocks int) (*NowPlaying, int, error) {
+	for attempt := 0; attempt < maxBlocks; attempt++ {
 		if _, err := io.CopyN(io.Discard, r, int64(metaint)); err != nil {
-			return nil, fmt.Errorf("skip audio bytes: %w", err)
+			return nil, attempt, fmt.Errorf("skip audio bytes: %w", err)
 		}
 
 		// 1-byte length field; actual block size = value × 16.
 		var lenBuf [1]byte
 		if _, err := io.ReadFull(r, lenBuf[:]); err != nil {
-			return nil, fmt.Errorf("read meta length byte: %w", err)
+			return nil, attempt, fmt.Errorf("read meta length byte: %w", err)
 		}
 		metaLen := int(lenBuf[0]) * 16
 		if metaLen == 0 {
@@ -573,11 +599,12 @@ func (f *Fetcher) readICYBlock(r io.Reader, metaint int, streamURL string) (*Now
 
 		metaBuf := make([]byte, metaLen)
 		if _, err := io.ReadFull(r, metaBuf); err != nil {
-			return nil, fmt.Errorf("read metadata block: %w", err)
+			return nil, attempt + 1, fmt.Errorf("read metadata block: %w", err)
 		}
 
 		raw := strings.TrimRight(string(metaBuf), "\x00")
 		title := extractICYField(raw, "StreamTitle")
+		title = normalizeMetadataTitle(title)
 		f.log.Debug("metadata: icy block content", "url", streamURL, "attempt", attempt+1, "raw", raw, "title", title)
 		if isPlaceholderTitle(title) {
 			title = ""
@@ -593,10 +620,10 @@ func (f *Fetcher) readICYBlock(r io.Reader, metaint int, streamURL string) (*Now
 			FetchedAt:   time.Now(),
 		}
 		np.Artist, np.Song = splitArtistTitle(title)
-		return np, nil
+		return np, attempt + 1, nil
 	}
 
-	return nil, fmt.Errorf("no stream title found in %d icy blocks", maxICYMetadataBlocks)
+	return nil, maxBlocks, fmt.Errorf("no stream title found in %d icy blocks", maxBlocks)
 }
 
 // ---------------------------------------------------------------------------
@@ -687,14 +714,15 @@ func (f *Fetcher) fetchIcecastJSONAt(ctx context.Context, streamURL string, stat
 	if isPlaceholderTitle(best.Title) {
 		return nil, fmt.Errorf("no title in icecast source")
 	}
+	title := normalizeMetadataTitle(best.Title)
 
 	np := &NowPlaying{
-		Title:     best.Title,
+		Title:     title,
 		Source:    "icecast",
 		MetadataURL: statusURL,
 		FetchedAt: time.Now(),
 	}
-	np.Artist, np.Song = splitArtistTitle(best.Title)
+	np.Artist, np.Song = splitArtistTitle(title)
 	return np, nil
 }
 
@@ -751,7 +779,7 @@ func (f *Fetcher) fetchShoutcastCurrentSong(ctx context.Context, endpoint string
 	if err != nil {
 		return nil, err
 	}
-	title := strings.TrimSpace(string(b))
+	title := normalizeMetadataTitle(string(b))
 	if isPlaceholderTitle(title) {
 		return nil, fmt.Errorf("empty shoutcast /currentsong body")
 	}
@@ -792,7 +820,7 @@ func (f *Fetcher) fetchShoutcast7HTML(ctx context.Context, endpoint string) (*No
 	if len(parts) < 7 {
 		return nil, fmt.Errorf("unexpected /7.html format: %q", text)
 	}
-	title := strings.TrimSpace(parts[6])
+	title := normalizeMetadataTitle(parts[6])
 	if isPlaceholderTitle(title) {
 		return nil, fmt.Errorf("empty title in /7.html")
 	}
@@ -809,7 +837,6 @@ func (f *Fetcher) fetchShoutcast7HTML(ctx context.Context, endpoint string) (*No
 // extractICYField parses a named value from an ICY metadata string.
 //
 // ICY format: StreamTitle='value';StreamUrl='value';
-//
 // The spec mandates "';'" as the terminator, but some servers omit the
 // semicolon on the last field, so we fall back to the last single-quote.
 func extractICYField(meta, key string) string {
@@ -828,13 +855,27 @@ func extractICYField(meta, key string) string {
 	return rest
 }
 
+func normalizeMetadataTitle(s string) string {
+	s = strings.TrimSpace(s)
+	for {
+		trimmed := false
+		for _, suffix := range []string{" -", " –", " —"} {
+			if strings.HasSuffix(s, suffix) {
+				s = strings.TrimSpace(strings.TrimSuffix(s, suffix))
+				trimmed = true
+				break
+			}
+		}
+		if !trimmed {
+			return s
+		}
+	}
+}
+
 // splitArtistTitle splits "Artist - Title" into its components.
 // Returns ("", fullTitle) when no recognised delimiter is found.
 func splitArtistTitle(s string) (artist, song string) {
-	s = strings.TrimSpace(s)
-	if strings.HasSuffix(s, "-") || strings.HasSuffix(s, "–") || strings.HasSuffix(s, "—") {
-		return "", s
-	}
+	s = normalizeMetadataTitle(s)
 	if parsedArtist, parsedSong, ok := parseQuotedBylineTitle(s); ok {
 		return parsedArtist, parsedSong
 	}

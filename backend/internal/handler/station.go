@@ -63,6 +63,7 @@ type streamResponse struct {
 	MetadataURL               *string  `json:"metadata_url,omitempty"`
 	MetadataResolver          string   `json:"metadata_resolver,omitempty"`
 	MetadataResolverCheckedAt *string  `json:"metadata_resolver_checked_at,omitempty"`
+	MetadataDelayed           bool     `json:"metadata_delayed"`
 	HealthScore               float64  `json:"health_score"`
 	LastCheckedAt             *string  `json:"last_checked_at,omitempty"`
 	LastError                 *string  `json:"last_error,omitempty"`
@@ -112,6 +113,7 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 		MetadataURL:               s.MetadataURL,
 		MetadataResolver:          metadataResolverForResponse(s),
 		MetadataResolverCheckedAt: metadataResolverCheckedAt,
+		MetadataDelayed:           s.MetadataDelayed,
 		HealthScore:               s.HealthScore,
 		LastCheckedAt:             lastCheckedAt,
 		LastError:                 s.LastError,
@@ -147,6 +149,7 @@ func defaultStreamResponseForStation(s *store.Station) []streamResponse {
 		MetadataSource:         nil,
 		MetadataURL:            nil,
 		MetadataResolver:       "server",
+		MetadataDelayed:        false,
 		HealthScore:            s.ReliabilityScore,
 	}}
 }

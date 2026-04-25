@@ -39,6 +39,7 @@ type StationStream struct {
 	MetadataURL               *string
 	MetadataResolver          string
 	MetadataResolverCheckedAt *time.Time
+	MetadataDelayed           bool
 	HealthScore               float64
 	LastCheckedAt             *time.Time
 	LastError                 *string
@@ -71,6 +72,7 @@ type StationStreamInput struct {
 	MetadataURL               *string
 	MetadataResolver          string
 	MetadataResolverCheckedAt *time.Time
+	MetadataDelayed           bool
 	HealthScore               float64
 	LastCheckedAt             *time.Time
 	LastError                 *string
@@ -80,6 +82,7 @@ type MetadataResolverSnapshot struct {
 	Resolver    string
 	MetadataURL *string
 	CheckedAt   *time.Time
+	Delayed     *bool
 }
 
 // StationStreamStore executes queries against station_streams.
@@ -121,6 +124,7 @@ func scanStationStreamRow(row Scanner) (*StationStream, error) {
 		&s.MetadataURL,
 		&s.MetadataResolver,
 		&s.MetadataResolverCheckedAt,
+		&s.MetadataDelayed,
 		&s.HealthScore,
 		&s.LastCheckedAt,
 		&s.LastError,
@@ -219,6 +223,7 @@ func sanitizeStreamInput(in StationStreamInput, fallbackPriority int) StationStr
 		MetadataURL:               metadataURL,
 		MetadataResolver:          normalizeMetadataResolver(in.MetadataResolver),
 		MetadataResolverCheckedAt: in.MetadataResolverCheckedAt,
+		MetadataDelayed:           in.MetadataDelayed,
 		HealthScore:               health,
 		LastCheckedAt:             in.LastCheckedAt,
 		LastError:                 in.LastError,
@@ -331,7 +336,7 @@ func (s *StationStreamStore) ListByStationID(ctx context.Context, stationID stri
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE station_id = $1
@@ -363,7 +368,7 @@ func (s *StationStreamStore) ListByStationIDs(ctx context.Context, stationIDs []
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE station_id = ANY($1::uuid[])
@@ -420,14 +425,14 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 				station_id, url, resolved_url, kind, container, transport,
 				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 				priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
-				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
+				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
 				last_checked_at, last_error, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
 				$7, $8, $9, $10, $11, $12, $13,
 				$14, $15, $16, $17, $18, $19, $20,
-				$21, $22, $23, $24, $25, $26, $27,
-				$28, $29, NOW()
+				$21, $22, $23, $24, $25, $26, $27, $28,
+				$29, $30, NOW()
 			)`,
 			stationID,
 			in.URL,
@@ -455,6 +460,7 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			in.MetadataURL,
 			in.MetadataResolver,
 			in.MetadataResolverCheckedAt,
+			in.MetadataDelayed,
 			in.HealthScore,
 			in.LastCheckedAt,
 			in.LastError,
@@ -501,14 +507,14 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
-			metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
+			metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
 			last_checked_at, last_error, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12, $13,
 			1, true, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25,
-			$26, $27, NOW()
+			$19, $20, $21, $22, $23, $24, $25, $26,
+			$27, $28, NOW()
 		)
 		ON CONFLICT (station_id, priority) DO UPDATE SET
 			url = EXCLUDED.url,
@@ -535,6 +541,7 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			metadata_url = EXCLUDED.metadata_url,
 			metadata_resolver = EXCLUDED.metadata_resolver,
 			metadata_resolver_checked_at = EXCLUDED.metadata_resolver_checked_at,
+			metadata_delayed = EXCLUDED.metadata_delayed,
 			health_score = EXCLUDED.health_score,
 			last_checked_at = EXCLUDED.last_checked_at,
 			last_error = EXCLUDED.last_error,
@@ -563,6 +570,7 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		n.MetadataURL,
 		n.MetadataResolver,
 		n.MetadataResolverCheckedAt,
+		n.MetadataDelayed,
 		n.HealthScore,
 		n.LastCheckedAt,
 		n.LastError,
@@ -600,6 +608,7 @@ type ProbeUpdate struct {
 	MetadataResolver          string
 	MetadataURL               *string
 	MetadataResolverCheckedAt *time.Time
+	MetadataDelayed           *bool
 	LastCheckedAt             time.Time
 	LastError                 *string
 }
@@ -611,7 +620,7 @@ func (s *StationStreamStore) ListAllActive(ctx context.Context) ([]*StationStrea
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
 			last_checked_at, last_error
 		FROM station_streams
 		WHERE is_active = true
@@ -684,16 +693,20 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 				WHEN $17::boolean AND $20::text IS NOT NULL AND trim($20::text) <> '' THEN $20
 				ELSE metadata_url
 			END,
-			last_checked_at = $21,
-			last_error     = $22,
+			metadata_delayed = CASE
+				WHEN $17::boolean AND $21::boolean IS NOT NULL THEN $21
+				ELSE metadata_delayed
+			END,
+			last_checked_at = $22,
+			last_error     = $23,
 			health_score   = CASE
-				WHEN $23::double precision IS NULL THEN health_score
-				WHEN $23::double precision < 0 THEN 0
-				WHEN $23::double precision > 1 THEN 1
-				ELSE $23::double precision
+				WHEN $24::double precision IS NULL THEN health_score
+				WHEN $24::double precision < 0 THEN 0
+				WHEN $24::double precision > 1 THEN 1
+				ELSE $24::double precision
 			END,
 			updated_at     = NOW()
-		WHERE id = $24`,
+		WHERE id = $25`,
 		u.ResolvedURL,
 		u.Kind,
 		u.Container,
@@ -714,6 +727,7 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 		normalizeMetadataResolver(u.MetadataResolver),
 		u.MetadataResolverCheckedAt,
 		normalizeMetadataURL(u.MetadataURL),
+		u.MetadataDelayed,
 		u.LastCheckedAt,
 		u.LastError,
 		u.HealthScore,
@@ -740,6 +754,7 @@ func (s *StationStreamStore) UpdateMetadataDetection(
 	id string,
 	metadataSource *string,
 	metadataURL *string,
+	metadataDelayed *bool,
 ) error {
 	src := normalizeMetadataSource(metadataSource)
 	url := normalizeMetadataURL(metadataURL)
@@ -748,14 +763,20 @@ func (s *StationStreamStore) UpdateMetadataDetection(
 		SET
 			metadata_source = COALESCE($1, metadata_source),
 			metadata_url    = COALESCE($2, metadata_url),
+			metadata_delayed = CASE
+				WHEN $3::boolean IS NOT NULL THEN $3
+				ELSE metadata_delayed
+			END,
 			updated_at      = NOW()
-		WHERE id = $3
+		WHERE id = $4
 		  AND (
 			($1::text IS NOT NULL AND metadata_source IS DISTINCT FROM $1)
 			OR ($2::text IS NOT NULL AND metadata_url IS DISTINCT FROM $2)
+			OR ($3::boolean IS NOT NULL AND metadata_delayed IS DISTINCT FROM $3)
 		  )`,
 		src,
 		url,
+		metadataDelayed,
 		id,
 	)
 	if err != nil {
@@ -780,8 +801,12 @@ func (s *StationStreamStore) UpdateMetadataResolver(
 				ELSE metadata_url
 			END,
 			metadata_resolver_checked_at = $3,
+			metadata_delayed = CASE
+				WHEN $4::boolean IS NOT NULL THEN $4
+				ELSE metadata_delayed
+			END,
 			updated_at = NOW()
-		WHERE id = $4
+		WHERE id = $5
 		  AND (
 			metadata_resolver IS DISTINCT FROM $1
 			OR (
@@ -789,10 +814,12 @@ func (s *StationStreamStore) UpdateMetadataResolver(
 				AND metadata_url IS DISTINCT FROM $2
 			)
 			OR metadata_resolver_checked_at IS DISTINCT FROM $3
+			OR ($4::boolean IS NOT NULL AND metadata_delayed IS DISTINCT FROM $4)
 		  )`,
 		resolver,
 		metadataURL,
 		snapshot.CheckedAt,
+		snapshot.Delayed,
 		id,
 	)
 	if err != nil {

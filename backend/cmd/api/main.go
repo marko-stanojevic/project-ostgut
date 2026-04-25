@@ -183,6 +183,7 @@ func main() {
 	admin.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
 	admin.Use(middleware.AdminMiddleware(userStore))
 	{
+		admin.GET("/overview", h.AdminOverview)
 		admin.GET("/stats", h.AdminStats)
 		admin.GET("/stations", h.AdminListStations)
 		admin.POST("/stations", h.AdminCreateStation)

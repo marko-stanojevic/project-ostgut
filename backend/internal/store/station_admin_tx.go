@@ -92,14 +92,14 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 				station_id, url, resolved_url, kind, container, transport,
 				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 				priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
-				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, health_score,
+				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
 				last_checked_at, last_error, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
 				$7, $8, $9, $10, $11, $12, $13,
 				$14, $15, $16, $17, $18, $19, $20,
-				$21, $22, $23, $24, $25, $26, $27,
-				$28, $29, NOW()
+				$21, $22, $23, $24, $25, $26, $27, $28,
+				$29, $30, NOW()
 			)`,
 			id,
 			in.URL,
@@ -127,6 +127,7 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 			in.MetadataURL,
 			in.MetadataResolver,
 			in.MetadataResolverCheckedAt,
+			in.MetadataDelayed,
 			in.HealthScore,
 			in.LastCheckedAt,
 			in.LastError,
