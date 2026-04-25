@@ -47,15 +47,17 @@ The admin station detail page owns the explicit operational probes:
   - does not touch loudness or now-playing snapshot
 - `Probe resolver`
   - checks whether the stream should route metadata through `client` or `server`
-  - updates `metadata_resolver` and `metadata_resolver_checked_at` only
+  - updates `metadata_resolver` and `metadata_resolver_checked_at`
+  - also stores a client-readable `metadata_url` hint when the browser-capability probe finds one
 - `Probe metadata`
   - refreshes the stored resolver
-  - refreshes cached now-playing snapshot and metadata status fields
+  - refreshes cached now-playing snapshot in `stream_now_playing`
+  - persists detected backend `metadata_source` and `metadata_url` hints back to `station_streams`
 - `Probe loudness`
   - runs loudness sampling only
   - updates loudness fields without touching resolver or now-playing snapshot
 - `Probe full`
-  - combines quality, resolver, metadata snapshot, and loudness updates
+  - combines quality, resolver, metadata snapshot, loudness, and metadata detection hint updates
 
 ### 5. Ingestion sync (every 6 h)
 
@@ -71,6 +73,8 @@ Up to **10 concurrent workers** run in parallel. Each stream gets:
 - a separate **8-second** metadata resolver probe budget for browser-capability checks
 
 Results are written back via `UpdateProbeResult`, which refreshes `resolved_url`, `kind`, `container`, `transport`, `mime_type`, `last_checked_at`, `last_error`, `health_score`, and `metadata_resolver`. Codec and bitrate are only updated when the probe returns non-empty values, so existing known-good data is never overwritten with empty probe results.
+
+The background re-probe does not fetch live now-playing snapshots and does not update `metadata_source`. It only refreshes routing state (`metadata_resolver`, `metadata_resolver_checked_at`, and sometimes `metadata_url`) plus stream health/probe fields.
 
 The background cycle does **not** measure loudness. Loudness is intentionally reserved for explicit loudness-aware probes.
 
@@ -98,6 +102,12 @@ A stream with a probe error is still offered to the player. The player uses `res
 - anything else → `<audio>` element with direct src
 
 On fatal playback error (source unreachable, codec unsupported), the player tries the next variant in priority order before falling back to exponential backoff on the same variant.
+
+For metadata specifically:
+
+- `metadata_resolver = client` means the frontend attempts metadata directly in the browser
+- `metadata_resolver = server` means the frontend consumes cached snapshots and SSE updates from the backend
+- `metadata_resolver = none` means the player should not attempt metadata polling for that stream
 
 ---
 

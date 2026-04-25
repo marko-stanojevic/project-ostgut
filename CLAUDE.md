@@ -135,6 +135,7 @@ project-ostgut/
 
 - Stations ingested from **Radio Browser API** + optional manual curated list
 - Curation rules: filter dead streams, prefer high bitrate, prefer stations with metadata
+- Ingested stations must remain `pending` until an admin user explicitly approves them. Do not auto-approve imported or synced stations.
 - Stations cached in Postgres, refreshed every 6h via background goroutine
 - Public endpoints (no auth): `GET /stations`, `GET /stations/:id`, `GET /search`
 - Audio: MP3/AAC native, HLS via `hls.js`
@@ -171,4 +172,5 @@ project-ostgut/
 - Do not use `@tailwind base` directives (breaks Tailwind v4)
 - Do not create `pgcrypto` extension (banned on Azure PostgreSQL Flexible Server)
 - Do not use `postgres://` scheme for golang-migrate (use `pgx5://`)
+- Do not auto-approve stations during ingestion, sync, bootstrap, or recovery flows; only an admin user may approve a station for public visibility
 - Do not commit secrets — all secrets flow through GitHub Secrets → OpenTofu vars → Container App secrets

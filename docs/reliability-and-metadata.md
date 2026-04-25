@@ -107,11 +107,16 @@ Meaning:
 
 - `metadata_enabled`: editorial on/off switch
 - `metadata_type`: configured strategy, currently always `auto`
-- `metadata_source`: the strategy that actually succeeded, such as `icy`, `icecast`, `shoutcast`, or `id3`
-- `metadata_url`: the exact metadata endpoint that last succeeded, such as the stream URL itself, `/status-json.xsl`, `/currentsong`, or `/7.html`
+- `metadata_source`: durable detection hint for the last backend fetch strategy that succeeded, such as `icy`, `icecast`, or `shoutcast`
+- `metadata_url`: durable hint for the exact endpoint that most recently succeeded, such as the stream URL itself, `/status-json.xsl`, `/currentsong`, or `/7.html`
 - `metadata_resolver`: persisted routing decision, `client`, `server`, or `none`
 - `metadata_resolver_checked_at`: when the resolver was last verified
-- `stream_now_playing.*`: the latest cached snapshot served by `GET /stations/:id/now-playing` and by SSE fan-out
+- `stream_now_playing.*`: the high-churn live snapshot served by `GET /stations/:id/now-playing` and by SSE fan-out
+
+The important split after the refactor is:
+
+- `station_streams.metadata_*` stores durable routing and detection hints that survive restarts and speed up later checks
+- `stream_now_playing` stores the latest fetched track payload and error state without rewriting the editorial stream row on every poll
 
 ### Detection strategies
 
@@ -119,9 +124,12 @@ The backend metadata fetcher tries several approaches in order. See `backend/int
 
 In `auto` mode, it can detect metadata via:
 
-- ICY in-stream metadata
+- ICY in-stream metadata via HTTP
+- raw TCP ICY fallback for legacy Shoutcast servers that answer with `ICY 200 OK`
 - Icecast status endpoint
 - Shoutcast text/status endpoints
+
+When `metadata_url` and `metadata_source` are already known, the fetcher tries that exact hint first before falling back to broader discovery.
 
 The system stores the **detected** source in `metadata_source`, which is what the admin UI shows as a badge.
 
@@ -150,7 +158,7 @@ Resolver checks run in two places:
 
 The backend decides routing by testing realistic browser constraints such as CORS and readable metadata endpoints, using configured app origins. For HLS streams, the prober also checks whether early media segments expose ID3 tags; HLS streams with detectable ID3 resolve to `client`, while HLS streams without ID3 resolve to `none`.
 
-When a metadata probe or fetch succeeds, OSTGUT also persists the exact winning metadata URL. Both the backend poller and the frontend client resolver try that stored endpoint first on later polls before falling back to broader discovery.
+When a client-capability check succeeds, OSTGUT persists the resolver plus the winning client-readable `metadata_url`. When a backend metadata fetch succeeds, OSTGUT also persists the detected `metadata_source` and exact winning `metadata_url`. Both the backend poller and later manual probes reuse those hints before falling back to broader discovery.
 
 ### Manual probe behavior
 
@@ -159,10 +167,10 @@ Admin saves no longer perform live remote probes. Probe-derived metadata is now 
 The stream probe actions are:
 
 - `Probe resolver`: refresh `metadata_resolver` only
-- `Probe metadata`: refresh resolver plus cached now-playing snapshot
+- `Probe metadata`: refresh resolver, refresh the cached now-playing snapshot, and persist detected `metadata_source`/`metadata_url` hints from the backend fetcher
 - `Probe quality`: refresh signal/playability fields only
 - `Probe loudness`: refresh loudness fields only
-- `Probe full`: refresh signal, resolver, metadata snapshot, and loudness
+- `Probe full`: refresh signal, resolver, metadata snapshot, loudness, and any detected metadata hints
 
 This keeps admin saves fast and predictable while still giving editors precise operational tools.
 
@@ -173,16 +181,18 @@ This keeps admin saves fast and predictable while still giving editors precise o
 It no longer performs live upstream metadata discovery inside the request path. Instead, it:
 
 - returns the latest stored now-playing snapshot immediately
-- serves `disabled`, `unsupported`, or `error` states from the cached snapshot plus resolver metadata
+- serves `disabled` or `unsupported` immediately from the stream's resolver/config state when metadata is turned off or unsupported
+- otherwise returns the last stored snapshot, including prior error state when one exists
 - triggers a one-shot async refresh only for stale `server` snapshots when no SSE poll loop is already active
 - uses a shared per-stream background poller for `server` streams, so one upstream fetch fan-outs to all listeners
+- writes newly discovered backend detection hints back to `station_streams` while writing live track payloads to `stream_now_playing`
 
 This removes slow metadata discovery from the playback-critical request path.
 
 Primary implementation lives in:
 
 - `backend/internal/metadata/metadata.go`
-- `backend/internal/handler/nowplaying_new.go`
+- `backend/internal/handler/nowplaying.go`
 - `backend/internal/handler/metadata_poller.go`
 - `backend/internal/handler/admin.go`
 - `backend/internal/radio/hls_metadata_probe.go`

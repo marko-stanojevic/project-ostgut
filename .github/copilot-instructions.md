@@ -162,6 +162,12 @@ interface Station {
 }
 ```
 
+## Station approval policy
+
+- Stations discovered by ingestion or sync must remain `pending` by default.
+- Never auto-approve stations as part of import, sync, bootstrap, repair, or recovery flows.
+- A station becomes publicly visible only after an admin user explicitly approves it.
+
 ## Naming conventions
 
 | Layer | Convention |

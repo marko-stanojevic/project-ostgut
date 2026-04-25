@@ -901,7 +901,7 @@ export default function StationEditorPage() {
                                                             ) : (
                                                                 <WaveformIcon className="h-4 w-4" weight="fill" />
                                                             )}
-                                                            Probe quality
+                                                            Refresh quality
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -956,6 +956,9 @@ export default function StationEditorPage() {
                                                         <p className="text-sm">
                                                             {streamDetails[i].metadata_error ? streamDetails[i].metadata_error : 'No metadata errors recorded'}
                                                         </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Refreshing metadata also recalculates the resolver for this stream.
+                                                        </p>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Last checked</p>
@@ -971,21 +974,6 @@ export default function StationEditorPage() {
                                                             size="sm"
                                                             variant="outline"
                                                             className="h-8 w-full gap-1.5 px-2.5 text-xs"
-                                                            disabled={probingAction === `${streamDetails[i].id}:resolver`}
-                                                            onClick={() => handleProbeStream(streamDetails[i].id, 'resolver')}
-                                                        >
-                                                            {probingAction === `${streamDetails[i].id}:resolver` ? (
-                                                                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
-                                                            ) : (
-                                                                <ArrowsClockwiseIcon className="h-4 w-4" weight="bold" />
-                                                            )}
-                                                            Probe resolver
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="h-8 w-full gap-1.5 px-2.5 text-xs"
                                                             disabled={probingAction === `${streamDetails[i].id}:metadata`}
                                                             onClick={() => handleProbeStream(streamDetails[i].id, 'metadata')}
                                                         >
@@ -994,7 +982,7 @@ export default function StationEditorPage() {
                                                             ) : (
                                                                 <ArrowsClockwiseIcon className="h-4 w-4" weight="bold" />
                                                             )}
-                                                            Probe metadata
+                                                            Refresh metadata
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1058,7 +1046,7 @@ export default function StationEditorPage() {
                                                             ) : (
                                                                 <WaveformIcon className="h-4 w-4" weight="fill" />
                                                             )}
-                                                            Probe loudness
+                                                            Measure loudness
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1088,7 +1076,7 @@ export default function StationEditorPage() {
                                 </p>
                             )}
                         <p className="text-xs text-muted-foreground">
-                            URLs are probed on save. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
+                            Saving updates the stream list without probing. Use the refresh actions below each stream for quality, metadata, and loudness checks. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
                         </p>
                     </CardContent>
                     </Card>

@@ -56,24 +56,28 @@ When the next change touches `PlayerContext` — not worth a standalone PR, but 
 
 ## Now Playing — push vs poll
 
-Currently implemented as a stateless `GET /stations/:id/now-playing` endpoint with a 30 s server-side cache. Good enough for the current scale; track changes every few minutes so the UX difference is invisible.
+This is no longer just a stateless poll endpoint. The current implementation is hybrid:
+
+- `GET /stations/:id/now-playing` serves the cached snapshot from `stream_now_playing`
+- `GET /stations/:id/now-playing/stream` provides SSE updates for streams whose persisted resolver is `server`
+- the backend runs one poll loop per active server-resolved stream with subscribers, then fans one upstream fetch out to all listeners
+- stale server snapshots can trigger a one-shot async refresh when the read endpoint is hit without an active SSE loop
 
 ### When to revisit
 
-When concurrent listeners per station become measurable and the redundant poll traffic shows up in logs, or if sub-10 s "now playing" accuracy becomes a product requirement.
+When multi-replica fan-out becomes important. The current in-process poller works well on a single backend instance, but cross-replica coordination will need shared pub/sub if server-resolved SSE traffic grows.
 
-### The SSE path (preferred if push is needed)
+### Remaining scale step
 
-Server-Sent Events over HTTP/2 — unidirectional, no protocol upgrade, native browser support, dead simple reconnect. The backend holds the stream open and pushes a JSON event whenever the track changes.
+Server-Sent Events are already the push path. The next step, if needed, is making that fan-out replica-aware instead of per-process.
 
-**User benefit:** instant "now playing" updates without any poll overhead. Background tabs get free updates without burning requests.
+**User benefit:** instant server-side metadata updates without each client polling upstream separately.
 
 **Infrastructure delta:**
 
-- Backend needs a broadcaster — a goroutine that fetches metadata on a ticker and fans out to all connected SSE clients for that station.
-- Replicas can no longer be fully stateless. A user connected to replica A won't get pushes from replica B. Needs a lightweight pub/sub between replicas — Redis pub/sub or Azure Service Bus would work.
-- `min_replicas` should be raised to 1 in production (connections drop on cold start; clients need reconnect logic regardless).
-- No changes to the database or frontend auth flow.
+- Cross-replica SSE fan-out still needs lightweight pub/sub — Redis pub/sub or Azure Service Bus would work.
+- `min_replicas` should be raised to 1 in production for stable long-lived SSE connections.
+- If server-side metadata traffic grows, the cadence policy may need to move from fixed fast/slow polling to change-aware backoff.
 
 ### WebSocket — skip it
 
