@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// ErrDuplicateStationName is returned when a write would cause two
+// approved-and-active stations to share the same case- and whitespace-
+// insensitive name. Enforced by the partial unique index
+// stations_approved_name_idx.
+var ErrDuplicateStationName = errors.New("station name already in use among approved stations")
+
+// translateStationWriteErr maps Postgres unique-violation errors on the
+// stations table to typed sentinels. Callers use errors.Is to branch.
+func translateStationWriteErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if uniqueViolationConstraint(err) == "stations_approved_name_idx" {
+		return ErrDuplicateStationName
+	}
+	return err
+}
+
 // Station holds a row from the stations table.
 type Station struct {
 	ID               string
@@ -462,6 +480,9 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 		in.Featured, in.Status, in.Overview,
 	).Scan(&id)
 	if err != nil {
+		if terr := translateStationWriteErr(err); errors.Is(terr, ErrDuplicateStationName) {
+			return nil, terr
+		}
 		return nil, fmt.Errorf("create manual station: %w", err)
 	}
 
@@ -505,7 +526,7 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 		styleTags, formatTags, textureTags,
 		u.Status, u.EditorNotes, u.Overview, u.Featured, id,
 	)
-	return err
+	return translateStationWriteErr(err)
 }
 
 // UpdateLogo sets the logo field for a station.
@@ -558,7 +579,7 @@ func (s *StationStore) BulkUpdateStatus(ctx context.Context, ids []string, statu
 	)
 	tag, err := s.pool.Exec(ctx, q, args...)
 	if err != nil {
-		return 0, err
+		return 0, translateStationWriteErr(err)
 	}
 	return int(tag.RowsAffected()), nil
 }

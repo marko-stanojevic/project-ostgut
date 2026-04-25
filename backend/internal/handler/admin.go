@@ -64,6 +64,10 @@ func (h *Handler) AdminBulkAction(c *gin.Context) {
 
 	updated, err := h.admin.stations.BulkUpdateStatus(c.Request.Context(), req.IDs, req.Status)
 	if err != nil {
+		if errors.Is(err, store.ErrDuplicateStationName) {
+			c.JSON(http.StatusConflict, gin.H{"error": "another approved station already uses this name"})
+			return
+		}
 		h.log.Error("admin bulk action", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
@@ -199,6 +203,10 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 
 	created, err := h.admin.stations.CreateManual(c.Request.Context(), manual)
 	if err != nil {
+		if errors.Is(err, store.ErrDuplicateStationName) {
+			c.JSON(http.StatusConflict, gin.H{"error": "another approved station already uses this name"})
+			return
+		}
 		h.log.Error("admin create station", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
@@ -715,12 +723,20 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 
 	if len(rebuiltStreams) > 0 {
 		if err := h.admin.stations.UpdateEnrichmentAndStreams(c.Request.Context(), id, u, rebuiltStreams); err != nil {
+			if errors.Is(err, store.ErrDuplicateStationName) {
+				c.JSON(http.StatusConflict, gin.H{"error": "another approved station already uses this name"})
+				return
+			}
 			h.log.Error("admin update station+streams", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
 	} else {
 		if err := h.admin.stations.UpdateEnrichment(c.Request.Context(), id, u); err != nil {
+			if errors.Is(err, store.ErrDuplicateStationName) {
+				c.JSON(http.StatusConflict, gin.H{"error": "another approved station already uses this name"})
+				return
+			}
 			h.log.Error("admin update station", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
