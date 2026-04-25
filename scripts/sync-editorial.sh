@@ -238,6 +238,17 @@ check_schema() {
     exit 1
   fi
 
+  # Verify migration 032 (partial unique index on approved station names) is
+  # applied. Without it, the import may silently allow duplicates; with it
+  # missing, callers get a confusing 23505 mid-import instead of a clear hint.
+  local has_idx
+  has_idx=$(psql "$url" -t -A -q -c "SELECT 1 FROM pg_indexes WHERE indexname = 'stations_approved_name_idx'")
+  if [[ "$has_idx" != "1" ]]; then
+    echo "Error: target database is missing the stations_approved_name_idx index (migration 032)."
+    echo "Deploy the backend to the target environment to apply pending migrations, then retry."
+    exit 1
+  fi
+
   echo "Schema OK."
 }
 
@@ -267,7 +278,7 @@ do_import() {
     return
   fi
 
-  psql "$tgt_url" -f "$in_file"
+  psql "$tgt_url" -v ON_ERROR_STOP=1 --single-transaction -f "$in_file"
   echo "Done."
 }
 

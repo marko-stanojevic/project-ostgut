@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -79,6 +80,9 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 		deriveStationReliabilityFromStreams(normalized),
 		u.Status, u.EditorNotes, u.Overview, u.Featured, id,
 	); err != nil {
+		if terr := translateStationWriteErr(err); errors.Is(terr, ErrDuplicateStationName) {
+			return terr
+		}
 		return fmt.Errorf("update station enrichment: %w", err)
 	}
 
