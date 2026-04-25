@@ -281,7 +281,6 @@ async function fetchICY(streamURL: string, signal: AbortSignal): Promise<NowPlay
     reader.releaseLock()
   }
 }
-
 async function fetchIcecastJSON(streamURL: string, signal: AbortSignal, hintedURL?: string): Promise<NowPlaying | null> {
   const url = new URL(streamURL)
   const statusURL = hintedURL || `${url.protocol}//${url.host}/status-json.xsl`

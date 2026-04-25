@@ -90,6 +90,7 @@ func TestSplitArtistTitle(t *testing.T) {
 		{"  Artist  -  Song  ", "Artist", "Song"}, // whitespace trimmed
 		// Multiple " - " separators: first occurrence wins.
 		{"A - B - C", "A", "B - C"},
+		{"\"Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude\" by Johnny Gandelsman on Currents on WFMU", "Johnny Gandelsman", "Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude"},
 	}
 
 	for _, tc := range tests {
@@ -454,5 +455,47 @@ func TestFetchICYFromStream(t *testing.T) {
 	}
 	if np.Source != "icy" {
 		t.Errorf("got source %q; want %q", np.Source, "icy")
+	}
+}
+
+func TestFetchICYFromStreamSkipsEmptyPrerollBlocks(t *testing.T) {
+	const metaint = 64
+	firstMeta := "StreamTitle='';StreamUrl='';adw_ad='true';"
+	secondTitle := "Kaitlyn Aurelia Smith - An Intention"
+	secondMeta := "StreamTitle='" + secondTitle + "';"
+
+	padBlock := func(raw string) string {
+		padded := raw
+		if rem := len(raw) % 16; rem != 0 {
+			padded += strings.Repeat("\x00", 16-rem)
+		}
+		return string([]byte{byte(len(padded) / 16)}) + padded
+	}
+
+	body := strings.Builder{}
+	for i := 0; i < 7; i++ {
+		body.WriteString(strings.Repeat("a", metaint))
+		body.WriteString(padBlock(firstMeta))
+	}
+	body.WriteString(strings.Repeat("b", metaint))
+	body.WriteString(padBlock(secondMeta))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Icy-Metaint", strconv.Itoa(metaint))
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Write([]byte(body.String()))
+	}))
+	defer srv.Close()
+
+	f := NewFetcher(slog.Default())
+	np, err := f.fetchICY(t.Context(), srv.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if np.Title != secondTitle {
+		t.Errorf("got title %q; want %q", np.Title, secondTitle)
+	}
+	if np.Artist != "Kaitlyn Aurelia Smith" {
+		t.Errorf("got artist %q; want %q", np.Artist, "Kaitlyn Aurelia Smith")
 	}
 }

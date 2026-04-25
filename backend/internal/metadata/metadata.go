@@ -33,12 +33,13 @@ import (
 )
 
 const (
-	icyTimeout          = 10 * time.Second // budget to connect + skip audio + read block
-	fallbackTimeout     = 5 * time.Second  // budget for lightweight JSON / text endpoints
-	cacheTTLSupported   = 30 * time.Second // stream returned metadata
-	cacheTTLUnsupported = 3 * time.Minute  // stream returned nothing — don't hammer it
-	maxMetaint          = 65536            // reject streams with implausibly large metadata intervals
-	userAgent           = "OSTGUT/1.0 (radio@worksfine.app)"
+	icyTimeout           = 20 * time.Second // budget to connect + survive longer prerolls before title appears
+	fallbackTimeout      = 5 * time.Second  // budget for lightweight JSON / text endpoints
+	cacheTTLSupported    = 30 * time.Second // stream returned metadata
+	cacheTTLUnsupported  = 3 * time.Minute  // stream returned nothing — don't hammer it
+	maxMetaint           = 65536            // reject streams with implausibly large metadata intervals
+	maxICYMetadataBlocks = 64               // tolerate longer ad/empty prerolls before giving up
+	userAgent            = "OSTGUT/1.0 (radio@worksfine.app)"
 )
 
 const (
@@ -551,43 +552,51 @@ func (f *Fetcher) fetchICYRaw(ctx context.Context, streamURL string) (*NowPlayin
 	return f.readICYBlock(r, metaint, streamURL)
 }
 
-// readICYBlock skips `metaint` audio bytes then reads one ICY metadata block.
+// readICYBlock skips `metaint` audio bytes and scans a few metadata blocks so
+// preroll ads or empty blocks do not mask a later real track title.
 func (f *Fetcher) readICYBlock(r io.Reader, metaint int, streamURL string) (*NowPlaying, error) {
-	if _, err := io.CopyN(io.Discard, r, int64(metaint)); err != nil {
-		return nil, fmt.Errorf("skip audio bytes: %w", err)
+	for attempt := 0; attempt < maxICYMetadataBlocks; attempt++ {
+		if _, err := io.CopyN(io.Discard, r, int64(metaint)); err != nil {
+			return nil, fmt.Errorf("skip audio bytes: %w", err)
+		}
+
+		// 1-byte length field; actual block size = value × 16.
+		var lenBuf [1]byte
+		if _, err := io.ReadFull(r, lenBuf[:]); err != nil {
+			return nil, fmt.Errorf("read meta length byte: %w", err)
+		}
+		metaLen := int(lenBuf[0]) * 16
+		if metaLen == 0 {
+			f.log.Debug("metadata: icy block empty", "url", streamURL, "attempt", attempt+1)
+			continue
+		}
+
+		metaBuf := make([]byte, metaLen)
+		if _, err := io.ReadFull(r, metaBuf); err != nil {
+			return nil, fmt.Errorf("read metadata block: %w", err)
+		}
+
+		raw := strings.TrimRight(string(metaBuf), "\x00")
+		title := extractICYField(raw, "StreamTitle")
+		f.log.Debug("metadata: icy block content", "url", streamURL, "attempt", attempt+1, "raw", raw, "title", title)
+		if isPlaceholderTitle(title) {
+			title = ""
+		}
+		if title == "" {
+			continue
+		}
+
+		np := &NowPlaying{
+			Title:       title,
+			Source:      "icy",
+			MetadataURL: streamURL,
+			FetchedAt:   time.Now(),
+		}
+		np.Artist, np.Song = splitArtistTitle(title)
+		return np, nil
 	}
 
-	// 1-byte length field; actual block size = value × 16.
-	var lenBuf [1]byte
-	if _, err := io.ReadFull(r, lenBuf[:]); err != nil {
-		return nil, fmt.Errorf("read meta length byte: %w", err)
-	}
-	metaLen := int(lenBuf[0]) * 16
-	if metaLen == 0 {
-		return nil, fmt.Errorf("empty metadata block")
-	}
-
-	metaBuf := make([]byte, metaLen)
-	if _, err := io.ReadFull(r, metaBuf); err != nil {
-		return nil, fmt.Errorf("read metadata block: %w", err)
-	}
-
-	// Strip null padding and parse StreamTitle field.
-	raw := strings.TrimRight(string(metaBuf), "\x00")
-	title := extractICYField(raw, "StreamTitle")
-	f.log.Debug("metadata: icy block content", "url", streamURL, "raw", raw, "title", title)
-	if isPlaceholderTitle(title) {
-		title = ""
-	}
-
-	np := &NowPlaying{
-		Title:     title,
-		Source:    "icy",
-		MetadataURL: streamURL,
-		FetchedAt: time.Now(),
-	}
-	np.Artist, np.Song = splitArtistTitle(title)
-	return np, nil
+	return nil, fmt.Errorf("no stream title found in %d icy blocks", maxICYMetadataBlocks)
 }
 
 // ---------------------------------------------------------------------------
@@ -823,12 +832,51 @@ func extractICYField(meta, key string) string {
 // Returns ("", fullTitle) when no recognised delimiter is found.
 func splitArtistTitle(s string) (artist, song string) {
 	s = strings.TrimSpace(s)
+	if parsedArtist, parsedSong, ok := parseQuotedBylineTitle(s); ok {
+		return parsedArtist, parsedSong
+	}
 	for _, sep := range []string{" - ", " – ", " — "} {
 		if idx := strings.Index(s, sep); idx != -1 {
 			return strings.TrimSpace(s[:idx]), strings.TrimSpace(s[idx+len(sep):])
 		}
 	}
 	return "", s
+}
+
+func parseQuotedBylineTitle(s string) (artist, song string, ok bool) {
+	for _, quote := range []string{"\"", "“", "'"} {
+		if !strings.HasPrefix(s, quote) {
+			continue
+		}
+
+		rest := s[len(quote):]
+		end := strings.Index(rest, quote)
+		if end == -1 {
+			continue
+		}
+
+		song = strings.TrimSpace(rest[:end])
+		if song == "" {
+			continue
+		}
+
+		byline := strings.TrimSpace(rest[end+len(quote):])
+		if len(byline) < 3 || !strings.EqualFold(byline[:3], "by ") {
+			continue
+		}
+
+		artist = strings.TrimSpace(byline[3:])
+		if idx := strings.Index(strings.ToLower(artist), " on "); idx != -1 {
+			artist = strings.TrimSpace(artist[:idx])
+		}
+		if artist == "" {
+			continue
+		}
+
+		return artist, song, true
+	}
+
+	return "", "", false
 }
 
 // stripHTML removes HTML tags and decodes common HTML entities.

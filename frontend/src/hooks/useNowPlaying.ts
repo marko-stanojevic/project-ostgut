@@ -54,7 +54,6 @@ export function useNowPlaying(
         : null,
     [streamObjectID, streamRawURL, streamURL, streamKind, streamId, streamMetadataEnabled, streamMetadataType, stream?.metadataUrl, streamMetadataResolver],
   )
-
   // Clear track immediately on station change so stale data never shows.
   useEffect(() => {
     setNowPlaying(null)
@@ -87,7 +86,7 @@ export function useNowPlaying(
       }
     }
 
-    if (streamMetadataResolver === 'client' && streamSnapshot) {
+      if (streamMetadataResolver === 'client' && streamSnapshot) {
       if (streamKind === 'hls') {
         const onID3 = (event: Event) => {
           const detail = (event as CustomEvent<HlsNowPlayingDetail>).detail
