@@ -1,6 +1,8 @@
 package metadata
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -24,42 +26,15 @@ func TestExtractICYField(t *testing.T) {
 		key  string
 		want string
 	}{
-		{
-			name: "standard format",
-			meta: "StreamTitle='Massive Attack - Teardrop';StreamUrl='';",
-			key:  "StreamTitle",
-			want: "Massive Attack - Teardrop",
-		},
-		{
-			name: "last field without trailing semicolon",
-			meta: "StreamTitle='Portishead - Glory Box'",
-			key:  "StreamTitle",
-			want: "Portishead - Glory Box",
-		},
-		{
-			name: "empty value",
-			meta: "StreamTitle='';StreamUrl='http://example.com';",
-			key:  "StreamTitle",
-			want: "",
-		},
-		{
-			name: "key not present",
-			meta: "StreamUrl='http://example.com';",
-			key:  "StreamTitle",
-			want: "",
-		},
-		{
-			name: "title with comma",
-			meta: "StreamTitle='Arca, Björk - Mutual Core';StreamUrl='';",
-			key:  "StreamTitle",
-			want: "Arca, Björk - Mutual Core",
-		},
-		{
-			name: "null-padded block",
-			meta: "StreamTitle='FKA Twigs - Cellophane';\x00\x00\x00\x00",
-			key:  "StreamTitle",
-			want: "FKA Twigs - Cellophane",
-		},
+		{"standard format", "StreamTitle='Massive Attack - Teardrop';StreamUrl='';", "StreamTitle", "Massive Attack - Teardrop"},
+		{"last field without trailing semicolon", "StreamTitle='Portishead - Glory Box'", "StreamTitle", "Portishead - Glory Box"},
+		{"empty value", "StreamTitle='';StreamUrl='http://example.com';", "StreamTitle", ""},
+		{"key not present", "StreamUrl='http://example.com';", "StreamTitle", ""},
+		{"title with comma", "StreamTitle='Arca, Björk - Mutual Core';StreamUrl='';", "StreamTitle", "Arca, Björk - Mutual Core"},
+		{"null-padded block", "StreamTitle='FKA Twigs - Cellophane';\x00\x00\x00\x00", "StreamTitle", "FKA Twigs - Cellophane"},
+		// Embedded apostrophe inside the value: regex-driven parser must not
+		// truncate at the first single quote.
+		{"embedded apostrophe", "StreamTitle='O'Brien - Untitled';StreamUrl='';", "StreamTitle", "O'Brien - Untitled"},
 	}
 
 	for _, tc := range tests {
@@ -73,7 +48,7 @@ func TestExtractICYField(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// splitArtistTitle
+// splitArtistTitle / parseQuotedBylineTitle
 // ---------------------------------------------------------------------------
 
 func TestSplitArtistTitle(t *testing.T) {
@@ -83,16 +58,17 @@ func TestSplitArtistTitle(t *testing.T) {
 		wantSong   string
 	}{
 		{"Massive Attack - Teardrop", "Massive Attack", "Teardrop"},
-		{"Björk – Jóga", "Björk", "Jóga"},                     // en dash
-		{"Portishead — Glory Box", "Portishead", "Glory Box"}, // em dash
+		{"Björk – Jóga", "Björk", "Jóga"},
+		{"Portishead — Glory Box", "Portishead", "Glory Box"},
 		{"Only a title", "", "Only a title"},
 		{"", "", ""},
-		{"  Artist  -  Song  ", "Artist", "Song"}, // whitespace trimmed
-		// Multiple " - " separators: first occurrence wins.
+		{"  Artist  -  Song  ", "Artist", "Song"},
 		{"A - B - C", "A", "B - C"},
 		{"Variety Mix - Greta Rose -", "Variety Mix", "Greta Rose"},
 		{"Warn Yuh - Jah Lil -", "Warn Yuh", "Jah Lil"},
 		{"\"Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude\" by Johnny Gandelsman on Currents on WFMU", "Johnny Gandelsman", "Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude"},
+		// Apostrophe contraction must NOT match the quoted-byline branch.
+		{"'Cause I Said So - Foo", "'Cause I Said So", "Foo"},
 	}
 
 	for _, tc := range tests {
@@ -105,55 +81,112 @@ func TestSplitArtistTitle(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// normalizeMetadataTitle
+// ---------------------------------------------------------------------------
+
+func TestNormalizeMetadataTitle(t *testing.T) {
+	cases := map[string]string{
+		"Track":         "Track",
+		"Track -":       "Track",
+		"Track - - - -": "Track",
+		"Track – – –":   "Track",
+		"Track —":       "Track",
+		"Mixed - – —":   "Mixed",
+		"  Spaced  ":    "Spaced",
+		"":              "",
+		"Foo Bar":       "Foo Bar",
+		"Foo - Bar - ":  "Foo - Bar", // only trailing separator stripped
+	}
+	for in, want := range cases {
+		if got := normalizeMetadataTitle(in); got != want {
+			t.Errorf("normalizeMetadataTitle(%q) = %q; want %q", in, got, want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // stripHTML
 // ---------------------------------------------------------------------------
 
 func TestStripHTML(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
+	tests := []struct{ in, want string }{
 		{"<html><body>1,5,20,0,0,128,Artist - Song</body></html>", "1,5,20,0,0,128,Artist - Song"},
 		{"plain text", "plain text"},
 		{"&amp; &lt; &gt; &quot; &#039;", "& < > \" '"},
 		{"<b>bold</b> &amp; <i>italic</i>", "bold & italic"},
 	}
-
 	for _, tc := range tests {
-		got := stripHTML(tc.input)
-		if got != tc.want {
-			t.Errorf("stripHTML(%q) = %q; want %q", tc.input, got, tc.want)
+		if got := stripHTML(tc.in); got != tc.want {
+			t.Errorf("stripHTML(%q) = %q; want %q", tc.in, got, tc.want)
 		}
 	}
 }
 
 // ---------------------------------------------------------------------------
-// isICYProtocolError
+// isPlaceholderTitle
 // ---------------------------------------------------------------------------
 
-func TestIsICYProtocolError(t *testing.T) {
+func TestIsPlaceholderTitle(t *testing.T) {
+	yes := []string{"", " ", "-", "--", "n/a", "N/A", "NULL", "undefined", "Unknown", `"-"`, "''"}
+	no := []string{"Artist - Song", "0", "Track 1"}
+	for _, s := range yes {
+		if !isPlaceholderTitle(s) {
+			t.Errorf("expected placeholder: %q", s)
+		}
+	}
+	for _, s := range no {
+		if isPlaceholderTitle(s) {
+			t.Errorf("expected non-placeholder: %q", s)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// errors / classification
+// ---------------------------------------------------------------------------
+
+func TestErrorCodeFromErr(t *testing.T) {
 	cases := []struct {
-		msg  string
-		want bool
+		err  error
+		want string
 	}{
-		{`malformed HTTP version "ICY"`, true},
-		{"malformed HTTP response", true},
-		{"bad status line", true},
-		{"connection refused", false},
-		{"context deadline exceeded", false},
-		{"", false},
+		{nil, ErrorCodeNoMeta},
+		{context.DeadlineExceeded, ErrorCodeTimeout},
+		{context.Canceled, ErrorCodeTimeout},
+		{fmt.Errorf("wrapped: %w", ErrICYProtocol), ErrorCodeProtocol},
+		{fmt.Errorf("wrapped: %w", ErrParse), ErrorCodeParse},
+		{fmt.Errorf("wrapped: %w", ErrUpstreamStatus), ErrorCodeStatus},
+		{fmt.Errorf("wrapped: %w", ErrNoMetaint), ErrorCodeNoMeta},
+		{fmt.Errorf("wrapped: %w", ErrEmptyMetadata), ErrorCodeNoMeta},
+		{fmt.Errorf("wrapped: %w", ErrNoStreamTitle), ErrorCodeNoMeta},
+		{errors.New("totally unknown"), ErrorCodeFetch},
 	}
 	for _, tc := range cases {
-		err := fmt.Errorf("%s", tc.msg) //nolint:goerr113
-		if got := isICYProtocolError(err); got != tc.want {
-			t.Errorf("isICYProtocolError(%q) = %v; want %v", tc.msg, got, tc.want)
+		if got := errorCodeFromErr(tc.err); got != tc.want {
+			t.Errorf("errorCodeFromErr(%v) = %q; want %q", tc.err, got, tc.want)
 		}
 	}
 }
 
+func TestIsICYProtocolError(t *testing.T) {
+	if !isICYProtocolError(fmt.Errorf("wrapped: %w", ErrICYProtocol)) {
+		t.Errorf("expected ICY protocol detection")
+	}
+	if isICYProtocolError(errors.New("connection refused")) {
+		t.Errorf("did not expect ICY protocol detection on plain error")
+	}
+}
+
 // ---------------------------------------------------------------------------
-// fetchIcecastJSON via httptest server
+// fetchIcecastJSON
 // ---------------------------------------------------------------------------
+
+func newFetcher(t *testing.T) *Fetcher {
+	t.Helper()
+	f := NewFetcher(slog.Default())
+	t.Cleanup(func() { _ = f.Close() })
+	return f
+}
 
 func TestFetchIcecastJSONSingleSource(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -162,31 +195,17 @@ func TestFetchIcecastJSONSingleSource(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
-			"icestats": {
-				"source": {
-					"title": "Aphex Twin - Windowlicker",
-					"mount": "/stream",
-					"listenurl": "http://example.com/stream"
-				}
-			}
-		}`))
+		w.Write([]byte(`{"icestats":{"source":{"title":"Aphex Twin - Windowlicker","mount":"/stream","listenurl":"http://example.com/stream"}}}`))
 	}))
 	defer srv.Close()
 
-	f := NewFetcher(slog.Default())
+	f := newFetcher(t)
 	np, err := f.fetchIcecastJSON(t.Context(), srv.URL+"/stream")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if np.Title != "Aphex Twin - Windowlicker" {
-		t.Errorf("got title %q; want %q", np.Title, "Aphex Twin - Windowlicker")
-	}
-	if np.Artist != "Aphex Twin" {
-		t.Errorf("got artist %q; want %q", np.Artist, "Aphex Twin")
-	}
-	if np.Source != "icecast" {
-		t.Errorf("got source %q; want %q", np.Source, "icecast")
+	if np.Title != "Aphex Twin - Windowlicker" || np.Artist != "Aphex Twin" || np.Source != TypeIcecast {
+		t.Errorf("got %+v", np)
 	}
 }
 
@@ -197,30 +216,22 @@ func TestFetchIcecastJSONMultipleSources(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		// Two mounts — we request /hifi so the second source should be preferred.
-		w.Write([]byte(`{
-			"icestats": {
-				"source": [
-					{"title": "Low quality - wrong", "mount": "/lofi"},
-					{"title": "Burial - Archangel", "mount": "/hifi"}
-				]
-			}
-		}`))
+		w.Write([]byte(`{"icestats":{"source":[{"title":"Low quality - wrong","mount":"/lofi"},{"title":"Burial - Archangel","mount":"/hifi"}]}}`))
 	}))
 	defer srv.Close()
 
-	f := NewFetcher(slog.Default())
+	f := newFetcher(t)
 	np, err := f.fetchIcecastJSON(t.Context(), srv.URL+"/hifi")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if np.Title != "Burial - Archangel" {
-		t.Errorf("got title %q; want %q", np.Title, "Burial - Archangel")
+		t.Errorf("got title %q", np.Title)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// fetchShoutcastCurrentSong via httptest server
+// shoutcast
 // ---------------------------------------------------------------------------
 
 func TestFetchShoutcastCurrentSong(t *testing.T) {
@@ -232,42 +243,28 @@ func TestFetchShoutcastCurrentSong(t *testing.T) {
 		w.Write([]byte("Four Tet - Baby"))
 	}))
 	defer srv.Close()
-
-	f := NewFetcher(slog.Default())
+	f := newFetcher(t)
 	np, err := f.fetchShoutcastCurrentSong(t.Context(), srv.URL+"/currentsong")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if np.Title != "Four Tet - Baby" {
-		t.Errorf("got title %q; want %q", np.Title, "Four Tet - Baby")
-	}
-	if np.Source != "shoutcast" {
-		t.Errorf("got source %q; want %q", np.Source, "shoutcast")
+	if np.Title != "Four Tet - Baby" || np.Source != TypeShoutcast {
+		t.Errorf("got %+v", np)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// fetchShoutcast7HTML via httptest server
-// ---------------------------------------------------------------------------
-
 func TestFetchShoutcast7HTML(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/7.html" {
-			http.NotFound(w, r)
-			return
-		}
-		// CurrentListeners,StreamStatus,Peak,Max,Unique,Bitrate,Title
 		w.Write([]byte("<html><body>3,1,10,100,3,128,Floating Points - LesAlpx</body></html>"))
 	}))
 	defer srv.Close()
-
-	f := NewFetcher(slog.Default())
+	f := newFetcher(t)
 	np, err := f.fetchShoutcast7HTML(t.Context(), srv.URL+"/7.html")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if np.Title != "Floating Points - LesAlpx" {
-		t.Errorf("got title %q; want %q", np.Title, "Floating Points - LesAlpx")
+		t.Errorf("got title %q", np.Title)
 	}
 }
 
@@ -276,19 +273,18 @@ func TestFetchShoutcast7HTMLTitleWithComma(t *testing.T) {
 		w.Write([]byte("<html><body>1,1,5,100,1,128,Arca, Björk - Mutual Core</body></html>"))
 	}))
 	defer srv.Close()
-
-	f := NewFetcher(slog.Default())
+	f := newFetcher(t)
 	np, err := f.fetchShoutcast7HTML(t.Context(), srv.URL+"/7.html")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if np.Title != "Arca, Björk - Mutual Core" {
-		t.Errorf("got title %q; want %q", np.Title, "Arca, Björk - Mutual Core")
+		t.Errorf("got title %q", np.Title)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Cache behaviour
+// Cache + Fetch behaviour
 // ---------------------------------------------------------------------------
 
 func TestFetcherCachesResult(t *testing.T) {
@@ -299,42 +295,37 @@ func TestFetcherCachesResult(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := NewFetcher(slog.Default())
-	// Prime the cache via the JSON path so we don't need a real stream.
-	f.fetchIcecastJSON(t.Context(), srv.URL+"/s") //nolint:errcheck
+	f := newFetcher(t)
+	streamURL := srv.URL + "/s"
 
 	// Manually insert into cache to test Fetch() cache path.
+	cfg := Config{Enabled: true, Type: TypeAuto}
+	key := cfg.cacheKey(streamURL)
 	f.mu.Lock()
-	key := srv.URL + "/s"
-	cacheKey := key + "|" + TypeAuto + "|true|delayed=false|detect-delayed=false"
-	f.cache[cacheKey] = cachedEntry{
-		np:  &NowPlaying{Title: "Cached Track", Source: "icecast"},
-		exp: time.Now().Add(cacheTTLSupported),
+	f.cache[key] = cachedEntry{
+		np:       &NowPlaying{Title: "Cached Track", Source: TypeIcecast, Supported: true, Status: "ok"},
+		strategy: TypeIcecast,
+		exp:      time.Now().Add(cacheTTLSupported),
 	}
 	f.mu.Unlock()
 
-	// Second call must not reach the server.
-	serverCallsBefore := callCount
-	np := f.Fetch(t.Context(), key, Config{Enabled: true, Type: TypeAuto})
-	if callCount != serverCallsBefore {
-		t.Errorf("expected no additional server calls; got %d", callCount-serverCallsBefore)
+	np, ev := f.Fetch(t.Context(), streamURL, cfg)
+	if callCount != 0 {
+		t.Errorf("expected no upstream calls, got %d", callCount)
 	}
 	if np.Title != "Cached Track" {
-		t.Errorf("got title %q; want %q", np.Title, "Cached Track")
+		t.Errorf("got title %q", np.Title)
+	}
+	if !ev.CacheHit {
+		t.Errorf("expected CacheHit=true")
 	}
 }
 
 func TestFetchDisabled(t *testing.T) {
-	f := NewFetcher(slog.Default())
-	np := f.Fetch(t.Context(), "https://example.com/stream", Config{Enabled: false, Type: TypeAuto})
-	if np.Status != "disabled" {
-		t.Fatalf("got status %q; want disabled", np.Status)
-	}
-	if np.ErrorCode != ErrorCodeDisabled {
-		t.Fatalf("got error code %q; want %q", np.ErrorCode, ErrorCodeDisabled)
-	}
-	if np.Supported {
-		t.Fatalf("expected supported=false when disabled")
+	f := newFetcher(t)
+	np, _ := f.Fetch(t.Context(), "https://example.com/stream", Config{Enabled: false, Type: TypeAuto})
+	if np.Status != "disabled" || np.ErrorCode != ErrorCodeDisabled || np.Supported {
+		t.Fatalf("got %+v", np)
 	}
 }
 
@@ -349,16 +340,13 @@ func TestFetchConfiguredIcecastOnly(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := NewFetcher(slog.Default())
-	np := f.Fetch(t.Context(), srv.URL+"/stream", Config{Enabled: true, Type: TypeIcecast})
-	if !np.Supported {
-		t.Fatalf("expected supported=true")
+	f := newFetcher(t)
+	np, ev := f.Fetch(t.Context(), srv.URL+"/stream", Config{Enabled: true, Type: TypeIcecast})
+	if !np.Supported || np.Status != "ok" || np.Source != TypeIcecast {
+		t.Fatalf("got %+v", np)
 	}
-	if np.Status != "ok" {
-		t.Fatalf("got status %q; want ok", np.Status)
-	}
-	if np.Source != "icecast" {
-		t.Fatalf("got source %q; want icecast", np.Source)
+	if ev.Strategy != TypeIcecast {
+		t.Errorf("got strategy %q", ev.Strategy)
 	}
 }
 
@@ -369,27 +357,19 @@ func TestFetchConfiguredIcecastErrorCode(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusBadGateway)
-		w.Write([]byte("upstream down"))
 	}))
 	defer srv.Close()
 
-	f := NewFetcher(slog.Default())
-	np := f.Fetch(t.Context(), srv.URL+"/stream", Config{Enabled: true, Type: TypeIcecast})
-	if np.Status != "error" {
-		t.Fatalf("got status %q; want error", np.Status)
-	}
-	if np.ErrorCode != ErrorCodeStatus {
-		t.Fatalf("got error code %q; want %q", np.ErrorCode, ErrorCodeStatus)
+	f := newFetcher(t)
+	np, _ := f.Fetch(t.Context(), srv.URL+"/stream", Config{Enabled: true, Type: TypeIcecast})
+	if np.Status != "error" || np.ErrorCode != ErrorCodeStatus {
+		t.Fatalf("got %+v", np)
 	}
 }
 
 func TestFetchDeduplicatesConcurrentRequests(t *testing.T) {
 	var callCount int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/status-json.xsl" {
-			http.NotFound(w, r)
-			return
-		}
 		atomic.AddInt32(&callCount, 1)
 		time.Sleep(120 * time.Millisecond)
 		w.Header().Set("Content-Type", "application/json")
@@ -397,7 +377,7 @@ func TestFetchDeduplicatesConcurrentRequests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := NewFetcher(slog.Default())
+	f := newFetcher(t)
 	cfg := Config{Enabled: true, Type: TypeIcecast}
 
 	var wg sync.WaitGroup
@@ -405,9 +385,9 @@ func TestFetchDeduplicatesConcurrentRequests(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			np := f.Fetch(t.Context(), srv.URL+"/stream", cfg)
+			np, _ := f.Fetch(t.Context(), srv.URL+"/stream", cfg)
 			if np.Title == "" {
-				t.Errorf("expected title from deduplicated fetch")
+				t.Errorf("expected title")
 			}
 		}()
 	}
@@ -422,123 +402,305 @@ func TestFetchDeduplicatesConcurrentRequests(t *testing.T) {
 // ICY stream simulation
 // ---------------------------------------------------------------------------
 
+func padICYBlock(raw string) string {
+	padded := raw
+	if rem := len(raw) % 16; rem != 0 {
+		padded += strings.Repeat("\x00", 16-rem)
+	}
+	return string([]byte{byte(len(padded) / 16)}) + padded
+}
+
 func TestFetchICYFromStream(t *testing.T) {
 	const metaint = 64
 	title := "DJ Shadow - Midnight in a Perfect World"
-	metaRaw := "StreamTitle='" + title + "';"
 
-	// Pad to 16-byte boundary.
-	padded := metaRaw
-	if rem := len(metaRaw) % 16; rem != 0 {
-		padded += strings.Repeat("\x00", 16-rem)
-	}
-	lenByte := byte(len(padded) / 16)
-
-	// Build a minimal ICY response body.
 	body := strings.Builder{}
-	body.WriteString(strings.Repeat("a", metaint)) // audio bytes
-	body.WriteByte(lenByte)
-	body.WriteString(padded)
+	body.WriteString(strings.Repeat("a", metaint))
+	body.WriteString(padICYBlock("StreamTitle='" + title + "';"))
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Icy-Metaint", strconv.Itoa(metaint))
-		w.Header().Set("Content-Type", "audio/mpeg")
 		w.Write([]byte(body.String()))
 	}))
 	defer srv.Close()
 
-	f := NewFetcher(slog.Default())
-	np, _, err := f.fetchICY(t.Context(), srv.URL, maxICYMetadataBlocksFast)
+	f := newFetcher(t)
+	np, blocks, err := f.fetchICY(t.Context(), srv.URL, maxICYMetadataBlocksFast)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if np.Title != title {
-		t.Errorf("got title %q; want %q", np.Title, title)
+	if np.Title != title || np.Source != TypeICY {
+		t.Errorf("got %+v", np)
 	}
-	if np.Source != "icy" {
-		t.Errorf("got source %q; want %q", np.Source, "icy")
+	if blocks < 1 {
+		t.Errorf("expected blocks >= 1, got %d", blocks)
 	}
 }
 
-func TestFetchICYFromStreamSkipsEmptyPrerollBlocks(t *testing.T) {
+func TestFetchICYSkipsEmptyPrerollBlocks(t *testing.T) {
 	const metaint = 64
-	firstMeta := "StreamTitle='';StreamUrl='';adw_ad='true';"
 	secondTitle := "Kaitlyn Aurelia Smith - An Intention"
-	secondMeta := "StreamTitle='" + secondTitle + "';"
-
-	padBlock := func(raw string) string {
-		padded := raw
-		if rem := len(raw) % 16; rem != 0 {
-			padded += strings.Repeat("\x00", 16-rem)
-		}
-		return string([]byte{byte(len(padded) / 16)}) + padded
-	}
 
 	body := strings.Builder{}
 	for i := 0; i < 7; i++ {
 		body.WriteString(strings.Repeat("a", metaint))
-		body.WriteString(padBlock(firstMeta))
+		body.WriteString(padICYBlock("StreamTitle='';StreamUrl='';adw_ad='true';"))
 	}
 	body.WriteString(strings.Repeat("b", metaint))
-	body.WriteString(padBlock(secondMeta))
+	body.WriteString(padICYBlock("StreamTitle='" + secondTitle + "';"))
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Icy-Metaint", strconv.Itoa(metaint))
-		w.Header().Set("Content-Type", "audio/mpeg")
 		w.Write([]byte(body.String()))
 	}))
 	defer srv.Close()
 
-	f := NewFetcher(slog.Default())
+	f := newFetcher(t)
 	np, _, err := f.fetchICY(t.Context(), srv.URL, maxICYMetadataBlocksFast)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if np.Title != secondTitle {
-		t.Errorf("got title %q; want %q", np.Title, secondTitle)
-	}
-	if np.Artist != "Kaitlyn Aurelia Smith" {
-		t.Errorf("got artist %q; want %q", np.Artist, "Kaitlyn Aurelia Smith")
+	if np.Title != secondTitle || np.Artist != "Kaitlyn Aurelia Smith" {
+		t.Errorf("got %+v", np)
 	}
 }
 
-func TestFetchConfiguredICYDetectsDelayedMetadata(t *testing.T) {
+// Probe should detect a delayed stream that sits past the fast budget.
+func TestProbeDetectsDelayedMetadata(t *testing.T) {
 	const metaint = 64
 	delayedTitle := "KEXP - Live from Seattle"
-	delayedMeta := "StreamTitle='" + delayedTitle + "';"
-
-	padBlock := func(raw string) string {
-		padded := raw
-		if rem := len(raw) % 16; rem != 0 {
-			padded += strings.Repeat("\x00", 16-rem)
-		}
-		return string([]byte{byte(len(padded) / 16)}) + padded
-	}
 
 	body := strings.Builder{}
 	for i := 0; i < maxICYMetadataBlocksFast; i++ {
 		body.WriteString(strings.Repeat("a", metaint))
-		body.WriteString(padBlock("StreamTitle='';"))
+		body.WriteString(padICYBlock("StreamTitle='';"))
 	}
 	body.WriteString(strings.Repeat("b", metaint))
-	body.WriteString(padBlock(delayedMeta))
+	body.WriteString(padICYBlock("StreamTitle='" + delayedTitle + "';"))
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Icy-Metaint", strconv.Itoa(metaint))
-		w.Header().Set("Content-Type", "audio/mpeg")
 		w.Write([]byte(body.String()))
 	}))
 	defer srv.Close()
 
+	f := newFetcher(t)
+	np, ev := f.Probe(t.Context(), srv.URL, Config{Enabled: true, Type: TypeICY})
+	if np.Title != delayedTitle || np.Status != "ok" {
+		t.Fatalf("got %+v", np)
+	}
+	if !ev.DelayedICY {
+		t.Fatalf("expected DelayedICY=true; ev=%+v", ev)
+	}
+	if ev.BlocksRead == 0 {
+		t.Fatalf("expected BlocksRead > 0; ev=%+v", ev)
+	}
+	if ev.Strategy != TypeICY {
+		t.Errorf("expected strategy=icy; got %q", ev.Strategy)
+	}
+}
+
+// Runtime Fetch must NOT extend to the slow budget. A stream that only
+// reveals metadata after the fast budget should fail with no_metadata.
+func TestFetchRuntimeDoesNotUseSlowBudget(t *testing.T) {
+	const metaint = 64
+	delayedTitle := "Late Title"
+
+	body := strings.Builder{}
+	for i := 0; i < maxICYMetadataBlocksFast; i++ {
+		body.WriteString(strings.Repeat("a", metaint))
+		body.WriteString(padICYBlock("StreamTitle='';"))
+	}
+	body.WriteString(strings.Repeat("b", metaint))
+	body.WriteString(padICYBlock("StreamTitle='" + delayedTitle + "';"))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Icy-Metaint", strconv.Itoa(metaint))
+		w.Write([]byte(body.String()))
+	}))
+	defer srv.Close()
+
+	f := newFetcher(t)
+	np, _ := f.Fetch(t.Context(), srv.URL, Config{Enabled: true, Type: TypeICY})
+	if np.Status != "error" {
+		t.Fatalf("expected error status; got %q (%+v)", np.Status, np)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Cache key, Close, bounded cache
+// ---------------------------------------------------------------------------
+
+func TestCacheKeyDoesNotCollide(t *testing.T) {
+	a := Config{Enabled: true, Type: TypeAuto, MetadataURL: "x|y", DelayedICY: false}
+	b := Config{Enabled: true, Type: TypeAuto, MetadataURL: "x", DelayedICY: false}
+	if a.cacheKey("u") == b.cacheKey("u") {
+		t.Fatalf("cache keys must differ for distinct MetadataURL values")
+	}
+	c := Config{Enabled: true, Type: TypeAuto, DelayedICY: true}
+	d := Config{Enabled: true, Type: TypeAuto, DelayedICY: false}
+	if c.cacheKey("u") == d.cacheKey("u") {
+		t.Fatalf("cache keys must differ for delayed flag")
+	}
+}
+
+func TestFetcherCloseStopsEviction(t *testing.T) {
 	f := NewFetcher(slog.Default())
-	np := f.Fetch(t.Context(), srv.URL, Config{Enabled: true, Type: TypeICY, DetectDelayedICY: true})
-	if np.Title != delayedTitle {
-		t.Fatalf("got title %q; want %q", np.Title, delayedTitle)
+	if err := f.Close(); err != nil {
+		t.Fatalf("close: %v", err)
 	}
-	if !np.DelayedICY {
-		t.Fatalf("expected delayed icy flag to be true")
+	// Second close is a no-op.
+	if err := f.Close(); err != nil {
+		t.Fatalf("second close: %v", err)
 	}
-	if np.Status != "ok" {
-		t.Fatalf("got status %q; want ok", np.Status)
+}
+
+func TestFetcherEnforceCacheBound(t *testing.T) {
+	f := NewFetcher(slog.Default(), WithMaxCacheEntries(2))
+	t.Cleanup(func() { _ = f.Close() })
+
+	exp := time.Now().Add(cacheTTLSupported)
+	f.mu.Lock()
+	for i := 0; i < 5; i++ {
+		k := cacheKey{URL: fmt.Sprintf("u%d", i), Type: TypeAuto, Enabled: true}
+		f.cache[k] = cachedEntry{np: &NowPlaying{Title: "x"}, exp: exp}
+	}
+	f.enforceCacheBound()
+	got := len(f.cache)
+	f.mu.Unlock()
+	if got > 2 {
+		t.Fatalf("expected cache size <= 2 after enforceCacheBound; got %d", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Playlist resolution
+// ---------------------------------------------------------------------------
+
+func TestResolvePlaylistM3U(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// CRLF is critical: many real-world playlists use Windows line endings.
+		w.Write([]byte("#EXTM3U\r\n#EXTINF:-1\r\nhttp://example.com/real-stream.mp3\r\n"))
+	}))
+	defer srv.Close()
+
+	f := newFetcher(t)
+	got, ok := f.resolvePlaylist(t.Context(), srv.URL+"/playlist.m3u")
+	if !ok {
+		t.Fatalf("expected playlist resolution to succeed")
+	}
+	if got != "http://example.com/real-stream.mp3" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestResolvePlaylistPLS(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("[playlist]\r\nFile1=http://example.com/real.mp3\r\nLength1=-1\r\n"))
+	}))
+	defer srv.Close()
+
+	f := newFetcher(t)
+	got, ok := f.resolvePlaylist(t.Context(), srv.URL+"/play.pls")
+	if !ok || got != "http://example.com/real.mp3" {
+		t.Fatalf("got %q ok=%v", got, ok)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// resolveAuto skips ICY for HLS
+// ---------------------------------------------------------------------------
+
+func TestResolveAutoSkipsICYForHLS(t *testing.T) {
+	icyHits := int32(0)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/status-json.xsl":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"icestats":{"source":{"title":"HLS Source - Track","mount":"/live.m3u8"}}}`))
+		case "/live.m3u8":
+			// Sniff: ICY would request the .m3u8 URL. We must not see this.
+			atomic.AddInt32(&icyHits, 1)
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	f := newFetcher(t)
+	np, ev := f.Fetch(t.Context(), srv.URL+"/live.m3u8", Config{Enabled: true, Type: TypeAuto})
+	if np.Title == "" {
+		t.Fatalf("expected title from icecast fallback; got %+v", np)
+	}
+	if ev.Strategy != TypeIcecast {
+		t.Errorf("expected icecast strategy; got %q", ev.Strategy)
+	}
+	if atomic.LoadInt32(&icyHits) != 0 {
+		t.Errorf("expected no ICY attempts on HLS URL; got %d", icyHits)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Metrics hook
+// ---------------------------------------------------------------------------
+
+type recordingMetrics struct {
+	mu      sync.Mutex
+	fetches int
+	hits    int
+	delayed int
+	lastOK  bool
+	lastStr string
+}
+
+func (m *recordingMetrics) OnFetch(strategy string, ok bool, _ time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.fetches++
+	m.lastOK = ok
+	m.lastStr = strategy
+}
+func (m *recordingMetrics) OnDelayedDetected(string) { m.mu.Lock(); m.delayed++; m.mu.Unlock() }
+func (m *recordingMetrics) OnCacheHit(string)        { m.mu.Lock(); m.hits++; m.mu.Unlock() }
+
+func TestMetricsHookFires(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/status-json.xsl" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(`{"icestats":{"source":{"title":"M - T","mount":"/s"}}}`))
+	}))
+	defer srv.Close()
+
+	m := &recordingMetrics{}
+	f := NewFetcher(slog.Default(), WithMetrics(m))
+	t.Cleanup(func() { _ = f.Close() })
+
+	cfg := Config{Enabled: true, Type: TypeIcecast}
+	f.Fetch(t.Context(), srv.URL+"/s", cfg)
+	f.Fetch(t.Context(), srv.URL+"/s", cfg) // cache hit
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.fetches < 1 || m.hits < 1 {
+		t.Fatalf("expected metrics fired; got %+v", m)
+	}
+	if m.lastStr != TypeIcecast {
+		t.Errorf("expected last strategy icecast; got %q", m.lastStr)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MetadataWaitSeconds
+// ---------------------------------------------------------------------------
+
+func TestMetadataWaitSeconds(t *testing.T) {
+	if got := MetadataWaitSeconds(false); got != 6 {
+		t.Errorf("normal wait = %d; want 6", got)
+	}
+	if got := MetadataWaitSeconds(true); got != 20 {
+		t.Errorf("delayed wait = %d; want 20", got)
 	}
 }

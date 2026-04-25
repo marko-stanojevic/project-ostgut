@@ -388,13 +388,12 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		}
 		nextMetadataDelayed := target.MetadataDelayed
 		if scope == "full" || scope == "metadata" {
-			np := h.admin.metaFetcher.Fetch(c.Request.Context(), metadataURL, metadata.Config{
-				Enabled:          target.MetadataEnabled,
-				Type:             target.MetadataType,
-				SourceHint:       stringValue(target.MetadataSource),
-				MetadataURL:      stringValue(target.MetadataURL),
-				DelayedICY:       target.MetadataDelayed,
-				DetectDelayedICY: true,
+			np, ev := h.admin.metaFetcher.Probe(c.Request.Context(), metadataURL, metadata.Config{
+				Enabled:     target.MetadataEnabled,
+				Type:        target.MetadataType,
+				SourceHint:  stringValue(target.MetadataSource),
+				MetadataURL: stringValue(target.MetadataURL),
+				DelayedICY:  target.MetadataDelayed,
 			})
 			snap := store.StreamNowPlaying{
 				StreamID:    target.ID,
@@ -416,9 +415,9 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			if np.Source != "" || np.MetadataURL != "" {
 				src := optionalString(np.Source)
 				url := optionalString(np.MetadataURL)
-				nextMetadataDelayed = np.DelayedICY || nextMetadataDelayed
-				delayed := &np.DelayedICY
-				_ = h.admin.streams.UpdateMetadataDetection(context.WithoutCancel(c.Request.Context()), target.ID, src, url, delayed)
+				nextMetadataDelayed = ev.DelayedICY || nextMetadataDelayed
+				delayed := ev.DelayedICY
+				_ = h.admin.streams.UpdateMetadataDetection(context.WithoutCancel(c.Request.Context()), target.ID, src, url, &delayed)
 			}
 		}
 		if err := h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(c.Request.Context()), target.ID, store.MetadataResolverSnapshot{
