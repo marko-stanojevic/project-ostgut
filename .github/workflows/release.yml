@@ -46,7 +46,7 @@ jobs:
       - name: Check if tag already exists
         id: tag-check
         run: |
-          TAG="v${{ steps.gitversion.outputs.semVer }}"
+          TAG="v${{ steps.gitversion.outputs.majorMinorPatch }}"
           if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Tag ${TAG} already exists, skipping release."
