@@ -1,27 +1,18 @@
 'use client'
 
-import type { StationStream } from '@/types/player'
 import type { NowPlaying } from '@/hooks/useNowPlaying'
+import {
+  normalizeResolvedClientMetadata,
+  resolveSupplementalMetadata,
+  type ClientMetadataStream,
+} from '@/lib/metadata-providers'
 import { metadataDebugLog } from '@/lib/metadata-observability'
+import { isPlaceholderMetadataTitle } from '@/lib/metadata-title'
 
 const CLIENT_TIMEOUT_MS = 4000
 const CACHE_TTL_OK_MS = 30_000
 const CACHE_TTL_MISS_MS = 3 * 60_000
 const MAX_METAINT = 65536
-const PLACEHOLDER_TITLES = new Set([
-  '',
-  '-',
-  'please',
-  'loading',
-  'unknown',
-  'untitled',
-  'stream',
-  'station',
-  'advertisement',
-  'ads',
-  'n/a',
-  'na',
-])
 
 type CacheEntry = {
   value: NowPlaying | null
@@ -35,11 +26,6 @@ type BufferedReader = {
 
 const cache = new Map<string, CacheEntry>()
 const inFlight = new Map<string, Promise<NowPlaying | null>>()
-
-export type ClientMetadataStream = Pick<
-  StationStream,
-  'id' | 'url' | 'resolvedUrl' | 'kind' | 'metadataEnabled' | 'metadataType' | 'metadataUrl' | 'metadataResolver'
->
 
 declare global {
   interface Window {
@@ -150,7 +136,7 @@ async function resolveClientNowPlaying(
         metadataUrl: hintedMetadataURL,
       })
       const hinted = await resolveHinted(streamURL, hintedMetadataURL, signal)
-      if (hinted?.title) return hinted
+      if (hinted?.title) return normalizeResolvedClientMetadata(stream, hinted)
     }
 
     if (configuredType && configuredType !== 'auto') {
@@ -159,22 +145,26 @@ async function resolveClientNowPlaying(
         url: streamURL,
         metadataType: configuredType,
       })
-      return await resolveConfigured(streamURL, configuredType, signal)
+      const configured = await resolveConfigured(streamURL, configuredType, signal)
+      return configured ? normalizeResolvedClientMetadata(stream, configured) : null
     }
 
     if (stream.kind !== 'hls') {
       metadataDebugLog('client-try-icy', { streamId: stream.id, url: streamURL })
       const icy = await fetchICY(streamURL, signal)
-      if (icy?.title) return icy
+      if (icy?.title) return normalizeResolvedClientMetadata(stream, icy)
     }
 
     metadataDebugLog('client-try-icecast', { streamId: stream.id, url: streamURL })
     const icecast = await fetchIcecastJSON(streamURL, signal)
-    if (icecast?.title) return icecast
+    if (icecast?.title) return normalizeResolvedClientMetadata(stream, icecast)
 
     metadataDebugLog('client-try-shoutcast', { streamId: stream.id, url: streamURL })
     const shoutcast = await fetchShoutcast(streamURL, signal)
-    if (shoutcast?.title) return shoutcast
+    if (shoutcast?.title) return normalizeResolvedClientMetadata(stream, shoutcast)
+
+    const supplemental = await resolveSupplementalMetadata(stream, signal)
+    if (supplemental?.title) return normalizeResolvedClientMetadata(stream, supplemental)
 
     metadataDebugLog('client-no-metadata', { streamId: stream.id, url: streamURL })
     return null
@@ -403,7 +393,7 @@ async function fetchShoutcast7HTML(endpoint: string, signal: AbortSignal): Promi
 
 function buildNowPlaying(
   title: string,
-  source: 'icy' | 'icecast' | 'shoutcast',
+  source: string,
   resolver: 'client',
   metadataUrl?: string,
 ): NowPlaying {
@@ -512,18 +502,7 @@ function formatError(error: unknown): string {
 }
 
 function isPlaceholderTitle(raw: string): boolean {
-  const title = raw.trim()
-  if (!title) return true
-
-  const normalized = title.toLowerCase()
-  if (PLACEHOLDER_TITLES.has(normalized)) return true
-  if (normalized.startsWith('<html')) return true
-  if (normalized.includes('access denied')) return true
-  if (normalized.includes('forbidden')) return true
-  if (normalized.includes('not found')) return true
-  if (normalized.includes('please wait')) return true
-  if (normalized === 'please') return true
-  return false
+  return isPlaceholderMetadataTitle(raw)
 }
 
 function isShoutcastNumericField(value: string): boolean {

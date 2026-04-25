@@ -6,6 +6,7 @@ import { usePlayer } from '@/context/PlayerContext'
 import { PlayerDeviceMenu } from '@/components/player-device-menu'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { buildMetadataBadges } from '@/lib/metadata-badges'
 import {
   PlayIcon,
   PauseIcon,
@@ -41,36 +42,11 @@ interface FullScreenPlayerProps {
   onClose: () => void
 }
 
-function formatMetadataLabel(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) return ''
-  if (trimmed.toLowerCase() === 'icy') return 'ICY'
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
-}
-
 function getMetadataBadges(
   stream: StationStream | null,
   nowPlaying: NowPlaying | null,
 ): string[] {
-  if (!stream?.metadataEnabled) return []
-
-  const resolver = nowPlaying?.resolver || stream.metadataResolver
-  const badges: string[] = []
-
-  if (resolver && resolver !== 'none') {
-    badges.push(`Metadata: ${resolver === 'client' ? 'Client' : 'Server'}`)
-  }
-
-  if (stream.metadataType && stream.metadataType !== 'auto') {
-    badges.push(`Probe: ${formatMetadataLabel(stream.metadataType)}`)
-  }
-
-  const source = nowPlaying?.source || stream.metadataSource || ''
-  if (source) {
-    badges.push(`Live: ${formatMetadataLabel(source)}`)
-  }
-
-  return badges
+  return buildMetadataBadges(stream, nowPlaying)
 }
 
 function resolveDisplayStream(

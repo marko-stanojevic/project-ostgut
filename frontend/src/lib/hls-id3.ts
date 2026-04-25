@@ -1,5 +1,7 @@
 export const HLS_ID3_EVENT = 'ostgut:stream-id3'
 
+import { isPlaceholderMetadataTitle } from '@/lib/metadata-title'
+
 export type HlsNowPlayingDetail = {
   streamUrl: string
   title: string
@@ -8,18 +10,6 @@ export type HlsNowPlayingDetail = {
   source: 'id3'
   resolver: 'client'
 }
-
-const PLACEHOLDER_TITLES = new Set([
-  '',
-  '-',
-  'loading',
-  'unknown',
-  'untitled',
-  'advertisement',
-  'ads',
-  'n/a',
-  'na',
-])
 
 export function emitHlsID3NowPlaying(streamUrl: string, samples: Array<{ data?: Uint8Array }>): void {
   if (typeof window === 'undefined' || !streamUrl || samples.length === 0) {
@@ -235,5 +225,5 @@ function splitArtistTitle(title: string): { artist?: string; song?: string } {
 }
 
 function isPlaceholderTitle(title: string): boolean {
-  return PLACEHOLDER_TITLES.has(title.trim().toLowerCase())
+  return isPlaceholderMetadataTitle(title)
 }

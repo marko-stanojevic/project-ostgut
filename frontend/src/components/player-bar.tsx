@@ -8,6 +8,7 @@ import { FullScreenPlayer } from '@/components/full-screen-player'
 import { PlayerDeviceMenu } from '@/components/player-device-menu'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { buildMetadataBadges } from '@/lib/metadata-badges'
 import type { NowPlaying } from '@/hooks/useNowPlaying'
 import type { StationStream } from '@/types/player'
 import {
@@ -42,36 +43,11 @@ function getStreamDetailBadges(stream?: {
   return badges
 }
 
-function formatMetadataLabel(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) return ''
-  if (trimmed.toLowerCase() === 'icy') return 'ICY'
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
-}
-
 function getMetadataBadges(
   stream: StationStream | null,
   nowPlaying: NowPlaying | null,
 ): PlayerStatBadge[] {
-  if (!stream?.metadataEnabled) return []
-
-  const resolver = nowPlaying?.resolver || stream.metadataResolver
-  const badges: PlayerStatBadge[] = []
-
-  if (resolver && resolver !== 'none') {
-    badges.push({ label: `Metadata: ${resolver === 'client' ? 'Client' : 'Server'}` })
-  }
-
-  if (stream.metadataType && stream.metadataType !== 'auto') {
-    badges.push({ label: `Probe: ${formatMetadataLabel(stream.metadataType)}` })
-  }
-
-  const source = nowPlaying?.source || stream.metadataSource || ''
-  if (source) {
-    badges.push({ label: `Live: ${formatMetadataLabel(source)}` })
-  }
-
-  return badges
+  return buildMetadataBadges(stream, nowPlaying).map((label) => ({ label }))
 }
 
 function resolveDisplayStream(
