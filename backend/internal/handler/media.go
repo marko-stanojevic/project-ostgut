@@ -145,13 +145,7 @@ func (h *Handler) CreateUploadIntent(c *gin.Context) {
 		ownerID = userID
 		maxBytes = maxAvatarBytes
 	case store.MediaAssetKindStationIcon:
-		isAdmin, err := h.media.users.IsAdmin(c.Request.Context(), userID)
-		if err != nil {
-			h.log.Error("check admin for media upload intent", "error", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-			return
-		}
-		if !isAdmin {
+		if middleware.GetRole(c) != store.RoleAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
 		}
@@ -440,11 +434,7 @@ func (h *Handler) authorizeMediaAssetAccess(c *gin.Context, userID string, asset
 		}
 		return nil
 	case store.MediaAssetOwnerStation:
-		isAdmin, err := h.media.users.IsAdmin(c.Request.Context(), userID)
-		if err != nil {
-			return err
-		}
-		if !isAdmin {
+		if middleware.GetRole(c) != store.RoleAdmin {
 			return errForbiddenMediaAsset
 		}
 		return nil

@@ -88,14 +88,14 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 	}
 
 	type userResp struct {
-		ID      string `json:"id"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		IsAdmin bool   `json:"is_admin"`
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+		Role  string `json:"role"`
 	}
 	resp := make([]userResp, len(users))
 	for i, u := range users {
-		resp[i] = userResp{ID: u.ID, Email: u.Email, Name: u.Name, IsAdmin: u.IsAdmin}
+		resp[i] = userResp{ID: u.ID, Email: u.Email, Name: u.Name, Role: string(u.Role)}
 	}
 	c.JSON(http.StatusOK, gin.H{"users": resp, "total": total})
 }
@@ -1006,28 +1006,34 @@ func inferBitrateFromURL(raw string) int {
 	return 0
 }
 
-// AdminSetUserAdmin handles PUT /admin/users/:id/admin
-// Body: { "is_admin": true|false }
-func (h *Handler) AdminSetUserAdmin(c *gin.Context) {
+// AdminSetUserRole handles PUT /admin/users/:id/role
+// Body: { "role": "user" | "editor" | "admin" }
+func (h *Handler) AdminSetUserRole(c *gin.Context) {
 	userID := c.Param("id")
 
 	var req struct {
-		IsAdmin bool `json:"is_admin"`
+		Role string `json:"role" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
-	if err := h.admin.users.SetAdmin(c.Request.Context(), userID, req.IsAdmin); err != nil {
+	role, err := store.ParseRole(req.Role)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be one of: user, editor, admin"})
+		return
+	}
+
+	if err := h.admin.users.SetRole(c.Request.Context(), userID, role); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
-		h.log.Error("admin set user admin", "error", err)
+		h.log.Error("admin set user role", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"user_id": userID, "is_admin": req.IsAdmin})
+	c.JSON(http.StatusOK, gin.H{"user_id": userID, "role": string(role)})
 }

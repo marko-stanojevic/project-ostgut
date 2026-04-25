@@ -16,6 +16,7 @@ import (
 // Dependencies groups the stores required by HTTP handlers.
 type Dependencies struct {
 	UserStore             *store.UserStore
+	RefreshTokenStore     *store.RefreshTokenStore
 	SubscriptionStore     *store.SubscriptionStore
 	StationStore          *store.StationStore
 	StationStreamStore    *store.StationStreamStore
@@ -45,6 +46,7 @@ type playerPreferencesStore interface {
 
 type authHandlers struct {
 	users     *store.UserStore
+	refresh   *store.RefreshTokenStore
 	jwtSecret string
 }
 
@@ -121,6 +123,7 @@ func New(deps Dependencies, opts Options) *Handler {
 	return &Handler{
 		auth: authHandlers{
 			users:     deps.UserStore,
+			refresh:   deps.RefreshTokenStore,
 			jwtSecret: opts.JWTSecret,
 		},
 		user: userHandlers{

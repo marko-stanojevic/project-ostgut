@@ -15,8 +15,8 @@ type Config struct {
 	// DatabaseURL is the PostgreSQL connection string.
 	DatabaseURL string
 
-	// JWTSecret is the secret used to validate Auth.js HS256 tokens.
-	// Must match AUTH_SECRET in the frontend.
+	// JWTSecret is the HS256 signing secret used to issue and verify the
+	// backend's own access tokens. Independent of the frontend AUTH_SECRET.
 	JWTSecret string
 
 	// AllowedOrigins is the list of origins permitted by the CORS middleware.

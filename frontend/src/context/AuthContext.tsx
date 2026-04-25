@@ -1,13 +1,16 @@
 'use client'
 
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useEffect } from 'react'
 import { useSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from 'next-auth/react'
 import type { Session } from 'next-auth'
+import type { Role } from '@/types/next-auth'
 
 interface AuthContextType {
   user: Session['user'] | null
   session: Session | null
   loading: boolean
+  role: Role | null
+  isAdmin: boolean
   signUp: (email: string, password: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -18,6 +21,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
   const loading = status === 'loading'
+
+  // If the backend refresh token is invalid (revoked or expired), the jwt
+  // callback in lib/auth.ts stamps `error` on the session. Force a sign-out
+  // so the user lands on the login screen instead of an authenticated UI
+  // making 401-ing requests with a dead access token.
+  useEffect(() => {
+    if (session?.error) {
+      nextAuthSignOut({ redirect: false }).catch((err) => {
+        console.error('Auto sign-out after refresh failure failed:', err)
+      })
+    }
+  }, [session?.error])
 
   const signUp = async (email: string, password: string) => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
@@ -47,12 +62,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await nextAuthSignOut({ redirect: false })
   }
 
+  const role = (session?.user?.role as Role | undefined) ?? null
+  const isAdmin = role === 'admin'
+
   return (
     <AuthContext.Provider
       value={{
         user: session?.user ?? null,
         session: session ?? null,
         loading,
+        role,
+        isAdmin,
         signUp,
         signIn,
         signOut,
