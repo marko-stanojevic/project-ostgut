@@ -19,6 +19,7 @@ import {
   normalizeNormalizationEnabled,
   readPersistedPlayerState,
 } from '@/types/player'
+import { emitHlsID3NowPlaying } from '@/lib/hls-id3'
 import { usePlayerStorage } from '@/hooks/usePlayerStorage'
 import { usePlayerSync } from '@/hooks/usePlayerSync'
 import { toStation } from '@/lib/station'
@@ -122,6 +123,32 @@ function getPlayableVariants(s: Station, caps: PlaybackCapabilities): PlayableVa
   return [{ url, kind, codec: '', mimeType: '', lossless: url.toLowerCase().includes('flac') }]
 }
 
+function getPlaybackStationSnapshot(next: Station, current: Station | null): Station {
+  if (!current || current.id !== next.id) return next
+
+  const nextHasStreams = (next.streams?.length ?? 0) > 0
+  const currentHasStreams = (current.streams?.length ?? 0) > 0
+  const nextHasMetadata = Boolean(
+    next.streams?.some((stream) => typeof stream.metadataEnabled === 'boolean' || Boolean(stream.metadataSource)),
+  )
+  const currentHasMetadata = Boolean(
+    current.streams?.some((stream) => typeof stream.metadataEnabled === 'boolean' || Boolean(stream.metadataSource)),
+  )
+
+  return {
+    ...current,
+    ...next,
+    streams:
+      currentHasStreams && (!nextHasStreams || (currentHasMetadata && !nextHasMetadata))
+        ? current.streams
+        : next.streams,
+    logo: next.logo || current.logo,
+    genres: next.genres?.length ? next.genres : current.genres,
+    country: next.country || current.country,
+    city: next.city || current.city,
+  }
+}
+
 function getVariantContentType(variant: PlayableVariant): string {
   const mimeType = variant.mimeType.trim()
   if (mimeType) return mimeType
@@ -174,6 +201,7 @@ const STATION_SWITCH_RAMP_MS = 360
 const TARGET_LOUDNESS_LUFS = -17
 const MAX_NORMALIZATION_BOOST_DB = 6
 const MAX_NORMALIZATION_CUT_DB = -9
+const TARGET_TRUE_PEAK_DBFS = -1
 
 const PlayerContext = createContext<PlayerContextValue | null>(null)
 
@@ -198,10 +226,19 @@ function getStreamNormalizationOffsetDb(
   if (!normalizationEnabled || !stream) return 0
   if (stream.loudnessMeasurementStatus !== 'measured') return 0
   if (!Number.isFinite(stream.loudnessIntegratedLufs)) return 0
-  return Math.max(
+
+  const loudnessOffsetDb = TARGET_LOUDNESS_LUFS - (stream.loudnessIntegratedLufs ?? TARGET_LOUDNESS_LUFS)
+  let offsetDb = Math.max(
     MAX_NORMALIZATION_CUT_DB,
-    Math.min(MAX_NORMALIZATION_BOOST_DB, TARGET_LOUDNESS_LUFS - (stream.loudnessIntegratedLufs ?? TARGET_LOUDNESS_LUFS)),
+    Math.min(MAX_NORMALIZATION_BOOST_DB, loudnessOffsetDb),
   )
+
+  if (offsetDb > 0 && Number.isFinite(stream.loudnessPeakDbfs)) {
+    const peakLimitedBoostDb = TARGET_TRUE_PEAK_DBFS - (stream.loudnessPeakDbfs ?? TARGET_TRUE_PEAK_DBFS)
+    offsetDb = Math.min(offsetDb, peakLimitedBoostDb)
+  }
+
+  return Math.max(MAX_NORMALIZATION_CUT_DB, offsetDb)
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
@@ -454,6 +491,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [baseVolume])
 
   useEffect(() => {
+    stationRef.current = station
+  }, [station])
+
+  useEffect(() => {
     normalizationEnabledRef.current = normalizationEnabled
   }, [normalizationEnabled])
 
@@ -533,7 +574,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const session = castContext.getCurrentSession()
     if (!session) return false
 
-    const variants = getPlayableVariants(s, playbackCaps)
+    const playbackStation = getPlaybackStationSnapshot(s, station)
+    const variants = getPlayableVariants(playbackStation, playbackCaps)
     if (variants.length === 0) {
       setCurrentStream(null)
       setState('error')
@@ -572,8 +614,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audioRef.current?.pause()
       audioRef.current?.removeAttribute('src')
       audioRef.current?.load()
-      stationRef.current = s
-      setStation(s)
+      stationRef.current = playbackStation
+      setStation(playbackStation)
       setCurrentStream(variant.source ?? null)
       setTransport('cast')
       setCastState('connected')
@@ -585,7 +627,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setState('error')
       return false
     }
-  }, [clearReconnect, detachHls, playbackCaps])
+  }, [clearReconnect, detachHls, playbackCaps, station])
 
   const promptCast = useCallback(async () => {
     if (!window.cast || !window.chrome) return false
@@ -712,7 +754,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current
     if (!audio) return
 
-    const variants = getPlayableVariants(s, playbackCaps)
+    const playbackStation = getPlaybackStationSnapshot(s, station)
+
+    const variants = getPlayableVariants(playbackStation, playbackCaps)
     if (variants.length === 0) {
       setCurrentStream(null)
       setState('error')
@@ -737,9 +781,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio.pause()
     detachHls()
     clearReconnect()
-    stationRef.current = s
+    stationRef.current = playbackStation
     setState('loading')
-    setStation(s)
+    setStation(playbackStation)
     touchPreferences()
 
     const { url, kind } = variant
@@ -751,6 +795,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         hlsRef.current = hls
         hls.loadSource(url)
         hls.attachMedia(audio)
+        hls.on(Hls.Events.FRAG_PARSING_METADATA, (_event, data) => {
+          emitHlsID3NowPlaying(url, data.samples ?? [])
+        })
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           audio.play().catch(() => {
             setState('error')

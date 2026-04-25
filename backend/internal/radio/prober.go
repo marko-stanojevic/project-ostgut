@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,23 +21,26 @@ const (
 	reprobeWorkers = 10
 
 	// reprobeTimeout is the per-stream HTTP probe deadline.
-	reprobeTimeout = 10 * time.Second
+	reprobeTimeout       = 10 * time.Second
+	resolverProbeTimeout = 8 * time.Second
 )
 
 // Prober periodically re-probes every active stream variant to refresh
 // resolved_url, detected codec/bitrate, and last_error.
 type Prober struct {
-	streamStore *store.StationStreamStore
-	log         *slog.Logger
-	client      *http.Client
+	streamStore         *store.StationStreamStore
+	log                 *slog.Logger
+	client              *http.Client
+	browserProbeOrigins []string
 }
 
 // NewProber creates a Prober.
-func NewProber(streamStore *store.StationStreamStore, log *slog.Logger) *Prober {
+func NewProber(streamStore *store.StationStreamStore, log *slog.Logger, browserProbeOrigins []string) *Prober {
 	return &Prober{
-		streamStore: streamStore,
-		log:         log,
-		client:      &http.Client{Timeout: reprobeTimeout},
+		streamStore:         streamStore,
+		log:                 log,
+		client:              &http.Client{Timeout: reprobeTimeout},
+		browserProbeOrigins: append([]string(nil), browserProbeOrigins...),
 	}
 }
 
@@ -76,31 +80,91 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			probeCtx, cancel := context.WithTimeout(ctx, reprobeTimeout)
-			result := ProbeStream(probeCtx, p.client, stream.URL)
-			cancel()
+			probeCtx, probeCancel := context.WithTimeout(ctx, reprobeTimeout)
+			result := ProbeStreamWithOptions(probeCtx, p.client, stream.URL, StreamProbeOptions{
+				IncludeLoudness: false,
+			})
+			probeCancel()
+
+			resolverURL := strings.TrimSpace(result.ResolvedURL)
+			if resolverURL == "" {
+				resolverURL = strings.TrimSpace(stream.ResolvedURL)
+			}
+			if resolverURL == "" {
+				resolverURL = strings.TrimSpace(stream.URL)
+			}
+
+			resolverKind := strings.TrimSpace(result.Kind)
+			if resolverKind == "" {
+				resolverKind = strings.TrimSpace(stream.Kind)
+			}
+			if resolverKind == "" {
+				resolverKind = "direct"
+			}
+
+			resolverContainer := strings.TrimSpace(result.Container)
+			if resolverContainer == "" {
+				resolverContainer = strings.TrimSpace(stream.Container)
+			}
+			if resolverContainer == "" {
+				resolverContainer = "none"
+			}
+
+			resolverCheckedAt := time.Now().UTC()
+			resolverProbeCtx, resolverCancel := context.WithTimeout(ctx, resolverProbeTimeout)
+			clientMetadata := ProbeClientMetadataSupport(
+				resolverProbeCtx,
+				p.client,
+				p.browserProbeOrigins,
+				resolverURL,
+				resolverKind,
+				resolverContainer,
+				stream.MetadataEnabled,
+				stream.MetadataType,
+			)
+			resolverCancel()
+			hlsID3Supported := false
+			if stream.MetadataEnabled && strings.EqualFold(resolverKind, "hls") {
+				hlsProbeCtx, hlsCancel := context.WithTimeout(ctx, resolverProbeTimeout)
+				hlsID3Supported = ProbeHLSID3Support(hlsProbeCtx, p.client, resolverURL)
+				hlsCancel()
+			}
+			if !clientMetadata.CheckedAt.IsZero() {
+				resolverCheckedAt = clientMetadata.CheckedAt
+			}
+			nextResolver := ResolveMetadataResolver(stream.MetadataEnabled, clientMetadata.Supported)
+			if strings.EqualFold(resolverKind, "hls") {
+				if hlsID3Supported {
+					nextResolver = "client"
+				} else {
+					nextResolver = "none"
+				}
+			}
+			nextMetadataURL := normalizeMetadataValue(clientMetadata.MetadataURL)
+			if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolverKind, "hls") {
+				nextMetadataURL = normalizeMetadataValue(resolverURL)
+			}
 			nextHealth := nextProbeHealthScore(stream.HealthScore, result.LastError == nil)
 
 			if err := p.streamStore.UpdateProbeResult(ctx, stream.ID, store.ProbeUpdate{
-				ResolvedURL:            result.ResolvedURL,
-				Kind:                   result.Kind,
-				Container:              result.Container,
-				Transport:              result.Transport,
-				MimeType:               result.MimeType,
-				Codec:                  result.Codec,
-				Bitrate:                result.Bitrate,
-				BitDepth:               result.BitDepth,
-				SampleRateHz:           result.SampleRateHz,
-				SampleRateConfidence:   result.SampleRateConfidence,
-				Channels:               result.Channels,
-				LoudnessIntegratedLUFS: result.LoudnessIntegratedLUFS,
-				LoudnessPeakDBFS:       result.LoudnessPeakDBFS,
-				LoudnessSampleDuration: result.LoudnessSampleDuration,
-				LoudnessMeasuredAt:     result.LoudnessMeasuredAt,
-				LoudnessStatus:         result.LoudnessStatus,
-				HealthScore:            &nextHealth,
-				LastCheckedAt:          result.LastCheckedAt,
-				LastError:              result.LastError,
+				ResolvedURL:               result.ResolvedURL,
+				Kind:                      result.Kind,
+				Container:                 result.Container,
+				Transport:                 result.Transport,
+				MimeType:                  result.MimeType,
+				Codec:                     result.Codec,
+				Bitrate:                   result.Bitrate,
+				BitDepth:                  result.BitDepth,
+				SampleRateHz:              result.SampleRateHz,
+				SampleRateConfidence:      result.SampleRateConfidence,
+				Channels:                  result.Channels,
+				HealthScore:               &nextHealth,
+				IncludeMetadataResolver:   true,
+				MetadataResolver:          nextResolver,
+				MetadataResolverCheckedAt: &resolverCheckedAt,
+				MetadataURL:               nextMetadataURL,
+				LastCheckedAt:             result.LastCheckedAt,
+				LastError:                 result.LastError,
 			}); err != nil {
 				// Graceful shutdown can cancel ctx while workers are flushing results.
 				// Treat cancellation as expected and avoid noisy WARN logs.
@@ -124,4 +188,12 @@ func nextProbeHealthScore(current float64, success bool) float64 {
 		return math.Min(1, current+0.08)
 	}
 	return math.Max(0, current-0.2)
+}
+
+func normalizeMetadataValue(raw string) *string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }

@@ -1,10 +1,8 @@
-import NextAuth from 'next-auth'
 import createIntlMiddleware from 'next-intl/middleware'
+import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { authConfig } from '@/lib/auth.config'
 import { routing } from './i18n/routing'
 
-const { auth } = NextAuth(authConfig)
 const handleI18n = createIntlMiddleware(routing)
 
 const protectedPrefixes = [
@@ -41,8 +39,12 @@ function getLocaleFromPath(pathname: string): string {
   return routing.defaultLocale
 }
 
-export default auth(function middleware(req) {
-  const isAuthenticated = !!req.auth?.user?.email
+function hasSessionToken(req: NextRequest): boolean {
+  return req.cookies.has('authjs.session-token') || req.cookies.has('__Secure-authjs.session-token')
+}
+
+export default function middleware(req: NextRequest) {
+  const isAuthenticated = hasSessionToken(req)
   const { pathname } = req.nextUrl
 
   const locale = getLocaleFromPath(pathname)
@@ -63,7 +65,7 @@ export default auth(function middleware(req) {
   }
 
   return handleI18n(req)
-})
+}
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico|api/).*)'],

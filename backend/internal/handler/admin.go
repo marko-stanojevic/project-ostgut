@@ -194,13 +194,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		Overview:    normalizeOptionalText(req.Overview),
 	}
 
-	probeCtx, probeCancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	probe := radio.ProbeStream(probeCtx, h.admin.streamProbeClient, streamURL)
-	probeCancel()
-	if err := validateProbedStream(probe); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
-		return
-	}
+	probe := radio.LightClassifyStreamURL(streamURL)
 	probe.Bitrate = resolveStreamBitrate(nil, streamURL, probe)
 
 	created, err := h.admin.stations.CreateManual(c.Request.Context(), manual)
@@ -209,10 +203,6 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-
-	metadataSource, metadataError, metadataErrorCode, metadataFetchedAt := detectMetadataSnapshot(
-		h.admin.metaFetcher.Fetch(c.Request.Context(), probe.ResolvedURL, metadata.Config{Enabled: true, Type: metadata.TypeAuto}),
-	)
 
 	_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), created.ID, store.StationStreamInput{
 		URL:                    streamURL,
@@ -236,13 +226,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		LoudnessStatus:         probe.LoudnessStatus,
 		MetadataEnabled:        true,
 		MetadataType:           "auto",
-		MetadataSource:         metadataSource,
-		MetadataError:          metadataError,
-		MetadataErrorCode:      metadataErrorCode,
-		MetadataLastFetchedAt:  metadataFetchedAt,
-		HealthScore:            initialProbeHealthScore(probe),
-		LastCheckedAt:          &probe.LastCheckedAt,
-		LastError:              probe.LastError,
+		HealthScore:            0,
 	})
 
 	created, err = h.admin.stations.GetByIDAdmin(c.Request.Context(), created.ID)
@@ -256,7 +240,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 }
 
 // AdminProbeStationStream handles POST /admin/stations/:id/streams/:streamID/probe.
-// Query param `scope` can be `quality`, `metadata`, `loudness`, or `full`.
+// Query param `scope` can be `quality`, `metadata`, `resolver`, `loudness`, or `full`.
 func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 	stationID := strings.TrimSpace(c.Param("id"))
 	streamID := strings.TrimSpace(c.Param("streamID"))
@@ -299,16 +283,20 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 	if scope == "" {
 		scope = "full"
 	}
-	if scope != "full" && scope != "quality" && scope != "metadata" && scope != "loudness" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "scope must be quality, metadata, loudness, or full"})
+	if scope != "full" && scope != "quality" && scope != "metadata" && scope != "resolver" && scope != "loudness" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "scope must be quality, metadata, resolver, loudness, or full"})
 		return
 	}
 
 	resolvedURL := strings.TrimSpace(target.ResolvedURL)
+	resolvedKind := target.Kind
+	resolvedContainer := target.Container
 
 	if scope == "full" || scope == "quality" || scope == "loudness" {
 		probeCtx, cancel := context.WithTimeout(c.Request.Context(), 12*time.Second)
-		probe := radio.ProbeStream(probeCtx, h.admin.streamProbeClient, target.URL)
+		probe := radio.ProbeStreamWithOptions(probeCtx, h.admin.streamProbeClient, target.URL, radio.StreamProbeOptions{
+			IncludeLoudness: scope == "full" || scope == "loudness",
+		})
 		cancel()
 
 		nextHealth := target.HealthScore
@@ -333,6 +321,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			LastError:            probe.LastError,
 		}
 		if scope == "full" || scope == "loudness" {
+			update.IncludeLoudness = true
 			update.LoudnessIntegratedLUFS = probe.LoudnessIntegratedLUFS
 			update.LoudnessPeakDBFS = probe.LoudnessPeakDBFS
 			update.LoudnessSampleDuration = probe.LoudnessSampleDuration
@@ -340,7 +329,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			update.LoudnessStatus = probe.LoudnessStatus
 		}
 
-		if err := h.admin.streams.UpdateProbeResult(c.Request.Context(), target.ID, update); err != nil {
+		if err := h.admin.streams.UpdateProbeResult(context.WithoutCancel(c.Request.Context()), target.ID, update); err != nil {
 			h.log.Error("admin probe stream update probe", "stream_id", target.ID, "scope", scope, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
@@ -349,28 +338,95 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		if strings.TrimSpace(probe.ResolvedURL) != "" {
 			resolvedURL = strings.TrimSpace(probe.ResolvedURL)
 		}
+		if strings.TrimSpace(probe.Kind) != "" {
+			resolvedKind = strings.TrimSpace(probe.Kind)
+		}
+		if strings.TrimSpace(probe.Container) != "" {
+			resolvedContainer = strings.TrimSpace(probe.Container)
+		}
 	}
 
-	if scope == "full" || scope == "metadata" {
+	if scope == "full" || scope == "metadata" || scope == "resolver" {
 		metadataURL := resolvedURL
 		if metadataURL == "" {
 			metadataURL = target.URL
 		}
-		metadataSource, metadataError, metadataErrorCode, metadataFetchedAt := detectMetadataSnapshot(
-			h.admin.metaFetcher.Fetch(c.Request.Context(), metadataURL, metadata.Config{
-				Enabled: target.MetadataEnabled,
-				Type:    target.MetadataType,
-			}),
-		)
-		if err := h.admin.streams.UpdateMetadataHealth(
+		if scope == "metadata" || scope == "resolver" {
+			classified := radio.LightClassifyStreamURL(metadataURL)
+			if v := strings.TrimSpace(classified.Kind); v != "" {
+				resolvedKind = v
+			}
+			if v := strings.TrimSpace(classified.Container); v != "" {
+				resolvedContainer = v
+			}
+		}
+		clientMetadata := radio.ProbeClientMetadataSupport(
 			c.Request.Context(),
-			target.ID,
-			metadataSource,
-			metadataError,
-			metadataErrorCode,
-			metadataFetchedAt,
-		); err != nil {
-			h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
+			h.admin.streamProbeClient,
+			h.admin.browserProbeOrigins,
+			metadataURL,
+			resolvedKind,
+			resolvedContainer,
+			target.MetadataEnabled,
+			target.MetadataType,
+		)
+		hlsID3Supported := false
+		if target.MetadataEnabled && strings.EqualFold(resolvedKind, "hls") {
+			hlsID3Supported = radio.ProbeHLSID3Support(c.Request.Context(), h.admin.streamProbeClient, metadataURL)
+		}
+		nextResolver := radio.ResolveMetadataResolver(target.MetadataEnabled, clientMetadata.Supported)
+		if strings.EqualFold(resolvedKind, "hls") {
+			if hlsID3Supported {
+				nextResolver = "client"
+			} else {
+				nextResolver = "none"
+			}
+		}
+		nextMetadataURL := optionalString(clientMetadata.MetadataURL)
+		if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolvedKind, "hls") {
+			nextMetadataURL = optionalString(metadataURL)
+		}
+		nextMetadataDelayed := target.MetadataDelayed
+		if scope == "full" || scope == "metadata" {
+			np, ev := h.admin.metaFetcher.Probe(c.Request.Context(), metadataURL, metadata.Config{
+				Enabled:     target.MetadataEnabled,
+				Type:        target.MetadataType,
+				SourceHint:  stringValue(target.MetadataSource),
+				MetadataURL: stringValue(target.MetadataURL),
+				DelayedICY:  target.MetadataDelayed,
+			})
+			snap := store.StreamNowPlaying{
+				StreamID:    target.ID,
+				Title:       np.Title,
+				Artist:      np.Artist,
+				Song:        np.Song,
+				Source:      np.Source,
+				MetadataURL: optionalString(np.MetadataURL),
+				Error:       optionalString(np.Error),
+				ErrorCode:   optionalString(np.ErrorCode),
+				FetchedAt:   np.FetchedAt,
+			}
+			if err := h.admin.nowPlaying.Upsert(context.WithoutCancel(c.Request.Context()), snap); err != nil {
+				h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+				return
+			}
+			// Persist discovered source / URL hints back to the editorial row.
+			if np.Source != "" || np.MetadataURL != "" {
+				src := optionalString(np.Source)
+				url := optionalString(np.MetadataURL)
+				nextMetadataDelayed = ev.DelayedICY || nextMetadataDelayed
+				delayed := ev.DelayedICY
+				_ = h.admin.streams.UpdateMetadataDetection(context.WithoutCancel(c.Request.Context()), target.ID, src, url, &delayed)
+			}
+		}
+		if err := h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(c.Request.Context()), target.ID, store.MetadataResolverSnapshot{
+			Resolver:    nextResolver,
+			MetadataURL: nextMetadataURL,
+			CheckedAt:   &clientMetadata.CheckedAt,
+			Delayed:     &nextMetadataDelayed,
+		}); err != nil {
+			h.log.Error("admin probe stream update metadata resolver", "stream_id", target.ID, "scope", scope, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
@@ -609,10 +665,10 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 
 	// Rebuild stream variants when the caller provides an explicit list.
-	// When only stream_url changed (no list), re-probe and upsert the primary.
+	// When only stream_url changed (no list), upsert the primary without probing.
 	var (
 		rebuiltStreams []store.StationStreamInput
-		primaryProbe   *radio.StreamProbeResult
+		primaryInput   *store.StationStreamInput
 	)
 
 	if req.Streams != nil && len(*req.Streams) > 0 {
@@ -622,17 +678,39 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return
 		}
+		mergeExistingProbeData(inputs, currentStreams)
 		rebuiltStreams = inputs
 	} else if req.StreamURL != nil {
-		probeCtx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-		probe := radio.ProbeStream(probeCtx, h.admin.streamProbeClient, u.StreamURL)
-		cancel()
-		if err := validateProbedStream(probe); err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
-			return
+		classified := radio.LightClassifyStreamURL(u.StreamURL)
+		classified.Bitrate = resolveStreamBitrate(nil, u.StreamURL, classified)
+		metadataEnabled := true
+		for _, stream := range currentStreams {
+			if stream.Priority != 1 {
+				continue
+			}
+			metadataEnabled = stream.MetadataEnabled
+			break
 		}
-		probe.Bitrate = resolveStreamBitrate(nil, u.StreamURL, probe)
-		primaryProbe = &probe
+		in := store.StationStreamInput{
+			URL:                  u.StreamURL,
+			ResolvedURL:          classified.ResolvedURL,
+			Kind:                 classified.Kind,
+			Container:            classified.Container,
+			Transport:            classified.Transport,
+			MimeType:             classified.MimeType,
+			Codec:                classified.Codec,
+			Bitrate:              classified.Bitrate,
+			BitDepth:             classified.BitDepth,
+			SampleRateHz:         classified.SampleRateHz,
+			SampleRateConfidence: classified.SampleRateConfidence,
+			Channels:             classified.Channels,
+			Priority:             1,
+			IsActive:             true,
+			MetadataEnabled:      metadataEnabled,
+			MetadataType:         metadata.TypeAuto,
+		}
+		mergeExistingProbeData([]store.StationStreamInput{in}, currentStreams)
+		primaryInput = &in
 	}
 
 	if len(rebuiltStreams) > 0 {
@@ -649,56 +727,8 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		}
 	}
 
-	if primaryProbe != nil {
-		metadataEnabled := true
-		for _, stream := range currentStreams {
-			if stream.Priority != 1 {
-				continue
-			}
-			metadataEnabled = stream.MetadataEnabled
-			break
-		}
-		var metadataSource *string
-		var metadataError *string
-		var metadataErrorCode *string
-		var metadataFetchedAt *time.Time
-		if metadataEnabled {
-			np := h.admin.metaFetcher.Fetch(c.Request.Context(), primaryProbe.ResolvedURL, metadata.Config{
-				Enabled: true,
-				Type:    metadata.TypeAuto,
-			})
-			metadataSource, metadataError, metadataErrorCode, metadataFetchedAt = detectMetadataSnapshot(np)
-		}
-		_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), id, store.StationStreamInput{
-			URL:                    u.StreamURL,
-			ResolvedURL:            primaryProbe.ResolvedURL,
-			Kind:                   primaryProbe.Kind,
-			Container:              primaryProbe.Container,
-			Transport:              primaryProbe.Transport,
-			MimeType:               primaryProbe.MimeType,
-			Codec:                  primaryProbe.Codec,
-			Bitrate:                primaryProbe.Bitrate,
-			BitDepth:               primaryProbe.BitDepth,
-			SampleRateHz:           primaryProbe.SampleRateHz,
-			SampleRateConfidence:   primaryProbe.SampleRateConfidence,
-			Channels:               primaryProbe.Channels,
-			Priority:               1,
-			IsActive:               true,
-			LoudnessIntegratedLUFS: primaryProbe.LoudnessIntegratedLUFS,
-			LoudnessPeakDBFS:       primaryProbe.LoudnessPeakDBFS,
-			LoudnessSampleDuration: primaryProbe.LoudnessSampleDuration,
-			LoudnessMeasuredAt:     primaryProbe.LoudnessMeasuredAt,
-			LoudnessStatus:         primaryProbe.LoudnessStatus,
-			MetadataEnabled:        metadataEnabled,
-			MetadataType:           metadata.TypeAuto,
-			MetadataSource:         metadataSource,
-			MetadataError:          metadataError,
-			MetadataErrorCode:      metadataErrorCode,
-			MetadataLastFetchedAt:  metadataFetchedAt,
-			HealthScore:            initialProbeHealthScore(*primaryProbe),
-			LastCheckedAt:          &primaryProbe.LastCheckedAt,
-			LastError:              primaryProbe.LastError,
-		})
+	if primaryInput != nil {
+		_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), id, *primaryInput)
 	}
 
 	updated, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), id)
@@ -731,33 +761,6 @@ func normalizeMetadataType(raw string) string {
 	default:
 		return ""
 	}
-}
-
-func detectMetadataSnapshot(np *metadata.NowPlaying) (*string, *string, *string, *time.Time) {
-	if np == nil {
-		return nil, nil, nil, nil
-	}
-
-	var source *string
-	if v := strings.TrimSpace(np.Source); v != "" {
-		source = &v
-	}
-
-	var errMsg *string
-	if v := strings.TrimSpace(np.Error); v != "" {
-		errMsg = &v
-	}
-
-	var errCode *string
-	if v := strings.TrimSpace(np.ErrorCode); v != "" {
-		errCode = &v
-	}
-
-	fetchedAt := np.FetchedAt
-	if fetchedAt.IsZero() {
-		return source, errMsg, errCode, nil
-	}
-	return source, errMsg, errCode, &fetchedAt
 }
 
 func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []adminStreamRequest {
@@ -835,12 +838,7 @@ func (h *Handler) buildStationStreams(
 			return nil, fmt.Errorf("stream %d bitrate must be >= 0", i+1)
 		}
 
-		probeCtx, cancel := context.WithTimeout(ctx.Request.Context(), 12*time.Second)
-		probe := radio.ProbeStream(probeCtx, h.admin.streamProbeClient, stream.URL)
-		cancel()
-		if err := validateProbedStream(probe); err != nil {
-			return nil, fmt.Errorf("stream %d: %w", i+1, err)
-		}
+		probe := radio.LightClassifyStreamURL(stream.URL)
 		probe.Bitrate = resolveStreamBitrate(stream.Bitrate, stream.URL, probe)
 
 		isActive := true
@@ -852,18 +850,6 @@ func (h *Handler) buildStationStreams(
 			metadataEnabled = *stream.MetadataEnabled
 		}
 		metadataType := "auto"
-
-		var metadataSource *string
-		var metadataError *string
-		var metadataErrorCode *string
-		var metadataLastFetchedAt *time.Time
-		if metadataEnabled {
-			np := h.admin.metaFetcher.Fetch(ctx.Request.Context(), probe.ResolvedURL, metadata.Config{
-				Enabled: true,
-				Type:    metadata.TypeAuto,
-			})
-			metadataSource, metadataError, metadataErrorCode, metadataLastFetchedAt = detectMetadataSnapshot(np)
-		}
 
 		inputs = append(inputs, store.StationStreamInput{
 			URL:                    strings.TrimSpace(stream.URL),
@@ -887,33 +873,54 @@ func (h *Handler) buildStationStreams(
 			LoudnessStatus:         probe.LoudnessStatus,
 			MetadataEnabled:        metadataEnabled,
 			MetadataType:           metadataType,
-			MetadataSource:         metadataSource,
-			MetadataError:          metadataError,
-			MetadataErrorCode:      metadataErrorCode,
-			MetadataLastFetchedAt:  metadataLastFetchedAt,
-			HealthScore:            initialProbeHealthScore(probe),
-			LastCheckedAt:          &probe.LastCheckedAt,
-			LastError:              probe.LastError,
+			HealthScore:            0,
 		})
 	}
 	return inputs, nil
 }
 
-func validateProbedStream(probe radio.StreamProbeResult) error {
-	if probe.LastError != nil && strings.TrimSpace(*probe.LastError) != "" {
-		return fmt.Errorf("stream probe failed: %s", strings.TrimSpace(*probe.LastError))
+// mergeExistingProbeData copies probe-measured fields from existing DB streams
+// into freshly-built inputs for any stream whose URL matches, so that a save
+// does not erase loudness, codec, metadata resolver, health score, etc.
+// Editorial fields (priority, active, metadata enabled/type, bitrate) are kept
+// from the new input.
+func mergeExistingProbeData(inputs []store.StationStreamInput, existing []*store.StationStream) {
+	byURL := make(map[string]*store.StationStream, len(existing))
+	for _, s := range existing {
+		byURL[strings.ToLower(strings.TrimSpace(s.URL))] = s
 	}
-	if strings.TrimSpace(probe.ResolvedURL) == "" {
-		return errors.New("stream probe failed: empty resolved URL")
+	for i := range inputs {
+		cur, ok := byURL[strings.ToLower(strings.TrimSpace(inputs[i].URL))]
+		if !ok {
+			continue
+		}
+		in := &inputs[i]
+		in.ResolvedURL = cur.ResolvedURL
+		in.Kind = cur.Kind
+		in.Container = cur.Container
+		in.Transport = cur.Transport
+		in.MimeType = cur.MimeType
+		in.Codec = cur.Codec
+		in.BitDepth = cur.BitDepth
+		in.SampleRateHz = cur.SampleRateHz
+		in.SampleRateConfidence = cur.SampleRateConfidence
+		in.Channels = cur.Channels
+		in.LoudnessIntegratedLUFS = cur.LoudnessIntegratedLUFS
+		in.LoudnessPeakDBFS = cur.LoudnessPeakDBFS
+		in.LoudnessSampleDuration = cur.LoudnessSampleDuration
+		in.LoudnessMeasuredAt = cur.LoudnessMeasuredAt
+		in.LoudnessStatus = cur.LoudnessStatus
+		in.MetadataSource = cur.MetadataSource
+		in.MetadataURL = cur.MetadataURL
+		in.MetadataResolver = cur.MetadataResolver
+		in.MetadataResolverCheckedAt = cur.MetadataResolverCheckedAt
+		in.HealthScore = cur.HealthScore
+		in.LastCheckedAt = cur.LastCheckedAt
+		in.LastError = cur.LastError
+		if cur.Bitrate > 0 && in.Bitrate == 0 {
+			in.Bitrate = cur.Bitrate
+		}
 	}
-	return nil
-}
-
-func initialProbeHealthScore(probe radio.StreamProbeResult) float64 {
-	if probe.LastError == nil && strings.TrimSpace(probe.ResolvedURL) != "" {
-		return 1
-	}
-	return 0
 }
 
 func resolveStreamBitrate(override *int, rawURL string, probe radio.StreamProbeResult) int {

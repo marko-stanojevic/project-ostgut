@@ -1,8 +1,11 @@
 name: Sync Editorial Stations
 
 # Syncs editorial station decisions (status, featured, custom_*, editor_notes)
-# and their associated streams (url, codec, bitrate, audio format, metadata config)
-# using Azure Blob Storage as a versioned intermediate artifact.
+# and their associated streams (url, codec, bitrate, audio format, metadata config:
+# metadata_enabled, metadata_type, metadata_source, metadata_url,
+# metadata_resolver, metadata_delayed) using Azure Blob Storage as a versioned
+# intermediate artifact. Operational state (health, loudness, resolver timestamps)
+# is not synced.
 #
 # Modes:
 #   sync         — export from source DB → blob, then import blob → target DB (default)

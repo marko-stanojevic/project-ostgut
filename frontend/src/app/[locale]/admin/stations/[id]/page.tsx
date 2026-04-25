@@ -59,10 +59,15 @@ interface AdminStream {
     loudness_measured_at?: string
     loudness_measurement_status?: string
     metadata_enabled: boolean
+    metadata_type: string
     metadata_source?: string
+    metadata_url?: string
+    metadata_delayed?: boolean
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string
+    metadata_resolver?: 'none' | 'server' | 'client'
+    metadata_resolver_checked_at?: string
     health_score: number
     last_checked_at?: string
     last_error?: string
@@ -137,6 +142,8 @@ const statusConfig = {
 }
 
 const ADMIN_TAG_BADGE_CLASS = 'ui-admin-tag-badge rounded-none border-transparent font-medium text-[10px] uppercase tracking-wide'
+const METADATA_WAIT_SECONDS_NORMAL = 6
+const METADATA_WAIT_SECONDS_DELAYED = 20
 
 function SourceField({ label, value }: { label: string; value?: string }) {
     if (!value) {
@@ -473,7 +480,7 @@ export default function StationEditorPage() {
         }
     }
 
-    const handleProbeStream = async (streamID: string, scope: 'quality' | 'metadata' | 'loudness' | 'full') => {
+    const handleProbeStream = async (streamID: string, scope: 'quality' | 'metadata' | 'resolver' | 'loudness' | 'full') => {
         if (!accessToken) return
 
         setProbingAction(`${streamID}:${scope}`)
@@ -547,6 +554,13 @@ export default function StationEditorPage() {
             loudnessSampleDurationSeconds: stream.loudness_sample_duration_seconds,
             loudnessMeasuredAt: stream.loudness_measured_at,
             loudnessMeasurementStatus: stream.loudness_measurement_status,
+            metadataEnabled: stream.metadata_enabled,
+            metadataType: stream.metadata_type,
+            metadataSource: stream.metadata_source,
+            metadataUrl: stream.metadata_url,
+            metadataResolver: stream.metadata_resolver,
+            metadataResolverCheckedAt: stream.metadata_resolver_checked_at,
+            metadataDelayed: stream.metadata_delayed,
             lastCheckedAt: stream.last_checked_at,
             lastError: stream.last_error,
         })),
@@ -791,6 +805,27 @@ export default function StationEditorPage() {
                                         </div>
 
                                         {streamDetails[i] && (
+                                            <div className="rounded-md border bg-muted/30 px-3 py-2">
+                                                <div className="space-y-2">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Stream URL</p>
+                                                        <p className="break-all font-mono text-xs text-foreground/80">
+                                                            {stream.url.trim() || 'Not set'}
+                                                        </p>
+                                                    </div>
+                                                    {streamDetails[i].metadata_url && (
+                                                        <div className="space-y-1">
+                                                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Metadata URL</p>
+                                                            <p className="break-all font-mono text-xs text-foreground/80">
+                                                                {streamDetails[i].metadata_url}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {streamDetails[i] && (
                                             <div className="grid gap-3 xl:grid-cols-3">
                                                 <div className="flex h-full flex-col rounded-lg border p-3">
                                                     <div className="flex items-start justify-between gap-3">
@@ -870,21 +905,53 @@ export default function StationEditorPage() {
                                                             ) : (
                                                                 <WaveformIcon className="h-4 w-4" weight="fill" />
                                                             )}
-                                                            Probe quality
+                                                            Refresh quality
                                                         </Button>
                                                     </div>
                                                 </div>
 
                                                 <div className="flex h-full flex-col rounded-lg border p-3">
-                                                    <div className="flex items-start justify-between gap-3">
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs text-muted-foreground">Metadata status</p>
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                {stream.metadata_enabled ? 'Enabled' : 'Disabled'}
+                                                            </Badge>
+                                                            <Switch
+                                                                checked={stream.metadata_enabled}
+                                                                onCheckedChange={(checked) => setForm((prev) => ({
+                                                                    ...prev,
+                                                                    streams: prev.streams.map((s, idx) =>
+                                                                        idx === i ? { ...s, metadata_enabled: !!checked } : s
+                                                                    ),
+                                                                }))}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3 min-w-0">
                                                         <div className="min-w-0">
-                                                            <p className="text-xs text-muted-foreground">Metadata status</p>
+                                                            <p className="text-xs text-muted-foreground">Metadata type</p>
                                                             <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                {streamDetails[i].metadata_type && (
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                        {streamDetails[i].metadata_type}
+                                                                    </Badge>
+                                                                )}
                                                                 {streamDetails[i].metadata_source && (
                                                                     <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].metadata_source}
                                                                     </Badge>
                                                                 )}
+                                                                {streamDetails[i].metadata_resolver && (
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                        {streamDetails[i].metadata_resolver}
+                                                                    </Badge>
+                                                                )}
+                                                                {streamDetails[i].metadata_delayed ? (
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                        delayed metadata
+                                                                    </Badge>
+                                                                ) : null}
                                                                 {streamDetails[i].metadata_error_code && (
                                                                     <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].metadata_error_code}
@@ -892,26 +959,28 @@ export default function StationEditorPage() {
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <Switch
-                                                            checked={stream.metadata_enabled}
-                                                            onCheckedChange={(checked) => setForm((prev) => ({
-                                                                ...prev,
-                                                                streams: prev.streams.map((s, idx) =>
-                                                                    idx === i ? { ...s, metadata_enabled: !!checked } : s
-                                                                ),
-                                                            }))}
-                                                        />
                                                     </div>
                                                     <div className="mt-3 space-y-1">
-                                                        <p className="text-xs text-muted-foreground">Metadata polling</p>
-                                                        <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                            {stream.metadata_enabled ? 'Enabled' : 'Disabled'}
-                                                        </Badge>
+                                                        <p className="text-xs text-muted-foreground">Metadata timing</p>
+                                                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                {streamDetails[i].metadata_delayed ? 'delayed' : 'normal'}
+                                                            </Badge>
+                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                {streamDetails[i].metadata_delayed ? METADATA_WAIT_SECONDS_DELAYED : METADATA_WAIT_SECONDS_NORMAL} seconds
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Server-side ICY metadata budget.
+                                                        </p>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Latest metadata check</p>
                                                         <p className="text-sm">
                                                             {streamDetails[i].metadata_error ? streamDetails[i].metadata_error : 'No metadata errors recorded'}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Refreshing metadata also recalculates the resolver for this stream.
                                                         </p>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
@@ -922,7 +991,7 @@ export default function StationEditorPage() {
                                                                 : 'Not checked yet'}
                                                         </p>
                                                     </div>
-                                                    <div className="mt-auto pt-4">
+                                                    <div className="mt-auto grid gap-2 pt-4">
                                                         <Button
                                                             type="button"
                                                             size="sm"
@@ -936,7 +1005,7 @@ export default function StationEditorPage() {
                                                             ) : (
                                                                 <ArrowsClockwiseIcon className="h-4 w-4" weight="bold" />
                                                             )}
-                                                            Probe metadata
+                                                            Refresh metadata
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1000,7 +1069,7 @@ export default function StationEditorPage() {
                                                             ) : (
                                                                 <WaveformIcon className="h-4 w-4" weight="fill" />
                                                             )}
-                                                            Probe loudness
+                                                            Measure loudness
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1030,7 +1099,7 @@ export default function StationEditorPage() {
                                 </p>
                             )}
                         <p className="text-xs text-muted-foreground">
-                            URLs are probed on save. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
+                            Saving updates the stream list without probing. Use the refresh actions below each stream for quality, metadata, and loudness checks. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
                         </p>
                     </CardContent>
                     </Card>

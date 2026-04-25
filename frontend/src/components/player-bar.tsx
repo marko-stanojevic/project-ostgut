@@ -8,6 +8,9 @@ import { FullScreenPlayer } from '@/components/full-screen-player'
 import { PlayerDeviceMenu } from '@/components/player-device-menu'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { buildMetadataBadges } from '@/lib/metadata-badges'
+import type { NowPlaying } from '@/hooks/useNowPlaying'
+import type { StationStream } from '@/types/player'
 import {
   PlayIcon,
   PauseIcon,
@@ -18,6 +21,11 @@ import {
   CornersOutIcon,
 } from '@phosphor-icons/react'
 
+type PlayerStatBadge = {
+  label: string
+  tone?: 'default' | 'accent'
+}
+
 function getStreamDetailBadges(stream?: {
   codec?: string
   lossless?: boolean
@@ -25,15 +33,44 @@ function getStreamDetailBadges(stream?: {
   sampleRateHz?: number
   sampleRateConfidence?: string
   channels?: number
-} | null): { primary: string[]; secondary: string[] } {
-  if (!stream) return { primary: [], secondary: [] }
-  const primary: string[] = []
-  const secondary: string[] = []
-  if (stream.codec) primary.push(`Codec: ${stream.codec}`)
-  if (stream.lossless) primary.push('Format: Lossless')
-  if ((stream.bitDepth ?? 0) > 0) secondary.push(`Depth: ${stream.bitDepth}-bit`)
-  if ((stream.sampleRateHz ?? 0) > 0) secondary.push(`Rate: ${stream.sampleRateHz} Hz`)
-  return { primary, secondary }
+} | null): PlayerStatBadge[] {
+  if (!stream) return []
+  const badges: PlayerStatBadge[] = []
+  if (stream.codec) badges.push({ label: `Codec: ${stream.codec}` })
+  if (stream.lossless) badges.push({ label: 'Format: Lossless' })
+  if ((stream.bitDepth ?? 0) > 0) badges.push({ label: `Depth: ${stream.bitDepth}-bit` })
+  if ((stream.sampleRateHz ?? 0) > 0) badges.push({ label: `Rate: ${stream.sampleRateHz} Hz` })
+  return badges
+}
+
+function getMetadataBadges(
+  stream: StationStream | null,
+  nowPlaying: NowPlaying | null,
+): PlayerStatBadge[] {
+  return buildMetadataBadges(stream, nowPlaying).map((label) => ({ label }))
+}
+
+function resolveDisplayStream(
+  station: { streams?: StationStream[] } | null,
+  currentStream: StationStream | null,
+): StationStream | null {
+  const streams = station?.streams ?? []
+  if (currentStream) {
+    const latest = streams.find((stream) => {
+      if (currentStream.id && stream.id === currentStream.id) return true
+      if (currentStream.resolvedUrl && stream.resolvedUrl === currentStream.resolvedUrl) return true
+      if (currentStream.url && stream.url === currentStream.url) return true
+      return stream.priority === currentStream.priority
+    })
+    return latest ?? currentStream
+  }
+
+  if (streams.length === 0) return null
+  const active = streams.filter((st) => st.isActive)
+  if (active.length > 0) {
+    return [...active].sort((a, b) => a.priority - b.priority)[0]
+  }
+  return [...streams].sort((a, b) => a.priority - b.priority)[0]
 }
 
 function PlayerMetadataTicker({ text, className }: { text: string; className?: string }) {
@@ -115,21 +152,18 @@ export function PlayerBar() {
   const isLoading = state === 'loading'
   const isError = state === 'error'
 
+  const displayStream = useMemo(
+    () => resolveDisplayStream(station, currentStream),
+    [station, currentStream],
+  )
   const { nowPlaying, settled } = useNowPlaying(
     station?.id,
     currentStream?.id,
+    displayStream,
     (isPlaying || isLoading) && !fullScreen,
   )
-  const displayStream = useMemo(() => {
-    if (currentStream) return currentStream
-    if (!station?.streams || station.streams.length === 0) return null
-    const active = station.streams.filter((st) => st.isActive)
-    if (active.length > 0) {
-      return [...active].sort((a, b) => a.priority - b.priority)[0]
-    }
-    return [...station.streams].sort((a, b) => a.priority - b.priority)[0]
-  }, [station, currentStream])
   const streamDetailBadges = getStreamDetailBadges(displayStream)
+  const metadataBadges = getMetadataBadges(displayStream, nowPlaying)
   const isLosslessLike = Boolean(
     displayStream?.lossless || (displayStream?.codec || '').toUpperCase().includes('FLAC'),
   )
@@ -137,7 +171,16 @@ export function PlayerBar() {
   const normalizationBadge = Math.abs(normalizationOffsetDb) >= 0.1
     ? `${normalizationOffsetDb > 0 ? '+' : ''}${normalizationOffsetDb.toFixed(1)} dB`
     : null
-  const hasQualityDetails = streamDetailBadges.primary.length > 0 || streamDetailBadges.secondary.length > 0 || (bitrateKbps > 0 && !isLosslessLike) || Boolean(normalizationEnabled && normalizationBadge)
+  const allStatBadges: PlayerStatBadge[] = [
+    ...streamDetailBadges,
+    ...metadataBadges,
+    ...(bitrateKbps > 0 && !isLosslessLike ? [{ label: `Bitrate: ${bitrateKbps} kbps` }] : []),
+    ...(normalizationEnabled && normalizationBadge
+      ? [{ label: `Leveling: ${normalizationBadge}`, tone: 'accent' as const }]
+      : []),
+  ]
+  const hasQualityDetails =
+    allStatBadges.length > 0
   const cityLine = (station?.city && station.city !== '-') ? station.city : ''
   const hasNowPlaying = Boolean(nowPlaying?.title)
   const isReconnecting = isLoading && !hasNowPlaying
@@ -261,39 +304,19 @@ export function PlayerBar() {
                   statsExpanded ? 'max-w-[24rem] opacity-100' : 'max-w-0 opacity-0'
                 }`}
               >
-                <div className="flex flex-col items-end gap-1 pr-3">
-                  <div className="flex items-center gap-2">
-                    {streamDetailBadges.primary.map((detail) => (
-                      <span
-                        key={detail}
-                        className="shrink-0 rounded-[0.34rem] border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-player-bar-muted"
-                      >
-                        {detail}
-                      </span>
-                    ))}
-                    {bitrateKbps > 0 && !isLosslessLike ? (
-                      <span className="shrink-0 rounded-[0.34rem] border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-player-bar-muted">
-                        Bitrate: {bitrateKbps} kbps
-                      </span>
-                    ) : null}
-                  </div>
-                  {streamDetailBadges.secondary.length > 0 || (normalizationEnabled && normalizationBadge) ? (
-                    <div className="flex items-center gap-2">
-                      {streamDetailBadges.secondary.map((detail) => (
-                        <span
-                          key={detail}
-                          className="shrink-0 rounded-[0.34rem] border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-player-bar-muted"
-                        >
-                          {detail}
-                        </span>
-                      ))}
-                      {normalizationEnabled && normalizationBadge ? (
-                        <span className="shrink-0 rounded-[0.34rem] border border-player-accent-border bg-player-accent-soft px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-player-accent">
-                          Leveling: {normalizationBadge}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
+                <div className="flex h-[2.85rem] w-[24rem] content-start flex-wrap justify-end gap-2 overflow-hidden pr-3">
+                  {allStatBadges.map((badge) => (
+                    <span
+                      key={badge.label}
+                      className={
+                        badge.tone === 'accent'
+                          ? 'shrink-0 rounded-[0.34rem] border border-player-accent-border bg-player-accent-soft px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-player-accent'
+                          : 'shrink-0 rounded-[0.34rem] border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-player-bar-muted'
+                      }
+                    >
+                      {badge.label}
+                    </span>
+                  ))}
                 </div>
               </div>
 

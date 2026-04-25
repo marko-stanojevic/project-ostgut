@@ -25,10 +25,12 @@ This file is the single source of truth for product features that should later b
 | Last Station Resume | now | Return and pick up exactly where your listening left off. | Local + account sync behavior implemented. |
 | Personalized Volume Memory | now | Your preferred listening level follows your sessions. | Local + account sync behavior implemented. |
 | Signal Leveling | now | Smooth loudness jumps between stations for a calmer listening session. | User toggle is persisted and uses measured stream loudness when available. |
+| True-Peak-Aware Leveling | now | Level quieter streams without aggressively boosting hot ones into clipping. | Playback boost is capped by stored true peak, not LUFS alone. |
 | Device Handoff Menu | now | Move playback to supported living-room devices without leaving the player. | Device menu is integrated directly into the player utility row. |
 | Google Cast Support | now | Send live radio from the web player to Chromecast and Cast-enabled devices. | Web sender flow and Cast session controls are wired into the player state. |
 | Safari AirPlay Support | now | Route live playback to Apple TVs and AirPlay speakers from Safari. | Uses Safari's native AirPlay picker from the in-player device menu. |
 | Live Now Playing Metadata | now | See what is currently on air in real time. | Great for “discover by song” stories. |
+| Hybrid Metadata Routing | now | Use browser-side metadata when the stream allows it, and fall back to backend resolution when it does not. | Player badges expose whether metadata came from client or server. |
 | Quick Explore Search | now | Find stations fast by genre, place, and vibe. | Search UX in protected explore flow. |
 
 ## Quality + Reliability
@@ -37,8 +39,10 @@ This file is the single source of truth for product features that should later b
 | --- | --- | --- | --- |
 | Reliability-Scored Streams | now | Spend more time listening and less time hitting broken streams. | Reliability score already present on station model. |
 | Curated Popular / Featured Feeds | now | Instantly jump into trusted picks and trending favorites. | Featured and popular sorting available. |
-| Metadata-Aware Station Health | next | Better now-playing quality with smarter metadata fallbacks. | Station metadata config exists; keep improving match rate. |
-| Stream Error Recovery UX | next | Fewer dead ends with clearer retries and graceful fallback behavior. | Add specific user-facing states for failures. |
+| Persisted Metadata Resolver | now | Route metadata through the right layer per stream instead of guessing on every playback. | Each stream stores a checked `client` or `server` resolver. |
+| Manual Stream Probes | now | Let editors refresh resolver, metadata, signal quality, or loudness independently. | Admin stream card now exposes `Probe resolver`, `Probe metadata`, `Probe quality`, and `Probe loudness`. |
+| Cached Now Playing Snapshots | now | Keep the player responsive by serving stored metadata instantly instead of probing in the request path. | `/stations/:id/now-playing` now returns persisted snapshots and refreshes asynchronously. |
+| Stream Error Recovery UX | next | Fewer dead ends with clearer retries and graceful fallback behavior. | Add more explicit user-facing failure states and recovery copy. |
 
 ## Premium Product Story
 

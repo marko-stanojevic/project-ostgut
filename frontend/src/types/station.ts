@@ -23,9 +23,13 @@ export interface ApiStream {
     metadata_enabled: boolean
     metadata_type: string
     metadata_source?: string
+    metadata_url?: string
+    metadata_delayed?: boolean
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string
+    metadata_resolver?: 'none' | 'server' | 'client'
+    metadata_resolver_checked_at?: string
     health_score: number
     last_checked_at?: string
     last_error?: string

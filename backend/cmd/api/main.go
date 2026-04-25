@@ -71,26 +71,29 @@ func main() {
 	subStore := store.NewSubscriptionStore(pool)
 	stationStore := store.NewStationStore(pool)
 	stationStreamStore := store.NewStationStreamStore(pool)
+	streamNowPlayingStore := store.NewStreamNowPlayingStore(pool)
 	mediaAssetStore := store.NewMediaAssetStore(pool)
 	h := handler.New(
 		handler.Dependencies{
-			UserStore:          userStore,
-			SubscriptionStore:  subStore,
-			StationStore:       stationStore,
-			StationStreamStore: stationStreamStore,
-			MediaAssetStore:    mediaAssetStore,
+			UserStore:             userStore,
+			SubscriptionStore:     subStore,
+			StationStore:          stationStore,
+			StationStreamStore:    stationStreamStore,
+			StreamNowPlayingStore: streamNowPlayingStore,
+			MediaAssetStore:       mediaAssetStore,
 		},
 		handler.Options{
-			Log:                    logger,
-			JWTSecret:              cfg.JWTSecret,
-			PaddleWebhookSecret:    cfg.PaddleWebhookSecret,
-			PaddleClientToken:      cfg.PaddleClientToken,
-			PaddlePriceID:          cfg.PaddlePriceID,
-			MediaUploadBaseURL:     cfg.MediaUploadBaseURL,
-			MediaUploadSecret:      cfg.MediaUploadSigningSecret,
-			MediaStorageAccount:    cfg.MediaStorageAccountName,
-			MediaStorageContainer:  cfg.MediaStorageContainerName,
-			MediaStorageAccountKey: cfg.MediaStorageAccountKey,
+			Log:                         logger,
+			JWTSecret:                   cfg.JWTSecret,
+			PaddleWebhookSecret:         cfg.PaddleWebhookSecret,
+			PaddleClientToken:           cfg.PaddleClientToken,
+			PaddlePriceID:               cfg.PaddlePriceID,
+			MediaUploadBaseURL:          cfg.MediaUploadBaseURL,
+			MediaUploadSecret:           cfg.MediaUploadSigningSecret,
+			MediaStorageAccount:         cfg.MediaStorageAccountName,
+			MediaStorageContainer:       cfg.MediaStorageContainerName,
+			MediaStorageAccountKey:      cfg.MediaStorageAccountKey,
+			BrowserMetadataProbeOrigins: cfg.BrowserMetadataProbeOrigins,
 		},
 	)
 
@@ -101,8 +104,13 @@ func main() {
 	go syncer.Run(syncCtx)
 
 	// Start background stream re-probe (refreshes resolved_url, codec, health).
-	prober := radio.NewProber(stationStreamStore, logger)
+	prober := radio.NewProber(stationStreamStore, logger, cfg.BrowserMetadataProbeOrigins)
 	go prober.Run(syncCtx)
+
+	// Start metadata server-poller worker (drives upstream fetches for streams
+	// whose resolver is `server`, with subscriber-driven scheduling).
+	metaPoller := h.MetadataPoller()
+	go metaPoller.Run(syncCtx)
 
 	nrApp, err := newrelic.NewApplication(
 		newrelic.ConfigAppName(cfg.NewRelicAppName),
@@ -148,6 +156,7 @@ func main() {
 	router.GET("/stations/filters", h.GetFilters)
 	router.GET("/stations/:id", h.GetStation)
 	router.GET("/stations/:id/now-playing", h.GetNowPlaying)
+	router.GET("/stations/:id/now-playing/stream", h.StreamNowPlaying)
 	router.GET("/search", h.SearchStations)
 
 	// Paddle webhook (public — signature-verified internally)
@@ -174,6 +183,7 @@ func main() {
 	admin.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
 	admin.Use(middleware.AdminMiddleware(userStore))
 	{
+		admin.GET("/overview", h.AdminOverview)
 		admin.GET("/stats", h.AdminStats)
 		admin.GET("/stations", h.AdminListStations)
 		admin.POST("/stations", h.AdminCreateStation)

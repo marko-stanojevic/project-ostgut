@@ -25,6 +25,26 @@
       }
     },
     {
+      "label": "Frontend: Build (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run build"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Frontend: Dev Server",
       "type": "shell",
       "command": "sh",
@@ -57,6 +77,35 @@
       }
     },
     {
+      "label": "Frontend: Dev Server (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run dev -- --hostname 0.0.0.0"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^▲ Next\\.js.*",
+          "endsPattern": "^.*(Ready|compiled|✓).*"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Frontend: Lint",
       "type": "shell",
       "command": "sh",
@@ -66,6 +115,26 @@
         "env": {
           "NVM_DIR": "${userHome}/.nvm"
         }
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Frontend: Lint (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; npm run lint"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
       },
       "problemMatcher": [],
       "group": {
@@ -104,10 +173,50 @@
       }
     },
     {
+      "label": "Backend: Build (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; go build -o ./bin/api ./cmd/api"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": ["$go"],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Backend: Test",
       "type": "shell",
       "command": "sh",
       "args": ["-c", "set -a && source .env.devcontainer 2>/dev/null || true && set +a && go test -v -race ./..."],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": ["$go"],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Backend: Test (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; set -a; source \"${workspaceFolder}/backend/.env\"; set +a; go test -v -race ./..."],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -178,10 +287,57 @@
       }
     },
     {
+      "label": "Backend: Run (Local, WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; pkill -x api 2>/dev/null || true; set -a; source \"${workspaceFolder}/backend/.env\"; set +a; go run ./cmd/api"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*database connected.*",
+          "endsPattern": "^.*server starting.*"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Backend: Format Check",
       "type": "shell",
       "command": "go",
       "args": ["fmt", "./..."],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Backend: Format Check (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; go fmt ./..."],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -281,10 +437,42 @@
       }
     },
     {
+      "label": "Setup: Frontend Dependencies (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; npm install"],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Setup: Backend Dependencies",
       "type": "shell",
       "command": "go",
       "args": ["mod", "download"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": ["$go"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Setup: Backend Dependencies (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; go mod download"],
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },
@@ -306,8 +494,29 @@
       }
     },
     {
+      "label": "All: Build All (WSL)",
+      "dependsOn": ["Frontend: Build (WSL)", "Backend: Build (WSL)"],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
       "label": "All: Dev (Frontend + Backend)",
       "dependsOn": ["DB: Start", "Frontend: Dev Server", "Backend: Run (Local)"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "All: Dev (Frontend + Backend, WSL)",
+      "dependsOn": ["DB: Start", "Frontend: Dev Server (WSL)", "Backend: Run (Local, WSL)"],
       "dependsOrder": "sequence",
       "problemMatcher": [],
       "presentation": {
@@ -357,8 +566,47 @@
       }
     },
     {
+      "label": "Backend: Debug (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "export GOROOT=\"$HOME/.local/go\"; export PATH=\"$GOROOT/bin:$PATH\"; pkill -x api 2>/dev/null || true; set -a; source \"${workspaceFolder}/backend/.env\"; set +a; LOG_LEVEL=debug go run ./cmd/api"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*database connected.*",
+          "endsPattern": "^.*server starting.*"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      }
+    },
+    {
       "label": "All: Dev (Debug)",
       "dependsOn": ["DB: Start", "Frontend: Dev Server", "Backend: Debug"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "All: Dev (Debug, WSL)",
+      "dependsOn": ["DB: Start", "Frontend: Dev Server (WSL)", "Backend: Debug (WSL)"],
       "dependsOrder": "sequence",
       "problemMatcher": [],
       "presentation": {

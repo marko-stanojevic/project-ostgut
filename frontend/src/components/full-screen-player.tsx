@@ -6,6 +6,7 @@ import { usePlayer } from '@/context/PlayerContext'
 import { PlayerDeviceMenu } from '@/components/player-device-menu'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { buildMetadataBadges } from '@/lib/metadata-badges'
 import {
   PlayIcon,
   PauseIcon,
@@ -15,6 +16,7 @@ import {
   CircleNotchIcon,
   ArrowsInIcon,
 } from '@phosphor-icons/react'
+import type { StationStream } from '@/types/player'
 import type { NowPlaying } from '@/hooks/useNowPlaying'
 
 function WaveformBars() {
@@ -40,6 +42,34 @@ interface FullScreenPlayerProps {
   onClose: () => void
 }
 
+function getMetadataBadges(
+  stream: StationStream | null,
+  nowPlaying: NowPlaying | null,
+): string[] {
+  return buildMetadataBadges(stream, nowPlaying)
+}
+
+function resolveDisplayStream(
+  station: { streams?: StationStream[] } | null,
+  currentStream: StationStream | null,
+): StationStream | null {
+  const streams = station?.streams ?? []
+  if (currentStream) {
+    const latest = streams.find((stream) => {
+      if (currentStream.id && stream.id === currentStream.id) return true
+      if (currentStream.resolvedUrl && stream.resolvedUrl === currentStream.resolvedUrl) return true
+      if (currentStream.url && stream.url === currentStream.url) return true
+      return stream.priority === currentStream.priority
+    })
+    return latest ?? currentStream
+  }
+
+  if (streams.length === 0) return null
+  const active = streams.filter((st) => st.isActive)
+  if (active.length > 0) return [...active].sort((a, b) => a.priority - b.priority)[0]
+  return [...streams].sort((a, b) => a.priority - b.priority)[0]
+}
+
 export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps) {
   const {
     station,
@@ -63,17 +93,15 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
   const hasPrev = queueIndex > 0
   const hasNext = queueIndex < queue.length - 1
 
-  const displayStream = useMemo(() => {
-    if (currentStream) return currentStream
-    if (!station?.streams || station.streams.length === 0) return null
-    const active = station.streams.filter((st) => st.isActive)
-    if (active.length > 0) return [...active].sort((a, b) => a.priority - b.priority)[0]
-    return [...station.streams].sort((a, b) => a.priority - b.priority)[0]
-  }, [station, currentStream])
+  const displayStream = useMemo(
+    () => resolveDisplayStream(station, currentStream),
+    [station, currentStream],
+  )
 
   const bitrateKbps = displayStream ? (displayStream.bitrate ?? 0) : (station?.bitrate || 0)
   const isLosslessLike = Boolean(displayStream?.lossless || (displayStream?.codec || '').toUpperCase().includes('FLAC'))
   const codecLabel = displayStream?.codec ? displayStream.codec.toUpperCase() : null
+  const metadataBadges = getMetadataBadges(displayStream, nowPlaying)
 
   // Enter browser fullscreen and exit when the overlay closes
   useEffect(() => {
@@ -216,7 +244,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
           </div>
 
           {/* Quality badge */}
-          {(isLosslessLike || codecLabel || bitrateKbps > 0 || locationLine) && (
+          {(isLosslessLike || codecLabel || bitrateKbps > 0 || locationLine || metadataBadges.length > 0) && (
             <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
               {locationLine ? (
                 <span className="rounded-full border border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel)] px-3 py-1 text-xs font-medium text-player-screen-secondary">
@@ -236,6 +264,14 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
               {bitrateKbps > 0 && !isLosslessLike && (
                 <span className="rounded-full border border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel)] px-3 py-1 text-xs tabular-nums text-player-screen-muted">{bitrateKbps} kbps</span>
               )}
+              {metadataBadges.map((badge) => (
+                <span
+                  key={badge}
+                  className="rounded-full border border-[var(--player-screen-panel-border)] bg-[var(--player-screen-panel)] px-3 py-1 text-xs font-medium text-player-screen-secondary"
+                >
+                  {badge}
+                </span>
+              ))}
             </div>
           )}
         </div>

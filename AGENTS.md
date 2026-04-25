@@ -47,6 +47,58 @@ Once the product is live and users exist, this section will be removed and compa
 
 **Error handling: fail loudly and early.** When something goes wrong, crash with a clear message rather than defaulting silently. Defensive programming (null checks, fallbacks) is overhead. If the backend returns unexpected data, let it error; fix the contract. In production, add recovery paths.
 
+## Architectural Discipline (Required)
+
+Every change — feature, bug fix, refactor — is an architectural decision. Treat it as such. Plumbing-style fixes ("thread one more bool through three layers", "add another `if` branch", "sniff a string for a type") are forbidden as the default approach. Slow down, identify the root cause, and fix the design.
+
+### Before writing code
+
+1. **Name the concern.** Which layer owns this? Handler, store, context, hook, service? If multiple layers seem to own it, the design is wrong — pick one.
+2. **Find the root cause, not the symptom.** "The UI shows the wrong value" is a symptom. The cause is upstream — usually a data contract, a side-channel, or a missing field. Fix the contract.
+3. **Check existing patterns before adding new ones.** If a similar problem is already solved (e.g. `apiFetch`, `PlayerContext`, `store.ErrNotFound`), use it. If the existing pattern is wrong, refactor it — do not copy it.
+4. **Sketch the data flow end-to-end.** Where is state created, persisted, read, displayed? Write it down (1–2 lines is enough). If the flow has a side-channel (a field that exists only to thread state through an unrelated layer), redesign.
+
+### Anti-patterns to refuse
+
+- **String matching on errors or types.** Use sentinel errors (`errors.Is`), enums, or typed contracts. `strings.Contains(err.Error(), "timeout")` is a bug waiting to happen.
+- **Boolean flags piling up on existing structs.** When a struct grows a third or fourth flag to describe "mode", split into two entry points or a typed mode enum. `Config.DetectFoo` next to `Config.Foo` next to `Config.MaybeFoo` is the warning sign.
+- **Side-channel fields.** A field marked `json:"-"` that exists only to ferry data between two layers is a smell. Return a separate evidence/result struct instead.
+- **Cache keys built from string concatenation.** Use a typed key struct as the map key. Concatenated keys silently collide.
+- **Hard-coded constants duplicated across backend and frontend.** If the backend knows the value, the API must return it. Frontend mirroring of a backend constant is technical debt.
+- **Catch-and-default error handling.** If the backend returns unexpected data, fail loudly and fix the contract. Do not coerce, default, or fall back silently.
+- **"Fix" by adding another branch.** If a function has grown a chain of `if/else` for special cases, the abstraction is wrong. Refactor the dispatch.
+- **Cross-layer reaches.** Handlers do not touch the DB pool. Components do not call `fetch` directly. Stores do not import handlers. If you need to, the layering is wrong.
+
+### Bug fixes are architecture work
+
+When fixing a regression:
+
+1. **Reproduce, then explain why the design allowed it.** "Race condition" is not an explanation. "The cache key did not include the delayed flag, so the probe path read a stale runtime entry" is.
+2. **Fix the design, not just the symptom.** If the symptom is one of three possible manifestations of the same root cause, fix all three by fixing the root.
+3. **Add a test that fails on the old design.** A regression test that only catches the literal symptom is incomplete. Test the contract.
+4. **Consider whether the same bug class exists elsewhere.** If you found a string-matched error, search for other string-matched errors. If you found a side-channel, search for other side-channels.
+
+### Features are architecture work
+
+When adding a feature:
+
+1. **Define the contract first.** What does the API return? What does the store expose? What does the context publish? Write the type signatures before the implementation.
+2. **Place each piece in its correct layer.** Persistence in the store. HTTP shape in the handler. Side-effects in hooks/contexts. Pure logic in pure functions.
+3. **Prefer one good abstraction over five duplicated call sites.** If the third caller is copy-pasting setup code, extract.
+4. **Surface diagnostic data through dedicated types, not by mutating the user-facing payload.** If the poller needs to know how a result was obtained, return an evidence struct alongside the result; do not stuff observability fields into the response model.
+
+### When to stop and rethink
+
+If any of the following is true, stop coding and reconsider the design:
+
+- The change requires editing more than three files for a single concern, and they are not in the same layer.
+- A new field is being added to a struct that is already "the bag of everything for X".
+- A test asserts on a string that came from a log message or an error message.
+- The fix "works" but you cannot explain in one sentence *why* the previous design failed.
+- You catch yourself thinking "I'll come back and clean this up later."
+
+The codebase is small enough that the right thing is also the fast thing. Spending 30 extra minutes on the design saves three days of plumbing later.
+
 ## Platform scope
 
 - **Web app** — primary interface (Next.js, App Router)
@@ -135,6 +187,7 @@ project-ostgut/
 
 - Stations ingested from **Radio Browser API** + optional manual curated list
 - Curation rules: filter dead streams, prefer high bitrate, prefer stations with metadata
+- Ingested stations must remain `pending` until an admin user explicitly approves them. Do not auto-approve imported or synced stations.
 - Stations cached in Postgres, refreshed every 6h via background goroutine
 - Public endpoints (no auth): `GET /stations`, `GET /stations/:id`, `GET /search`
 - Audio: MP3/AAC native, HLS via `hls.js`
@@ -172,4 +225,5 @@ project-ostgut/
 - Do not use `@tailwind base` directives (breaks Tailwind v4)
 - Do not create `pgcrypto` extension (banned on Azure PostgreSQL Flexible Server)
 - Do not use `postgres://` scheme for golang-migrate (use `pgx5://`)
+- Do not auto-approve stations during ingestion, sync, bootstrap, or recovery flows; only an admin user may approve a station for public visibility
 - Do not commit secrets — all secrets flow through GitHub Secrets → OpenTofu vars → Container App secrets

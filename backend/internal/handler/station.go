@@ -36,36 +36,37 @@ type stationResponse struct {
 }
 
 type streamResponse struct {
-	ID                     string   `json:"id"`
-	URL                    string   `json:"url"`
-	ResolvedURL            string   `json:"resolved_url"`
-	Kind                   string   `json:"kind"`
-	Container              string   `json:"container"`
-	Transport              string   `json:"transport"`
-	MimeType               string   `json:"mime_type"`
-	Codec                  string   `json:"codec"`
-	Lossless               bool     `json:"lossless"`
-	Bitrate                int      `json:"bitrate"`
-	BitDepth               int      `json:"bit_depth"`
-	SampleRateHz           int      `json:"sample_rate_hz"`
-	SampleRateConfidence   string   `json:"sample_rate_confidence"`
-	Channels               int      `json:"channels"`
-	Priority               int      `json:"priority"`
-	IsActive               bool     `json:"is_active"`
-	LoudnessIntegratedLUFS *float64 `json:"loudness_integrated_lufs,omitempty"`
-	LoudnessPeakDBFS       *float64 `json:"loudness_peak_dbfs,omitempty"`
-	LoudnessSampleDuration float64  `json:"loudness_sample_duration_seconds"`
-	LoudnessMeasuredAt     *string  `json:"loudness_measured_at,omitempty"`
-	LoudnessStatus         string   `json:"loudness_measurement_status"`
-	MetadataEnabled        bool     `json:"metadata_enabled"`
-	MetadataType           string   `json:"metadata_type"`
-	MetadataSource         *string  `json:"metadata_source,omitempty"`
-	MetadataError          *string  `json:"metadata_error,omitempty"`
-	MetadataErrorCode      *string  `json:"metadata_error_code,omitempty"`
-	MetadataLastFetchedAt  *string  `json:"metadata_last_fetched_at,omitempty"`
-	HealthScore            float64  `json:"health_score"`
-	LastCheckedAt          *string  `json:"last_checked_at,omitempty"`
-	LastError              *string  `json:"last_error,omitempty"`
+	ID                        string   `json:"id"`
+	URL                       string   `json:"url"`
+	ResolvedURL               string   `json:"resolved_url"`
+	Kind                      string   `json:"kind"`
+	Container                 string   `json:"container"`
+	Transport                 string   `json:"transport"`
+	MimeType                  string   `json:"mime_type"`
+	Codec                     string   `json:"codec"`
+	Lossless                  bool     `json:"lossless"`
+	Bitrate                   int      `json:"bitrate"`
+	BitDepth                  int      `json:"bit_depth"`
+	SampleRateHz              int      `json:"sample_rate_hz"`
+	SampleRateConfidence      string   `json:"sample_rate_confidence"`
+	Channels                  int      `json:"channels"`
+	Priority                  int      `json:"priority"`
+	IsActive                  bool     `json:"is_active"`
+	LoudnessIntegratedLUFS    *float64 `json:"loudness_integrated_lufs,omitempty"`
+	LoudnessPeakDBFS          *float64 `json:"loudness_peak_dbfs,omitempty"`
+	LoudnessSampleDuration    float64  `json:"loudness_sample_duration_seconds"`
+	LoudnessMeasuredAt        *string  `json:"loudness_measured_at,omitempty"`
+	LoudnessStatus            string   `json:"loudness_measurement_status"`
+	MetadataEnabled           bool     `json:"metadata_enabled"`
+	MetadataType              string   `json:"metadata_type"`
+	MetadataSource            *string  `json:"metadata_source,omitempty"`
+	MetadataURL               *string  `json:"metadata_url,omitempty"`
+	MetadataResolver          string   `json:"metadata_resolver,omitempty"`
+	MetadataResolverCheckedAt *string  `json:"metadata_resolver_checked_at,omitempty"`
+	MetadataDelayed           bool     `json:"metadata_delayed"`
+	HealthScore               float64  `json:"health_score"`
+	LastCheckedAt             *string  `json:"last_checked_at,omitempty"`
+	LastError                 *string  `json:"last_error,omitempty"`
 }
 
 func toStreamResponse(s *store.StationStream) streamResponse {
@@ -74,10 +75,10 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 		formatted := s.LastCheckedAt.UTC().Format(time.RFC3339)
 		lastCheckedAt = &formatted
 	}
-	var metadataLastFetchedAt *string
-	if s.MetadataLastFetchedAt != nil {
-		formatted := s.MetadataLastFetchedAt.UTC().Format(time.RFC3339)
-		metadataLastFetchedAt = &formatted
+	var metadataResolverCheckedAt *string
+	if s.MetadataResolverCheckedAt != nil {
+		formatted := s.MetadataResolverCheckedAt.UTC().Format(time.RFC3339)
+		metadataResolverCheckedAt = &formatted
 	}
 	var loudnessMeasuredAt *string
 	if s.LoudnessMeasuredAt != nil {
@@ -85,36 +86,37 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 		loudnessMeasuredAt = &formatted
 	}
 	return streamResponse{
-		ID:                     s.ID,
-		URL:                    s.URL,
-		ResolvedURL:            s.ResolvedURL,
-		Kind:                   s.Kind,
-		Container:              s.Container,
-		Transport:              s.Transport,
-		MimeType:               s.MimeType,
-		Codec:                  s.Codec,
-		Lossless:               isLosslessStream(s.Codec, s.MimeType, s.URL, s.ResolvedURL),
-		Bitrate:                s.Bitrate,
-		BitDepth:               s.BitDepth,
-		SampleRateHz:           s.SampleRateHz,
-		SampleRateConfidence:   s.SampleRateConfidence,
-		Channels:               s.Channels,
-		Priority:               s.Priority,
-		IsActive:               s.IsActive,
-		LoudnessIntegratedLUFS: s.LoudnessIntegratedLUFS,
-		LoudnessPeakDBFS:       s.LoudnessPeakDBFS,
-		LoudnessSampleDuration: s.LoudnessSampleDuration,
-		LoudnessMeasuredAt:     loudnessMeasuredAt,
-		LoudnessStatus:         s.LoudnessStatus,
-		MetadataEnabled:        s.MetadataEnabled,
-		MetadataType:           s.MetadataType,
-		MetadataSource:         s.MetadataSource,
-		MetadataError:          s.MetadataError,
-		MetadataErrorCode:      s.MetadataErrorCode,
-		MetadataLastFetchedAt:  metadataLastFetchedAt,
-		HealthScore:            s.HealthScore,
-		LastCheckedAt:          lastCheckedAt,
-		LastError:              s.LastError,
+		ID:                        s.ID,
+		URL:                       s.URL,
+		ResolvedURL:               s.ResolvedURL,
+		Kind:                      s.Kind,
+		Container:                 s.Container,
+		Transport:                 s.Transport,
+		MimeType:                  s.MimeType,
+		Codec:                     s.Codec,
+		Lossless:                  isLosslessStream(s.Codec, s.MimeType, s.URL, s.ResolvedURL),
+		Bitrate:                   s.Bitrate,
+		BitDepth:                  s.BitDepth,
+		SampleRateHz:              s.SampleRateHz,
+		SampleRateConfidence:      s.SampleRateConfidence,
+		Channels:                  s.Channels,
+		Priority:                  s.Priority,
+		IsActive:                  s.IsActive,
+		LoudnessIntegratedLUFS:    s.LoudnessIntegratedLUFS,
+		LoudnessPeakDBFS:          s.LoudnessPeakDBFS,
+		LoudnessSampleDuration:    s.LoudnessSampleDuration,
+		LoudnessMeasuredAt:        loudnessMeasuredAt,
+		LoudnessStatus:            s.LoudnessStatus,
+		MetadataEnabled:           s.MetadataEnabled,
+		MetadataType:              s.MetadataType,
+		MetadataSource:            s.MetadataSource,
+		MetadataURL:               s.MetadataURL,
+		MetadataResolver:          metadataResolverForResponse(s),
+		MetadataResolverCheckedAt: metadataResolverCheckedAt,
+		MetadataDelayed:           s.MetadataDelayed,
+		HealthScore:               s.HealthScore,
+		LastCheckedAt:             lastCheckedAt,
+		LastError:                 s.LastError,
 	}
 }
 
@@ -145,8 +147,25 @@ func defaultStreamResponseForStation(s *store.Station) []streamResponse {
 		MetadataEnabled:        true,
 		MetadataType:           "auto",
 		MetadataSource:         nil,
+		MetadataURL:            nil,
+		MetadataResolver:       "server",
+		MetadataDelayed:        false,
 		HealthScore:            s.ReliabilityScore,
 	}}
+}
+
+func metadataResolverForResponse(s *store.StationStream) string {
+	if s == nil || !s.MetadataEnabled {
+		return "none"
+	}
+	switch strings.ToLower(strings.TrimSpace(s.MetadataResolver)) {
+	case "client":
+		return "client"
+	case "none":
+		return "none"
+	default:
+		return "server"
+	}
 }
 
 func isLosslessStream(codec, mimeType, urlValue, resolvedURL string) bool {
