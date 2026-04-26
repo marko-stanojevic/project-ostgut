@@ -25,8 +25,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: backend/go.mod
           cache: true
@@ -42,8 +42,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -54,3 +54,95 @@ jobs:
         # Fails on high+ severity in runtime deps. Dev-only issues are
         # surfaced separately by Dependabot but do not block.
         run: npm audit --omit=dev --audit-level=high
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Container image vulnerability scanning. Trivy scans the multi-stage
+  # output images for OS-level CVEs, vulnerable Go modules baked into the
+  # binary, and known-bad npm packages bundled in the standalone Next.js
+  # build. Fails on HIGH/CRITICAL.
+  # ──────────────────────────────────────────────────────────────────────────
+  trivy-backend:
+    name: Trivy (backend image)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+      - name: Build backend image (no push)
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+        with:
+          context: backend
+          file: backend/Dockerfile
+          load: true
+          tags: ostgut-backend:scan
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ostgut-backend:scan
+          format: sarif
+          output: trivy-backend.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Upload SARIF
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trivy-backend-sarif
+          path: trivy-backend.sarif
+
+  trivy-frontend:
+    name: Trivy (frontend image)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+      - name: Build frontend image (no push)
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          load: true
+          tags: ostgut-frontend:scan
+          # Build args mirror the deploy workflow; values don't matter for
+          # the scan but must be present or `next build` fails.
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8080
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ostgut-frontend:scan
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Upload SARIF
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trivy-frontend-sarif
+          path: trivy-frontend.sarif
+
+  # Filesystem scan — catches vulnerable dependencies before they hit an
+  # image (transitive npm + Go modules). Faster feedback than the image
+  # scans above and runs even when Dockerfiles haven't changed.
+  trivy-fs:
+    name: Trivy (repository filesystem)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - name: Trivy fs
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-dirs: "node_modules,frontend/.next,backend/bin"

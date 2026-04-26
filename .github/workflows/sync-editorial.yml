@@ -101,7 +101,7 @@ jobs:
       storage_account: ${{ steps.storage.outputs.name }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
 
       - name: Install psql
         run: |
@@ -109,7 +109,7 @@ jobs:
           sudo apt-get install -y -q postgresql-client
 
       - name: Azure login (OIDC)
-        uses: azure/login@v3
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -214,7 +214,7 @@ jobs:
       FW_RULE: gh-sync-${{ github.run_id }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
 
       - name: Validate source != target
         if: inputs.mode != 'local-import'
@@ -239,7 +239,7 @@ jobs:
           sudo apt-get install -y -q postgresql-client
 
       - name: Azure login (OIDC)
-        uses: azure/login@v3
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}

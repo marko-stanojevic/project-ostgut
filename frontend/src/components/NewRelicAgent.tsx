@@ -8,7 +8,10 @@ const licenseKey = process.env.NEXT_PUBLIC_NEW_RELIC_LICENSE_KEY
 const trustKey = process.env.NEXT_PUBLIC_NEW_RELIC_TRUST_KEY
 const agentId = process.env.NEXT_PUBLIC_NEW_RELIC_AGENT_ID
 
-export function NewRelicAgent() {
+// nonce is sourced from middleware via headers().get('x-nonce') in the
+// server component that renders this. CSP requires every <script> tag to
+// carry the per-request nonce, otherwise the browser refuses to execute it.
+export function NewRelicAgent({ nonce }: { nonce?: string }) {
   if (!accountId || !applicationId || !licenseKey || !trustKey || !agentId) {
     console.warn("[NR] browser agent disabled — one or more env vars missing")
     return null
@@ -23,9 +26,15 @@ export function NewRelicAgent() {
 
   return (
     <>
-      <Script id="nr-init" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: config }} />
+      <Script
+        id="nr-init"
+        nonce={nonce}
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{ __html: config }}
+      />
       <Script
         id="nr-agent"
+        nonce={nonce}
         strategy="afterInteractive"
         src="https://js-agent.newrelic.com/nr-loader-spa-current.min.js"
         onLoad={() => console.log("[NR] browser agent loaded")}
