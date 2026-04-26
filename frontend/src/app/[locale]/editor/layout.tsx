@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
-import { AdminSearchContext, useAdminSearch } from './admin-search-context'
+import { EditorSearchContext, useEditorSearch } from './editor-search-context'
 import { useTranslations } from 'next-intl'
-import { SquaresFourIcon, UsersIcon, ArrowLeftIcon, RadioIcon } from '@phosphor-icons/react'
+import { SquaresFourIcon, RadioIcon, ArrowLeftIcon, ShieldCheckIcon } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { AccountMenu } from '@/components/account-menu'
 import { SearchInput } from '@/components/search-input'
@@ -13,20 +13,20 @@ import { cn } from '@/lib/utils'
 
 // ─── Nav components ───────────────────────────────────────────────────────────
 
-function AdminTopNav() {
+function EditorTopNav() {
   const pathname = usePathname()
-  const t = useTranslations('admin')
+  const t = useTranslations('editor')
 
   const navItems = [
-    { title: t('nav_overview'), href: '/admin' },
-    { title: t('nav_users'), href: '/admin/users' },
+    { title: t('nav_overview'), href: '/editor' },
+    { title: t('nav_stations'), href: '/editor/stations' },
   ]
 
   return (
     <nav className="hidden items-center gap-0.5 md:flex">
       {navItems.map((item) => {
-        const active = item.href === '/admin'
-          ? pathname === '/admin'
+        const active = item.href === '/editor'
+          ? pathname === '/editor'
           : pathname.startsWith(item.href)
         return (
           <Link
@@ -50,20 +50,20 @@ function AdminTopNav() {
   )
 }
 
-function AdminTopNavMobile() {
+function EditorTopNavMobile() {
   const pathname = usePathname()
-  const t = useTranslations('admin')
+  const t = useTranslations('editor')
 
   const navItems = [
-    { title: t('nav_overview'), href: '/admin', icon: SquaresFourIcon },
-    { title: t('nav_users'), href: '/admin/users', icon: UsersIcon },
+    { title: t('nav_overview'), href: '/editor', icon: SquaresFourIcon },
+    { title: t('nav_stations'), href: '/editor/stations', icon: RadioIcon },
   ]
 
   return (
     <nav className="border-b border-border/50 bg-background md:hidden">
       <div className="flex items-center gap-0.5 overflow-x-auto px-3 py-1.5">
         {navItems.map(({ title, href, icon: Icon }) => {
-          const active = href === '/admin' ? pathname === '/admin' : pathname.startsWith(href)
+          const active = href === '/editor' ? pathname === '/editor' : pathname.startsWith(href)
           return (
             <Link
               key={href}
@@ -90,26 +90,22 @@ function AdminTopNavMobile() {
 
 // ─── Search input ─────────────────────────────────────────────────────────────
 
-function AdminSearchInput({ className }: { className?: string }) {
+function EditorSearchInput({ className }: { className?: string }) {
   const pathname = usePathname()
-  const t = useTranslations('admin')
-  const { query, setQuery } = useAdminSearch()
+  const t = useTranslations('editor')
+  const { query, setQuery } = useEditorSearch()
 
   const [value, setValue] = useState(query)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Sync local input when context resets (e.g. tab change or route change)
   useEffect(() => { setValue(query) }, [query])
 
   useEffect(() => {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [])
 
-  const isUsers = pathname.startsWith('/admin/users')
-
-  if (!isUsers) return null
-
-  const placeholder = t('search_users')
+  const isStations = pathname.startsWith('/editor/stations')
+  if (!isStations) return null
 
   const handleChange = (q: string) => {
     setValue(q)
@@ -125,7 +121,7 @@ function AdminSearchInput({ className }: { className?: string }) {
 
   return (
     <SearchInput
-      placeholder={placeholder}
+      placeholder={t('search_stations')}
       value={value}
       onChange={handleChange}
       onClear={clear}
@@ -136,25 +132,25 @@ function AdminSearchInput({ className }: { className?: string }) {
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function EditorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { session, loading, isAdmin } = useAuth()
+  const { session, loading, isEditor, isAdmin } = useAuth()
   const tNav = useTranslations('nav')
-  const tAdmin = useTranslations('admin')
+  const tEditor = useTranslations('editor')
 
   const [query, setQuery] = useState('')
 
-  // Clear search when navigating between admin sections
+  // Clear search when navigating between editor sections
   useEffect(() => { setQuery('') }, [pathname])
 
-  const showSearch = pathname.startsWith('/admin/users')
+  const showSearch = pathname.startsWith('/editor/stations')
 
   useEffect(() => {
-    if (!loading && session && !isAdmin) {
+    if (!loading && session && !isEditor) {
       router.replace('/')
     }
-  }, [loading, session, isAdmin, router])
+  }, [loading, session, isEditor, router])
 
   if (loading || !session) {
     return (
@@ -164,33 +160,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     )
   }
 
-  if (!isAdmin) return null
+  if (!isEditor) return null
 
   return (
-    <AdminSearchContext.Provider value={{ query, setQuery }}>
+    <EditorSearchContext.Provider value={{ query, setQuery }}>
       <div className="flex h-screen flex-col overflow-hidden">
         <header className="shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
           <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:gap-10 md:px-5 md:py-0">
             <div className="flex items-center justify-between md:shrink-0">
-              <Link href="/admin" className="text-[1.6rem] font-semibold tracking-[-0.04em] text-foreground md:py-3.5">
+              <Link href="/editor" className="text-[1.6rem] font-semibold tracking-[-0.04em] text-foreground md:py-3.5">
                 OSTGUT
               </Link>
               <div className="md:hidden">
                 <AccountMenu avatarSize={40} />
               </div>
             </div>
-            <AdminTopNav />
+            <EditorTopNav />
             <div className="hidden md:flex w-52">
-              <AdminSearchInput />
+              <EditorSearchInput />
             </div>
             <div className="hidden items-center gap-3 md:ml-auto md:flex">
-              <Link
-                href="/editor/stations"
-                className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-light text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <RadioIcon className="h-3.5 w-3.5" />
-                {tAdmin('go_to_editor')}
-              </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-light text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ShieldCheckIcon className="h-3.5 w-3.5" />
+                  {tEditor('go_to_admin')}
+                </Link>
+              )}
               <Link
                 href="/curated"
                 className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-light text-muted-foreground transition-colors hover:text-foreground"
@@ -202,10 +200,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           </div>
         </header>
-        <AdminTopNavMobile />
+        <EditorTopNavMobile />
         {showSearch && (
           <div className="border-b border-border/50 bg-background px-3 py-2 md:hidden">
-            <AdminSearchInput />
+            <EditorSearchInput />
           </div>
         )}
         <main className="flex-1 overflow-y-auto">
@@ -214,6 +212,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </main>
       </div>
-    </AdminSearchContext.Provider>
+    </EditorSearchContext.Provider>
   )
 }

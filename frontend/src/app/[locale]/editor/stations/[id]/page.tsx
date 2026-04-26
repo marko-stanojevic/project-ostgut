@@ -19,7 +19,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import {
     RadioIcon,
-    ArrowSquareOutIcon,
     ArrowLeftIcon,
     ArrowsClockwiseIcon,
     FloppyDiskIcon,
@@ -295,8 +294,6 @@ export default function StationEditorPage() {
     const accessToken = session?.accessToken
 
     const trimmedName = form.name.trim()
-    // Primary display URL — first non-empty stream entry.
-    const primaryStreamURL = form.streams.find(s => s.url.trim())?.url.trim() ?? ''
     const logoURL = form.logo.trim()
     const websiteURL = form.website.trim()
     const streamValidationMessages = form.streams.map((s) => getStreamURLValidationMessage(s.url))
@@ -321,7 +318,7 @@ export default function StationEditorPage() {
 
             try {
                 const s = await fetchJSONWithAuth<AdminStation>(
-                    `${API}/admin/stations/${id}`,
+                    `${API}/editor/stations/${id}`,
                     accessToken,
                 )
                 if (cancelled) return
@@ -331,7 +328,7 @@ export default function StationEditorPage() {
 
                 try {
                     const icon = await fetchJSONWithAuth<MediaAssetResponse>(
-                        `${API}/admin/stations/${id}/icon`,
+                        `${API}/editor/stations/${id}/icon`,
                         accessToken,
                     )
                     if (!cancelled) {
@@ -466,7 +463,7 @@ export default function StationEditorPage() {
         }
 
         try {
-            const updated = await fetchJSONWithAuth<AdminStation>(`${API}/admin/stations/${id}`, accessToken, {
+            const updated = await fetchJSONWithAuth<AdminStation>(`${API}/editor/stations/${id}`, accessToken, {
                 method: 'PUT',
                 body: JSON.stringify(body),
             })
@@ -490,7 +487,7 @@ export default function StationEditorPage() {
 
         try {
             const updated = await fetchJSONWithAuth<AdminStation>(
-                `${API}/admin/stations/${id}/streams/${streamID}/probe?scope=${scope}`,
+                `${API}/editor/stations/${id}/streams/${streamID}/probe?scope=${scope}`,
                 accessToken,
                 { method: 'POST' },
             )

@@ -373,8 +373,8 @@ function CockpitSkeleton() {
   )
 }
 
-export default function AdminOverviewPage() {
-  const t = useTranslations('admin')
+export default function EditorOverviewPage() {
+  const t = useTranslations('editor')
   const { session } = useAuth()
   const [overview, setOverview] = useState<OverviewResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -387,7 +387,7 @@ export default function AdminOverviewPage() {
     setLoading(true)
     setError('')
 
-    fetchJSONWithAuth<RawOverviewResponse>(`${API}/admin/overview`, session.accessToken)
+    fetchJSONWithAuth<RawOverviewResponse>(`${API}/editor/overview`, session.accessToken)
       .then((data) => {
         if (!cancelled) {
           setOverview(normalizeOverviewResponse(data))
@@ -395,7 +395,7 @@ export default function AdminOverviewPage() {
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load admin overview')
+          setError(err instanceof Error ? err.message : 'Failed to load editor overview')
           setOverview(null)
         }
       })
@@ -509,4 +509,3 @@ export default function AdminOverviewPage() {
     </div>
   )
 }
-

@@ -90,6 +90,7 @@
   "account_menu": {
     "profile": "Profil",
     "admin": "Admin",
+    "editor": "Redaktion",
     "settings": "Einstellungen",
     "security": "Sicherheit",
     "notifications": "Benachrichtigungen",
@@ -322,7 +323,8 @@
     "creating": "Erstellen…",
     "fix_urls_error": "Bitte korrigieren Sie die URL-Felder vor dem Erstellen.",
     "stations_label": "Sender",
-    "users_label": "Benutzer"
+    "users_label": "Benutzer",
+    "go_to_editor": "Redaktion"
   },
   "station_detail": {
     "back": "Zurück",
@@ -345,5 +347,13 @@
     "copy_stream": "Stream-URL kopieren",
     "editors_note": "Redaktionsnotiz",
     "about": "Über"
+  },
+  "editor": {
+    "panel_label": "Redaktion",
+    "nav_overview": "Übersicht",
+    "nav_stations": "Sender",
+    "overview_title": "Übersicht",
+    "search_stations": "Sender suchen…",
+    "go_to_admin": "Admin"
   }
 }

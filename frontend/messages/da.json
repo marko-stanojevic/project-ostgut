@@ -90,6 +90,7 @@
   "account_menu": {
     "profile": "Profil",
     "admin": "Admin",
+    "editor": "Redaktion",
     "settings": "Indstillinger",
     "security": "Sikkerhed",
     "notifications": "Notifikationer",
@@ -322,7 +323,8 @@
     "creating": "Opretter…",
     "fix_urls_error": "Ret URL-felterne før du opretter stationen.",
     "stations_label": "stationer",
-    "users_label": "brugere"
+    "users_label": "brugere",
+    "go_to_editor": "Redaktion"
   },
   "station_detail": {
     "back": "Tilbage",
@@ -345,5 +347,13 @@
     "copy_stream": "Kopiér stream-URL",
     "editors_note": "Redaktørens note",
     "about": "Om"
+  },
+  "editor": {
+    "panel_label": "Redaktion",
+    "nav_overview": "Overblik",
+    "nav_stations": "Stationer",
+    "overview_title": "Overblik",
+    "search_stations": "Søg stationer…",
+    "go_to_admin": "Admin"
   }
 }

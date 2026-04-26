@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
-import { useAdminSearch } from '../admin-search-context'
+import { useEditorSearch } from '../editor-search-context'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
@@ -106,7 +106,7 @@ export default function AdminStationsPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved'>(
     normalizeModerationStatus(searchParams.get('status')),
   )
-  const { query: search } = useAdminSearch()
+  const { query: search } = useEditorSearch()
   const [appliedSearch, setAppliedSearch] = useState(search)
   const [stations, setStations] = useState<AdminStation[]>([])
   const [loading, setLoading] = useState(true)
@@ -162,7 +162,7 @@ export default function AdminStationsPage() {
 
     try {
       const data = await fetchJSONWithAuth<{ stations?: AdminStation[]; count?: number }>(
-        `${API}/admin/stations?${params}`,
+        `${API}/editor/stations?${params}`,
         session.accessToken,
       )
       setStations(data.stations ?? [])
@@ -187,7 +187,7 @@ export default function AdminStationsPage() {
     const normalized = normalizeModerationStatus(tab)
     setActiveTab(normalized)
     setPage(0)
-    router.replace(`/admin/stations?status=${normalized}`)
+    router.replace(`/editor/stations?status=${normalized}`)
   }
 
   const toggleSelect = (id: string) => {
@@ -213,7 +213,7 @@ export default function AdminStationsPage() {
 
     try {
       await fetchJSONWithAuth(
-        `${API}/admin/stations/bulk`,
+        `${API}/editor/stations/bulk`,
         session.accessToken,
         {
           method: 'POST',
@@ -242,7 +242,7 @@ export default function AdminStationsPage() {
 
     try {
       const created = await fetchJSONWithAuth<AdminStation>(
-        `${API}/admin/stations`,
+        `${API}/editor/stations`,
         session.accessToken,
         {
           method: 'POST',
@@ -297,7 +297,7 @@ export default function AdminStationsPage() {
       if (nextStatus !== activeTab) {
         setActiveTab(nextStatus)
         setPage(0)
-        router.replace(`/admin/stations?status=${nextStatus}`)
+        router.replace(`/editor/stations?status=${nextStatus}`)
       } else {
         await fetchStations()
       }
@@ -404,7 +404,7 @@ export default function AdminStationsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <Link
-                        href={`/admin/stations/${s.id}`}
+                        href={`/editor/stations/${s.id}`}
                         className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <div className="flex items-center gap-2.5">
@@ -431,7 +431,7 @@ export default function AdminStationsPage() {
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.city || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.country || '—'}</td>
                     <td className="px-4 py-3 text-right">
-                      <Link href={`/admin/stations/${s.id}`}>
+                      <Link href={`/editor/stations/${s.id}`}>
                         <Button variant="ghost" size="sm" className="h-7 gap-1.5">
                           {t('edit')}
                           <ArrowSquareOutIcon className="h-3 w-3" />
