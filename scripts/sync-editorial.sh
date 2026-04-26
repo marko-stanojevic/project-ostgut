@@ -76,7 +76,7 @@ do_export() {
   psql "$src_url" -t -A -q <<'SQL' > "$out_file"
 SELECT format(
   $f$INSERT INTO stations (
-  external_id, name, stream_url, homepage, logo,
+  external_id, name, homepage, logo,
   genre_tags, subgenre_tags, search_tags, language, country, city,
   style_tags, format_tags, texture_tags,
   reliability_score,
@@ -84,7 +84,7 @@ SELECT format(
   custom_name, custom_website, overview, editorial_review, internal_notes,
   last_editor_action_at, last_synced_at, updated_at
 ) VALUES (
-  %L, %L, %L, %L, %L,
+  %L, %L, %L, %L,
   %L::text[], %L::text[], %L::text[], %L, %L, %L,
   %L::text[], %L::text[], %L::text[],
   %L::float8,
@@ -115,7 +115,7 @@ ON CONFLICT (external_id) DO UPDATE SET
 WHERE stations.last_editor_action_at IS NULL
    OR stations.last_editor_action_at < EXCLUDED.last_editor_action_at;
 $f$,
-  external_id, name, stream_url, homepage, logo,
+  external_id, name, homepage, logo,
   genre_tags, subgenre_tags, search_tags, language, country, city,
   style_tags, format_tags, texture_tags,
   reliability_score,
