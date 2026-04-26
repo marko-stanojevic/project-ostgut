@@ -51,7 +51,7 @@ function getMetadataBadges(
   return buildMetadataBadges(stream, nowPlaying).map((label) => ({ label }))
 }
 
-function PlayerMetadataTicker({ text, className }: { text: string; className?: string }) {
+function PlayerMetadataTicker({ text, className, active = true }: { text: string; className?: string; active?: boolean }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const textRef = useRef<HTMLSpanElement | null>(null)
   const measureRef = useRef<HTMLSpanElement | null>(null)
@@ -85,10 +85,11 @@ function PlayerMetadataTicker({ text, className }: { text: string; className?: s
       {shouldScroll ? (
         <span
           ref={textRef}
-          className="inline-block animate-player-marquee-swing will-change-transform"
+          className="inline-block animate-player-marquee-swing"
           style={{
             ['--player-marquee-shift' as string]: `${scrollDistance}px`,
             ['--player-marquee-duration' as string]: `${Math.max(6, scrollDistance / 18)}s`,
+            animationPlayState: active ? 'running' : 'paused',
           }}
         >
           {text}
@@ -210,7 +211,7 @@ export function PlayerBar() {
             </p>
             <div className={`flex h-3.5 min-w-0 items-center ${isError ? 'text-destructive' : 'text-player-bar-secondary'}`}>
               {!isReconnecting && secondaryLine ? (
-                <PlayerMetadataTicker className="w-full min-w-0 text-[11px] sm:text-[13px]" text={secondaryLine} />
+                <PlayerMetadataTicker className="w-full min-w-0 text-[11px] sm:text-[13px]" text={secondaryLine} active={isPlaying} />
               ) : null}
             </div>
           </div>

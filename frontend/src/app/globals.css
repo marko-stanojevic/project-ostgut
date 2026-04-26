@@ -898,16 +898,16 @@
   50%      { transform: scaleY(1); }
 }
 
-@keyframes bg-fade-drift {
-  0%   { background-position: 0% 0%, 100% 0%; }
-  50%  { background-position: 6% 3%, 96% 4%; }
-  100% { background-position: 2% 6%, 92% 2%; }
+@keyframes bg-drift {
+  0%   { transform: translate(0, 0); }
+  50%  { transform: translate(2.5%, 1%); }
+  100% { transform: translate(1%, 2.5%); }
 }
 
-@keyframes bg-fade-drift-alt {
-  0%   { background-position: 100% 100%, 0% 100%; }
-  50%  { background-position: 95% 96%, 4% 97%; }
-  100% { background-position: 92% 98%, 8% 94%; }
+@keyframes bg-drift-alt {
+  0%   { transform: translate(0, 0); }
+  50%  { transform: translate(-2.5%, -1%); }
+  100% { transform: translate(-1%, -2.5%); }
 }
 
 @keyframes player-marquee-swing {
@@ -922,7 +922,6 @@
 
 .animate-player-marquee-swing {
   animation: player-marquee-swing var(--player-marquee-duration, 8s) ease-in-out infinite alternate;
-  will-change: transform;
 }
 
 .animate-player-leveling-dot {
