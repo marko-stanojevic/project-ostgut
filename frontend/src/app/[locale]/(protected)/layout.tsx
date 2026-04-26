@@ -158,14 +158,12 @@ export default function DashboardLayout({
           </div>
         </header>
         <main className="relative flex-1 overflow-y-auto">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-55 bg-[image:var(--app-shell-overlay-1)] bg-[length:132%_132%,124%_124%] motion-safe:animate-[bg-fade-drift-alt_48s_ease-in-out_infinite_alternate] motion-reduce:animate-none"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-90 bg-[image:var(--app-shell-overlay-2)] bg-[length:118%_118%,112%_112%] motion-safe:animate-[bg-fade-drift_30s_ease-in-out_infinite_alternate] motion-reduce:animate-none"
-          />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute inset-[-6%] opacity-55 bg-[image:var(--app-shell-overlay-1)] bg-[size:100%_100%] motion-safe:animate-[bg-drift-alt_48s_ease-in-out_infinite_alternate] motion-reduce:animate-none" />
+          </div>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute inset-[-6%] opacity-90 bg-[image:var(--app-shell-overlay-2)] bg-[size:100%_100%] motion-safe:animate-[bg-drift_30s_ease-in-out_infinite_alternate] motion-reduce:animate-none" />
+          </div>
           <div className="relative p-3 pb-[calc(8.5rem+var(--safe-bottom))] sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
             {children}
           </div>
