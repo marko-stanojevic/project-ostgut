@@ -28,6 +28,8 @@ type Dependencies struct {
 type Options struct {
 	Log                         *slog.Logger
 	JWTSecret                   string
+	OAuthSharedSecret           string
+	PublicAPIBaseURL            string
 	PaddleWebhookSecret         string
 	PaddleClientToken           string
 	PaddlePriceID               string
@@ -45,9 +47,10 @@ type playerPreferencesStore interface {
 }
 
 type authHandlers struct {
-	users     *store.UserStore
-	refresh   *store.RefreshTokenStore
-	jwtSecret string
+	users       *store.UserStore
+	refresh     *store.RefreshTokenStore
+	jwtSecret   string
+	oauthSecret string
 }
 
 type userHandlers struct {
@@ -110,6 +113,7 @@ type Handler struct {
 	station           stationHandlers
 	media             mediaHandlers
 	admin             adminHandlers
+	publicAPIBaseURL  string
 	log               *slog.Logger
 	mediaBlobClientMu sync.Mutex
 	mediaBlobClient   *azblob.Client
@@ -122,9 +126,10 @@ func New(deps Dependencies, opts Options) *Handler {
 	metaPoller := NewMetadataPoller(deps.StationStreamStore, deps.StreamNowPlayingStore, metaFetcher, opts.Log)
 	return &Handler{
 		auth: authHandlers{
-			users:     deps.UserStore,
-			refresh:   deps.RefreshTokenStore,
-			jwtSecret: opts.JWTSecret,
+			users:       deps.UserStore,
+			refresh:     deps.RefreshTokenStore,
+			jwtSecret:   opts.JWTSecret,
+			oauthSecret: opts.OAuthSharedSecret,
 		},
 		user: userHandlers{
 			users: deps.UserStore,
@@ -169,7 +174,8 @@ func New(deps Dependencies, opts Options) *Handler {
 			streamProbeClient:   streamProbeClient,
 			browserProbeOrigins: append([]string(nil), opts.BrowserMetadataProbeOrigins...),
 		},
-		log: opts.Log,
+		publicAPIBaseURL: opts.PublicAPIBaseURL,
+		log:              opts.Log,
 	}
 }
 

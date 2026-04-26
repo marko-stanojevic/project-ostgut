@@ -87,6 +87,8 @@ func main() {
 		handler.Options{
 			Log:                         logger,
 			JWTSecret:                   cfg.JWTSecret,
+			OAuthSharedSecret:           cfg.OAuthSharedSecret,
+			PublicAPIBaseURL:            cfg.PublicAPIBaseURL,
 			PaddleWebhookSecret:         cfg.PaddleWebhookSecret,
 			PaddleClientToken:           cfg.PaddleClientToken,
 			PaddlePriceID:               cfg.PaddlePriceID,
@@ -130,10 +132,32 @@ func main() {
 	}
 
 	router := gin.New()
+
+	// c.ClientIP() is the basis of rate-limit bucket keys. Gin defaults to
+	// trusting all proxies, which lets a caller spoof X-Forwarded-For. Pin the
+	// trust list explicitly: empty (production) means "only the direct peer".
+	if err := router.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		logger.Error("set trusted proxies", "error", err)
+		os.Exit(1)
+	}
+
 	router.Use(gin.Recovery())
+	router.Use(middleware.SecurityHeaders())
 	if nrApp != nil {
 		router.Use(nrgin.Middleware(nrApp))
 	}
+
+	// 1 MB JSON body cap applied to most routes. The media upload PUT
+	// streams binary payloads up to 10 MB and applies its own io.LimitReader,
+	// so it is exempt — see the path check below.
+	const jsonBodyCapBytes = 1 << 20
+	router.Use(func(c *gin.Context) {
+		if c.Request.Method == http.MethodPut && strings.HasPrefix(c.Request.URL.Path, "/media/upload/") {
+			c.Next()
+			return
+		}
+		middleware.MaxBodySize(jsonBodyCapBytes)(c)
+	})
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.AllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -146,13 +170,24 @@ func main() {
 	router.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
-	router.POST("/auth/login", h.Login)
-	router.POST("/auth/register", h.Register)
-	router.POST("/auth/oauth", h.OAuthLogin)
-	router.POST("/auth/refresh", h.Refresh)
-	router.POST("/auth/logout", h.Logout)
-	router.POST("/auth/forgot-password", h.ForgotPassword)
-	router.POST("/auth/reset-password", h.ResetPassword)
+
+	// Auth endpoints are the highest-value brute-force target on the API.
+	// 5 req / s sustained, burst 10 per client IP. Tune from real traffic.
+	authLimiter := middleware.RateLimit(middleware.RateLimitConfig{
+		RatePerSecond: 5,
+		Burst:         10,
+	})
+	authGroup := router.Group("/auth")
+	authGroup.Use(authLimiter)
+	{
+		authGroup.POST("/login", h.Login)
+		authGroup.POST("/register", h.Register)
+		authGroup.POST("/oauth", h.OAuthLogin)
+		authGroup.POST("/refresh", h.Refresh)
+		authGroup.POST("/logout", h.Logout)
+		authGroup.POST("/forgot-password", h.ForgotPassword)
+		authGroup.POST("/reset-password", h.ResetPassword)
+	}
 
 	// Station routes (public — no auth required)
 	router.GET("/stations", h.ListStations)
