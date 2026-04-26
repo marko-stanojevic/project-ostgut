@@ -466,6 +466,35 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
 
+  /* Layout heights — single source of truth for the player and tab bar.
+     Consumed by layouts to set scroll-padding, by the mini-player to
+     compute its `bottom` offset, and by the tab bar for hit-targets. */
+  --player-bar-height: 5.5rem;       /* desktop player bar */
+  --mobile-tab-bar-height: 3.5rem;   /* mobile bottom nav */
+  --mini-player-height: 3.5rem;      /* compact player chip */
+  --header-height: 3.5rem;           /* sticky top header */
+
+  /* Z-index ladder — explicit, documented, single source of truth.
+     Use as `z-[var(--z-foo)]`. Any ad-hoc z-index in the codebase
+     should map back here. */
+  --z-base: 0;
+  --z-sticky: 10;        /* in-flow sticky bars */
+  --z-tab-bar: 30;       /* mobile bottom nav */
+  --z-player: 40;        /* player bar / mini-player */
+  --z-dropdown: 50;      /* menus, popovers, tooltips */
+  --z-overlay: 60;       /* dialog backdrops */
+  --z-modal: 60;         /* dialog content */
+  --z-toast: 70;         /* notifications */
+
+  /* Semantic spacing — used by layout containers, form rhythm, and
+     section padding. The Tailwind 4-step scale (space-1..space-12)
+     remains canonical for ad-hoc gaps. */
+  --space-control-x: 0.875rem;       /* default horizontal padding inside form controls */
+  --space-control-y: 0.5rem;         /* default vertical padding inside form controls */
+  --space-page-x: 1rem;              /* mobile page gutter */
+  --space-page-x-md: 1.5rem;         /* tablet+ page gutter */
+  --space-section-y: 2rem;           /* default vertical rhythm between page sections */
+
   /* Shadows (themed via --shadow-tint + --shadow-alpha) */
   --shadow-2xs: 0 1px 3px 0 hsl(var(--shadow-tint) / var(--shadow-alpha));
   --shadow-xs: 0 1px 3px 0 hsl(var(--shadow-tint) / var(--shadow-alpha));

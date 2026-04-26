@@ -78,13 +78,13 @@ export function MobileMiniPlayer() {
         onClick={() => setFullScreen(true)}
         aria-label="Open full screen player"
         className={cn(
-          // Position: above the tab bar (h-14 = 3.5rem) plus iOS home indicator.
-          'fixed left-2 right-2 z-40 flex items-center gap-3 rounded-2xl border border-player-bar-border',
+          // Position: above the tab bar plus iOS home indicator.
+          'fixed left-2 right-2 z-[var(--z-player)] flex items-center gap-3 rounded-2xl border border-player-bar-border',
           'bg-[image:var(--player-bar-bg)] px-3 py-2 text-left text-player-bar-fg shadow-md backdrop-blur-xl',
           'animate-in slide-in-from-bottom-4 fade-in duration-300 md:hidden',
           'transition-colors hover:bg-player-bar-chip-bg/40',
         )}
-        style={{ bottom: 'calc(3.5rem + var(--safe-bottom) + 0.5rem)' }}
+        style={{ bottom: 'calc(var(--mobile-tab-bar-height) + var(--safe-bottom) + 0.5rem)' }}
       >
         <span
           className={cn(

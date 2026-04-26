@@ -5,7 +5,8 @@ import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Alert } from '@/components/ui/alert'
 import { CheckIcon, ArrowLeftIcon } from '@phosphor-icons/react'
 import { API_URL } from '@/lib/api'
 import { AuthShell } from '@/components/auth/auth-shell'
@@ -71,18 +72,23 @@ export default function ForgotPasswordPage() {
       }
     >
       <div className="mx-auto w-full max-w-[20rem] space-y-4">
-        {error && (
-          <p className="rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <Alert variant="destructive">{error}</Alert>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm text-foreground">{t('email')}</Label>
-            <Input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" placeholder="you@example.com" className="h-13 rounded-2xl border-foreground/20 bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground/80" />
-          </div>
-          <Button type="submit" className="h-14 w-full rounded-full text-base font-semibold" disabled={loading}>
+          <Field>
+            <FieldLabel>{t('email')}</FieldLabel>
+            <Input
+              name="email"
+              type="email"
+              inputSize="xl"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+            />
+          </Field>
+          <Button type="submit" size="xl" className="w-full" loading={loading}>
             {loading ? t('submitting') : t('submit')}
           </Button>
         </form>

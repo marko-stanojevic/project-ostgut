@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import { TagInput } from '@/components/ui/tag-input'
 import {
   Dialog,
   DialogContent,
@@ -55,16 +56,16 @@ interface AdminStation {
 interface CreateStationForm {
   name: string
   stream_url: string
-  genre_tags: string
-  subgenre_tags: string
+  genre_tags: string[]
+  subgenre_tags: string[]
   country: string
   city: string
   language: string
   logo: string
   homepage: string
-  style_tags: string
-  format_tags: string
-  texture_tags: string
+  style_tags: string[]
+  format_tags: string[]
+  texture_tags: string[]
   overview: string
   editorial_review: string
   internal_notes: string
@@ -120,16 +121,16 @@ export default function AdminStationsPage() {
   const [createForm, setCreateForm] = useState<CreateStationForm>({
     name: '',
     stream_url: '',
-    genre_tags: '',
-    subgenre_tags: '',
+    genre_tags: [],
+    subgenre_tags: [],
     country: '',
     city: '',
     language: '',
     logo: '',
     homepage: '',
-    style_tags: '',
-    format_tags: '',
-    texture_tags: '',
+    style_tags: [],
+    format_tags: [],
+    texture_tags: [],
     overview: '',
     editorial_review: '',
     internal_notes: '',
@@ -248,16 +249,16 @@ export default function AdminStationsPage() {
           body: JSON.stringify({
             name: createForm.name.trim(),
             stream_url: createForm.stream_url.trim(),
-            genre_tags: createForm.genre_tags.split(',').map((g) => g.trim()).filter(Boolean),
-            subgenre_tags: createForm.subgenre_tags.split(',').map((g) => g.trim()).filter(Boolean),
+            genre_tags: createForm.genre_tags,
+            subgenre_tags: createForm.subgenre_tags,
             country: createForm.country.trim(),
             city: createForm.city.trim(),
             language: createForm.language.trim(),
             logo: createForm.logo.trim(),
             homepage: createForm.homepage.trim(),
-            style_tags: createForm.style_tags.split(',').map((v) => v.trim()).filter(Boolean),
-            format_tags: createForm.format_tags.split(',').map((v) => v.trim()).filter(Boolean),
-            texture_tags: createForm.texture_tags.split(',').map((v) => v.trim()).filter(Boolean),
+            style_tags: createForm.style_tags,
+            format_tags: createForm.format_tags,
+            texture_tags: createForm.texture_tags,
             overview: createForm.overview.trim() || null,
             editorial_review: createForm.editorial_review.trim() || null,
             internal_notes: createForm.internal_notes.trim() || null,
@@ -271,16 +272,16 @@ export default function AdminStationsPage() {
       setCreateForm({
         name: '',
         stream_url: '',
-        genre_tags: '',
-        subgenre_tags: '',
+        genre_tags: [],
+        subgenre_tags: [],
         country: '',
         city: '',
         language: '',
         logo: '',
         homepage: '',
-        style_tags: '',
-        format_tags: '',
-        texture_tags: '',
+        style_tags: [],
+        format_tags: [],
+        texture_tags: [],
         overview: '',
         editorial_review: '',
         internal_notes: '',
@@ -494,11 +495,11 @@ export default function AdminStationsPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Genre tags</label>
-                <Input value={createForm.genre_tags} onChange={(e) => setCreateForm((p) => ({ ...p, genre_tags: e.target.value }))} />
+                <TagInput value={createForm.genre_tags} onChange={(next) => setCreateForm((p) => ({ ...p, genre_tags: next }))} placeholder="Add genre, press Enter" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Subgenre tags</label>
-                <Input value={createForm.subgenre_tags} onChange={(e) => setCreateForm((p) => ({ ...p, subgenre_tags: e.target.value }))} />
+                <TagInput value={createForm.subgenre_tags} onChange={(next) => setCreateForm((p) => ({ ...p, subgenre_tags: next }))} placeholder="Add subgenre, press Enter" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">{t('field_language')}</label>
@@ -546,15 +547,15 @@ export default function AdminStationsPage() {
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">Style tags</label>
-                <Input value={createForm.style_tags} onChange={(e) => setCreateForm((p) => ({ ...p, style_tags: e.target.value }))} />
+                <TagInput value={createForm.style_tags} onChange={(next) => setCreateForm((p) => ({ ...p, style_tags: next }))} placeholder="Add style, press Enter" />
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">Format tags</label>
-                <Input value={createForm.format_tags} onChange={(e) => setCreateForm((p) => ({ ...p, format_tags: e.target.value }))} />
+                <TagInput value={createForm.format_tags} onChange={(next) => setCreateForm((p) => ({ ...p, format_tags: next }))} placeholder="Add format, press Enter" />
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">Texture tags</label>
-                <Input value={createForm.texture_tags} onChange={(e) => setCreateForm((p) => ({ ...p, texture_tags: e.target.value }))} />
+                <TagInput value={createForm.texture_tags} onChange={(next) => setCreateForm((p) => ({ ...p, texture_tags: next }))} placeholder="Add texture, press Enter" />
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">{t('field_overview')}</label>
@@ -609,7 +610,7 @@ export default function AdminStationsPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createLoading}>{t('cancel')}</Button>
-            <Button type="submit" form="create-station-form" disabled={createLoading || !canCreateStation}>
+            <Button type="submit" form="create-station-form" loading={createLoading} disabled={!canCreateStation}>
               {createLoading ? t('creating') : t('create_station')}
             </Button>
           </DialogFooter>

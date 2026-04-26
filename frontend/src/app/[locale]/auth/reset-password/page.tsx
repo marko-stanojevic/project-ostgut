@@ -6,7 +6,8 @@ import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Field, FieldLabel, FieldDescription } from '@/components/ui/field'
+import { Alert } from '@/components/ui/alert'
 import { ArrowLeftIcon, WarningCircleIcon } from '@phosphor-icons/react'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { API_URL } from '@/lib/api'
@@ -84,23 +85,37 @@ function ResetPasswordForm() {
       }
     >
       <div className="mx-auto w-full max-w-[20rem] space-y-4">
-        {error && (
-          <p className="rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        {error && <Alert variant="destructive">{error}</Alert>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm text-foreground">{t('new_password')}</Label>
-            <Input id="password" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" placeholder="••••••••" className="h-13 rounded-2xl border-foreground/20 bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground/80" />
-            <p className="text-xs text-muted-foreground">{t('password_hint')}</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirm-password" className="text-sm text-foreground">{t('confirm_password')}</Label>
-            <Input id="confirm-password" name="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required autoComplete="new-password" placeholder="••••••••" className="h-13 rounded-2xl border-foreground/20 bg-transparent px-4 text-base text-foreground placeholder:text-muted-foreground/80" />
-          </div>
-          <Button type="submit" className="h-14 w-full rounded-full text-base font-semibold" disabled={loading}>
+          <Field>
+            <FieldLabel>{t('new_password')}</FieldLabel>
+            <Input
+              name="password"
+              type="password"
+              inputSize="xl"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              placeholder="••••••••"
+            />
+            <FieldDescription>{t('password_hint')}</FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel>{t('confirm_password')}</FieldLabel>
+            <Input
+              name="confirm-password"
+              type="password"
+              inputSize="xl"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+              placeholder="••••••••"
+            />
+          </Field>
+          <Button type="submit" size="xl" className="w-full" loading={loading}>
             {loading ? t('submitting') : t('submit')}
           </Button>
         </form>
