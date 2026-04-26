@@ -94,6 +94,11 @@ function buildCSP(nonce: string): string {
     "base-uri 'self'",
     "object-src 'none'",
     'upgrade-insecure-requests',
+    // Violation reports — both legacy `report-uri` (broad browser support)
+    // and the modern Reports API (`report-to` + Reporting-Endpoints header
+    // set below). Browsers prefer report-to when both are present.
+    'report-uri /api/csp-report',
+    "report-to csp-endpoint",
   ].join('; ')
 }
 
@@ -150,6 +155,9 @@ export default function middleware(req: NextRequest) {
 
   const res = handleI18n(req)
   res.headers.set('Content-Security-Policy', csp)
+  // Reporting-Endpoints declares the named group referenced by `report-to`
+  // in the CSP above. Same path the legacy `report-uri` posts to.
+  res.headers.set('Reporting-Endpoints', 'csp-endpoint="/api/csp-report"')
   return res
 }
 

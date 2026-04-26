@@ -35,6 +35,34 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
+  gosec:
+    name: gosec (backend static analysis)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      # Catches patterns govulncheck cannot: hardcoded credentials, weak
+      # crypto primitives, command injection sinks, SQL string concatenation,
+      # path traversal. Failures fail the job; suppress per-line with a
+      # `// #nosec G104 -- justification` comment if intentional.
+      - name: Run gosec
+        working-directory: backend
+        run: gosec -fmt sarif -out gosec.sarif -severity medium ./...
+      - name: Upload SARIF
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gosec-sarif
+          path: backend/gosec.sarif
+
   npm-audit:
     name: npm audit (frontend)
     runs-on: ubuntu-latest
@@ -77,15 +105,27 @@ jobs:
           file: backend/Dockerfile
           load: true
           tags: ostgut-backend:scan
-      - name: Scan backend image
+      # Gating scan: table output so trivy-action passes severity/ignore-
+      # unfixed through to the CLI. Job fails on HIGH/CRITICAL fixed CVEs.
+      - name: Scan backend image (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ostgut-backend:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      # Separate non-gating SARIF run to keep an audit artifact. trivy-action
+      # writes "all severities" SARIF when format=sarif+output is set; that's
+      # by design — the file is for review, not for the gate.
+      - name: Scan backend image (SARIF artifact)
+        if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ostgut-backend:scan
           format: sarif
           output: trivy-backend.sarif
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+          exit-code: "0"
       - name: Upload SARIF
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -113,15 +153,22 @@ jobs:
           # the scan but must be present or `next build` fails.
           build-args: |
             NEXT_PUBLIC_API_URL=http://localhost:8080
-      - name: Scan frontend image
+      - name: Scan frontend image (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ostgut-frontend:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan frontend image (SARIF artifact)
+        if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ostgut-frontend:scan
           format: sarif
           output: trivy-frontend.sarif
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+          exit-code: "0"
       - name: Upload SARIF
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

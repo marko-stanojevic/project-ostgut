@@ -35,6 +35,13 @@ again.
 - `govulncheck` + `npm audit --omit=dev` in CI
 - Trivy filesystem + image scans in CI
 - All GitHub Actions pinned to commit SHAs with `# vX.Y` comments
+- `gosec` static analysis in CI (medium+ severity, SARIF artifact)
+- `POST /users/me/sessions/revoke-all` endpoint (sign out all devices)
+- `RequireJSON` middleware on `/auth`, protected, editor, admin groups
+  (rejects non-JSON POST/PUT/PATCH with 415; closes form-CSRF surface)
+- Decompression-bomb guard on image uploads (`width * height ≤ 25 MP`)
+- CSP violation reports → `/api/csp-report` (`report-uri` + Reports API
+  `report-to` with `Reporting-Endpoints` header)
 
 ---
 
@@ -92,13 +99,6 @@ re-entry for high-impact actions.
 - Reject `PUT /admin/users/:id/role`, `DELETE /admin/users/:id`, station
   bulk delete, etc. when `sudo_until < NOW() + 5 min`.
 
-### 1.5 `POST /auth/logout-all`
-**Why:** `RevokeAllForUser` already exists in the store; users have no way
-to invoke it. Required for "I lost my laptop" UX and for response after
-the audit log (1.3) flags suspicious activity.
-
-**What to do:** Trivial endpoint plus a button in account settings.
-
 ---
 
 ## Tier 2 — input/output hardening
@@ -110,38 +110,27 @@ private columns through an unfiltered key.
 
 **What to do:** Reject unknown keys with 400 in non-development builds.
 
-### 2.2 Strict `Content-Type` on JSON endpoints
-**Why:** Gin will decode form-encoded bodies on JSON handlers, which
-expands the CSRF attack surface (a `<form>` post from any origin can hit
-mutating endpoints).
-
-**What to do:** Tiny middleware that returns 415 unless
-`Content-Type: application/json` for POST/PUT/PATCH on the protected and
-admin/editor groups.
-
-### 2.3 Decompression-bomb guard on image uploads
-**Why:** A 10 MB WebP can decode to gigapixel buffers and OOM the
-container. Today only byte size is checked, not pixel area.
-
-**What to do:** After `image.DecodeConfig`, reject when
-`width * height > 25_000_000` before calling `image.Decode`.
-[backend/internal/handler/media.go](../backend/internal/handler/media.go).
-
 ### 2.4 Confirm EXIF strip on processed avatars
 **Why:** Documented in [docs/assets-management.md](assets-management.md)
 but never verified by code or test. Re-encoding through `image.Encode`
 strips EXIF as a side-effect, but assert it in a test so a future "preserve
 metadata" optimization doesn't reintroduce a privacy leak.
 
-### 2.5 SRI hashes on third-party CDN scripts
+### 2.5 SRI hashes on third-party CDN scripts (deferred)
 **Why:** CSP nonces don't help when the script is loaded by URL — a
 compromised CDN serves attacker JS. SRI ensures the browser only runs
 the exact bytes we expected.
 
-**What to do:** Add `integrity` to `<Script>` in
-[frontend/src/components/google-cast-script.tsx](../frontend/src/components/google-cast-script.tsx)
-and the New Relic loader. Integrity hashes need updating when versions bump
-— Renovate can do this automatically.
+**Why deferred:** New Relic's `nr-loader-spa-current.min.js` and Google
+Cast's `cast_sender.js` are deliberately rolling URLs — the upstream
+contract is "always latest". Pinning an SRI hash would either lock us
+to one snapshot (and break silently when the vendor ships a fix) or
+require automation that fetches and re-hashes on every upstream release.
+
+**What to do (when prioritized):** Either (a) self-host pinned versions
+of both scripts and add SRI on the local URLs, or (b) add a daily job
+that resolves the upstream URL to a versioned one, hashes it, and opens
+a PR updating the integrity attribute.
 
 ---
 
@@ -211,14 +200,23 @@ but nobody reads them. Without alerts these defenses are invisible.
 **What to do:** New Relic alert: "more than N `invalid token` /
 `refresh token reused` log lines from a single IP in 5 min" → page on-call.
 
-### 4.2 `SECURITY.md` + `/.well-known/security.txt`
-**Why:** Signals you're a real organization to security researchers and
-gives them a private disclosure channel rather than tweet-shaming.
+### 4.2 Finalize `SECURITY.md` + publish `/.well-known/security.txt`
+**Why:** Both files currently exist as placeholders only. The repo is
+private and there is no public domain, support email, or PGP key yet,
+so any concrete values would be inaccurate. Researchers parse
+`security.txt` strictly (RFC 9116) — a malformed file is worse than
+none, so the file has been removed for now and only `SECURITY.md` carries
+a "placeholder" notice.
 
-**What to do:**
-- `SECURITY.md` at repo root, RFC 9116-compliant `security.txt` served
-  from the Next.js public directory.
-- Disclosure email + GPG key (or a HackerOne page).
+**What to do (at public launch):**
+- Replace the placeholder body of [SECURITY.md](../SECURITY.md) with
+  real scope domains, a working disclosure email (e.g. dedicated
+  alias on the production domain), and an optional PGP key fingerprint.
+- Recreate `frontend/public/.well-known/security.txt` with valid
+  `Contact:`, `Expires:` (≤ 1 year out), and `Canonical:` matching the
+  production URL it will be served from.
+- Verify it serves at `https://<production-domain>/.well-known/security.txt`
+  with `Content-Type: text/plain` over HTTPS.
 
 ### 4.3 Threat model document
 **Why:** Forces explicit decisions on what we choose not to defend against
@@ -278,26 +276,12 @@ verification only.
 
 ## Tier 6 — nice-to-have, not gated on launch
 
-### 6.1 CSP report endpoint
-**Why:** Today CSP violations are silent. A `report-to` directive pointing
-at a small backend endpoint that logs the JSON body would tell us within
-hours which legitimate scripts are still missing nonces and which third-
-party origins our editorial team is loading.
-
 ### 6.2 SBOM generation
 **Why:** Some enterprise customers ask for it, and it's useful when
 responding to a CVE ("am I shipping vulnerable-package-X?").
 
 **What to do:** `syft` step in CI, attach SPDX JSON as a workflow artifact,
 publish on each release.
-
-### 6.3 `gosec` in the security workflow
-**Why:** Catches obvious patterns govulncheck doesn't (hardcoded
-credentials, weak crypto, command injection, SQL string concat) — cheap
-defense in depth.
-
-**What to do:** Add a `gosec` step to
-[.github/workflows/security.yml](../.github/workflows/security.yml).
 
 ### 6.4 Style-src nonces (drop `'unsafe-inline'`)
 **Why:** Lower priority than script nonces because `<style>` can't execute
