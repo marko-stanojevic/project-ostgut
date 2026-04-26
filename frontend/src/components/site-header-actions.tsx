@@ -1,15 +1,20 @@
+'use client'
+
 import { Link } from '@/i18n/navigation'
 import { AccountMenu } from '@/components/account-menu'
+import { Button } from '@/components/ui/button'
 
 export function AuthenticatedHeaderActions() {
     return (
         <>
-            <Link
-                href="/pricing"
-                className="hidden rounded-full border border-border/60 bg-background/70 px-3 py-2 text-xs font-medium tracking-tight text-foreground transition-colors hover:bg-secondary/60 sm:block"
+            <Button
+                variant="outline"
+                size="sm"
+                render={<Link href="/pricing" />}
+                className="hidden rounded-full sm:inline-flex"
             >
                 Upgrade
-            </Link>
+            </Button>
             <AccountMenu />
         </>
     )
@@ -24,15 +29,21 @@ export function GuestHeaderActions({
 }: GuestHeaderActionsProps) {
     return (
         <>
-            <Link href="/auth/login" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+            <Button
+                variant="ghost"
+                size="sm"
+                render={<Link href="/auth/login" />}
+                className="text-muted-foreground hover:text-foreground"
+            >
                 Login
-            </Link>
-            <Link
-                href="/auth/signup"
-                className="rounded-full bg-primary px-5 py-2 text-sm font-medium tracking-tight text-primary-foreground transition-colors hover:bg-primary/90"
+            </Button>
+            <Button
+                size="sm"
+                render={<Link href="/auth/signup" />}
+                className="rounded-full px-4"
             >
                 {signUpLabel}
-            </Link>
+            </Button>
         </>
     )
 }

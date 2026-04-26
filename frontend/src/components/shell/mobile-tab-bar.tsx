@@ -29,7 +29,7 @@ export function MobileTabBar() {
     <nav
       role="navigation"
       aria-label="Primary"
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-border/50 bg-background/95 pb-[var(--safe-bottom)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-[var(--z-tab-bar)] border-t border-border/50 bg-background/95 pb-[var(--safe-bottom)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 md:hidden"
     >
       <ul className="grid grid-cols-4">
         {items.map(({ href, icon: Icon, label }) => {
@@ -41,7 +41,7 @@ export function MobileTabBar() {
                 prefetch
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'relative flex h-14 flex-col items-center justify-center gap-0.5 text-[10px] tracking-wide transition-colors',
+                  'relative flex h-[var(--mobile-tab-bar-height)] flex-col items-center justify-center gap-0.5 text-[10px] tracking-wide transition-colors',
                   active
                     ? 'font-medium text-foreground'
                     : 'font-light text-muted-foreground hover:text-foreground'
