@@ -4,7 +4,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import { PlayerProvider } from '@/context/PlayerContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeProvider } from 'next-themes'
-import { PlayerBar } from '@/components/player-bar'
+import { GlobalPlayerSurface } from '@/components/global-player-surface'
 import { PhosphorProvider } from '@/components/phosphor-provider'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
@@ -45,7 +45,7 @@ export default async function LocaleLayout({
                 <TooltipProvider>
                   <PhosphorProvider>
                     {children}
-                    <PlayerBar />
+                    <GlobalPlayerSurface />
                   </PhosphorProvider>
                 </TooltipProvider>
               </PlayerProvider>

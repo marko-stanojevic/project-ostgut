@@ -7,7 +7,7 @@ import { Suspense } from 'react'
 import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { AccountMenu } from '@/components/account-menu'
-import { AppSidebarMobile } from '@/components/app-sidebar'
+import { MobileTabBar } from '@/components/shell/mobile-tab-bar'
 import { GoogleCastScript } from '@/components/google-cast-script'
 import { SearchInput } from '@/components/search-input'
 import { ArrowLeftIcon } from '@phosphor-icons/react'
@@ -157,7 +157,6 @@ export default function DashboardLayout({
             </div>
           </div>
         </header>
-        <AppSidebarMobile />
         <main className="relative flex-1 overflow-y-auto">
           <div
             aria-hidden="true"
@@ -167,10 +166,11 @@ export default function DashboardLayout({
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 opacity-90 bg-[image:var(--app-shell-overlay-2)] bg-[length:118%_118%,112%_112%] motion-safe:animate-[bg-fade-drift_30s_ease-in-out_infinite_alternate] motion-reduce:animate-none"
           />
-          <div className="relative p-3 pb-24 sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
+          <div className="relative p-3 pb-[calc(8.5rem+var(--safe-bottom))] sm:p-4 sm:pb-24 lg:p-6 lg:pb-24">
             {children}
           </div>
         </main>
+        <MobileTabBar />
       </div>
     </>
   )

@@ -1,3 +1,4 @@
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { cn } from '@/lib/utils'
 import { NewRelicAgent } from '@/components/NewRelicAgent'
@@ -13,6 +14,29 @@ const geistMono = Geist_Mono({
   display: 'swap',
   variable: '--font-geist-mono',
 })
+
+// PWA / iOS standalone polish.
+// `viewport-fit=cover` allows env(safe-area-inset-*) to resolve to non-zero on
+// iOS standalone and notched devices; safe-area tokens in globals.css use it.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#fafaf8' },
+    { media: '(prefers-color-scheme: dark)', color: '#0c0c0d' },
+  ],
+}
+
+export const metadata: Metadata = {
+  applicationName: 'OSTGUT',
+  appleWebApp: {
+    capable: true,
+    title: 'OSTGUT',
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: { telephone: false },
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

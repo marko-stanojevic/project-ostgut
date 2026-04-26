@@ -185,7 +185,7 @@ export function PlayerBar() {
           onClose={() => setFullScreen(false)}
         />
       )}
-    <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300 border-t border-player-bar-border bg-[image:var(--player-bar-bg)] text-player-bar-fg backdrop-blur-xl">
+    <div className="fixed bottom-0 left-0 right-0 z-50 hidden animate-in slide-in-from-bottom-4 fade-in duration-300 border-t border-player-bar-border bg-[image:var(--player-bar-bg)] text-player-bar-fg backdrop-blur-xl md:block">
       <div
         className="relative grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 py-3 sm:px-5 sm:py-3.5"
       >

@@ -82,3 +82,42 @@ Server-Sent Events are already the push path. The next step, if needed, is makin
 ### WebSocket — skip it
 
 Only worth it if the client also needs to send messages on the same connection. "Now playing" is read-only, so WebSocket adds complexity with no benefit over SSE.
+
+---
+
+## Form-factor variants — build out the new shells
+
+The two-tier token system, scale tokens (`compact` / `regular` / `wide` / `carplay` breakpoints, `--container-*` sizes, `--safe-*` insets) and form-factor split (`MobileTabBar`, `MobileMiniPlayer`, `GlobalPlayerSurface`, `/[locale]/carplay`) are in place. The remaining work is filling them in:
+
+### Compact (mobile web / iOS PWA)
+
+- Curated / Explore / Shows / Talks pages: design compact-first layouts (single-column scroll, snap-to-card), not just the desktop grid reflowed.
+- Station detail (`/curated/[id]`): mobile sheet pattern instead of full-page nav, so playback context stays visible.
+- Settings: replace the desktop two-column layout with a stacked accordion or section list.
+- Search input: promote to a sticky top bar on mobile (currently inline in the header).
+- Pull-to-refresh on Curated / Explore lists.
+
+### CarPlay (`/[locale]/carplay`)
+
+- Per-tab views (Recent, Favourites, By Genre) — currently a single grid of featured stations.
+- Voice search hand-off — the page is a placeholder for what a native CarPlay app would expose via `MPPlayableContentManager`.
+- Proper auth hand-off (currently redirects to `/auth/login`, which is not a CarPlay-friendly screen). Long term: the native CarPlay container handles auth.
+
+### iOS native app
+
+- Capacitor or native SwiftUI shell pointing at the same backend. Reuses the player preferences sync API.
+- Native AVPlayer for HLS — drop `hls.js` in the native shell.
+- MPNowPlayingInfoCenter integration for lock screen and Control Center.
+
+### Container queries — wire into specific components
+
+The `--container-{compact,regular,wide}` tokens are registered but no component currently declares `@container player/inline-size`. Apply where the layout should adapt to its container's width rather than the viewport's:
+
+- `PlayerBar` quality-badge tray (currently hides at `md:` viewport; should hide based on its own width when sidebar layouts arrive).
+- Station cards (compact vs editorial render based on the parent grid column width).
+- Sidebar collapse states.
+
+### Tablet split-view (regular)
+
+The current `md:` layout was designed for desktop. Once mobile is solid, audit `regular:` (768–1280px) — it likely needs its own treatment (sidebar collapsed by default, two-column station grid, full player bar) rather than treating "anything ≥ 768px" as desktop.
+
