@@ -254,6 +254,11 @@ func main() {
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: router,
+		// Slowloris guard. Header read must complete in 5s; full request
+		// body in 30s. Idle keep-alive caps at 60s. Tune from real traffic.
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {

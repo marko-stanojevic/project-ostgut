@@ -26,10 +26,12 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: backend/go.mod
-          cache: true
+          # Repo has a go.work at root, which makes setup-go's cache resolver
+          # look for go.sum at the repo root and fail. Pin it to the real one.
+          cache-dependency-path: backend/go.sum
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: Run govulncheck
@@ -43,22 +45,27 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: backend/go.mod
-          cache: true
+          cache-dependency-path: backend/go.sum
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest
-      # Catches patterns govulncheck cannot: hardcoded credentials, weak
-      # crypto primitives, command injection sinks, SQL string concatenation,
-      # path traversal. Failures fail the job; suppress per-line with a
+      # Gating run uses the default text formatter so findings are visible
+      # in the Actions log when the job fails. Suppress per-line with a
       # `// #nosec G104 -- justification` comment if intentional.
-      - name: Run gosec
+      - name: Run gosec (gate)
         working-directory: backend
-        run: gosec -fmt sarif -out gosec.sarif -severity medium ./...
+        run: gosec -severity medium ./...
+      # Non-gating run produces a SARIF artifact for offline review.
+      # `if: always()` so the artifact is preserved even when the gate fails.
+      - name: Run gosec (SARIF artifact)
+        if: always()
+        working-directory: backend
+        run: gosec -fmt sarif -out gosec.sarif -severity medium ./... || true
       - name: Upload SARIF
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gosec-sarif
           path: backend/gosec.sarif
@@ -128,7 +135,7 @@ jobs:
           exit-code: "0"
       - name: Upload SARIF
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-backend-sarif
           path: trivy-backend.sarif
@@ -171,7 +178,7 @@ jobs:
           exit-code: "0"
       - name: Upload SARIF
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-frontend-sarif
           path: trivy-frontend.sarif
