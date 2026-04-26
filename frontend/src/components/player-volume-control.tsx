@@ -46,7 +46,7 @@ export function PlayerVolumeControl({
               aria-pressed={Boolean(normalizationEnabled)}
               aria-label={normalizationEnabled ? 'Disable leveling' : 'Enable leveling'}
               onClick={() => onToggleNormalization(!normalizationEnabled)}
-              className="relative flex h-9 shrink-0 items-center justify-center rounded-[0.7rem] px-2.5 text-[11px] font-medium uppercase tracking-[0.18em] text-player-muted transition-colors hover:text-player-muted-hover"
+              className="relative flex h-9 shrink-0 items-center justify-center rounded-md px-2.5 ui-eyebrow text-player-muted transition-colors hover:text-player-muted-hover"
             >
               <span>Leveling</span>
               {normalizationEnabled && showNormalizationActivity ? (
