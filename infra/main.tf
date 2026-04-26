@@ -466,10 +466,10 @@ resource "azurerm_container_app" "frontend" {
 # DNS prerequisite: CNAME + TXT (asuid.*) records must already exist.
 # ──────────────────────────────────────────────
 
-resource "null_resource" "backend_custom_domain" {
+resource "terraform_data" "backend_custom_domain" {
   count = var.backend_custom_domain != "" ? 1 : 0
 
-  triggers = {
+  triggers_replace = {
     domain   = var.backend_custom_domain
     app_name = azurerm_container_app.backend.name
     env_name = azurerm_container_app_environment.main.name
@@ -479,14 +479,14 @@ resource "null_resource" "backend_custom_domain" {
   provisioner "local-exec" {
     command = <<-EOT
       az containerapp hostname add \
-        --hostname "${self.triggers.domain}" \
-        --name "${self.triggers.app_name}" \
-        --resource-group "${self.triggers.rg_name}" || true
+        --hostname "${self.triggers_replace.domain}" \
+        --name "${self.triggers_replace.app_name}" \
+        --resource-group "${self.triggers_replace.rg_name}" || true
       az containerapp hostname bind \
-        --hostname "${self.triggers.domain}" \
-        --name "${self.triggers.app_name}" \
-        --environment "${self.triggers.env_name}" \
-        --resource-group "${self.triggers.rg_name}" \
+        --hostname "${self.triggers_replace.domain}" \
+        --name "${self.triggers_replace.app_name}" \
+        --environment "${self.triggers_replace.env_name}" \
+        --resource-group "${self.triggers_replace.rg_name}" \
         --validation-method CNAME
     EOT
   }
@@ -495,9 +495,9 @@ resource "null_resource" "backend_custom_domain" {
     when    = destroy
     command = <<-EOT
       az containerapp hostname delete \
-        --hostname "${self.triggers.domain}" \
-        --name "${self.triggers.app_name}" \
-        --resource-group "${self.triggers.rg_name}" \
+        --hostname "${self.triggers_replace.domain}" \
+        --name "${self.triggers_replace.app_name}" \
+        --resource-group "${self.triggers_replace.rg_name}" \
         --yes || true
     EOT
   }
@@ -505,10 +505,10 @@ resource "null_resource" "backend_custom_domain" {
   depends_on = [azurerm_container_app.backend]
 }
 
-resource "null_resource" "frontend_custom_domain" {
+resource "terraform_data" "frontend_custom_domain" {
   count = var.frontend_custom_domain != "" ? 1 : 0
 
-  triggers = {
+  triggers_replace = {
     domain   = var.frontend_custom_domain
     app_name = azurerm_container_app.frontend.name
     env_name = azurerm_container_app_environment.main.name
@@ -518,14 +518,14 @@ resource "null_resource" "frontend_custom_domain" {
   provisioner "local-exec" {
     command = <<-EOT
       az containerapp hostname add \
-        --hostname "${self.triggers.domain}" \
-        --name "${self.triggers.app_name}" \
-        --resource-group "${self.triggers.rg_name}" || true
+        --hostname "${self.triggers_replace.domain}" \
+        --name "${self.triggers_replace.app_name}" \
+        --resource-group "${self.triggers_replace.rg_name}" || true
       az containerapp hostname bind \
-        --hostname "${self.triggers.domain}" \
-        --name "${self.triggers.app_name}" \
-        --environment "${self.triggers.env_name}" \
-        --resource-group "${self.triggers.rg_name}" \
+        --hostname "${self.triggers_replace.domain}" \
+        --name "${self.triggers_replace.app_name}" \
+        --environment "${self.triggers_replace.env_name}" \
+        --resource-group "${self.triggers_replace.rg_name}" \
         --validation-method CNAME
     EOT
   }
@@ -534,9 +534,9 @@ resource "null_resource" "frontend_custom_domain" {
     when    = destroy
     command = <<-EOT
       az containerapp hostname delete \
-        --hostname "${self.triggers.domain}" \
-        --name "${self.triggers.app_name}" \
-        --resource-group "${self.triggers.rg_name}" \
+        --hostname "${self.triggers_replace.domain}" \
+        --name "${self.triggers_replace.app_name}" \
+        --resource-group "${self.triggers_replace.rg_name}" \
         --yes || true
     EOT
   }
