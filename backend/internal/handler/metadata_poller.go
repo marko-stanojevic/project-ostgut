@@ -136,7 +136,10 @@ func (p *MetadataPoller) RefreshOnce(ctx context.Context, stream *store.StationS
 	if stream == nil || !strings.EqualFold(strings.TrimSpace(stream.MetadataResolver), "server") {
 		return
 	}
-	go func() {
+	// Intentional fire-and-forget. The caller's request context is dead
+	// the moment the HTTP response is written; using it would cancel the
+	// upstream fetch and defeat the cache-warming purpose of RefreshOnce.
+	go func() { // #nosec G118 -- see comment above
 		fetchCtx, cancel := context.WithTimeout(context.Background(), pollerFetchBudget)
 		defer cancel()
 		_, _ = p.fetchAndPersist(fetchCtx, stream)

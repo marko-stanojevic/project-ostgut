@@ -36,6 +36,11 @@ const (
 	maxAvatarBytes      int64 = 5 * 1024 * 1024
 	maxStationIconBytes int64 = 10 * 1024 * 1024
 	maxSniffBytes             = 512
+	// maxImagePixels caps the decoded pixel area to defeat decompression
+	// bombs (e.g. a 10 MB WebP that decodes to a multi-gigapixel buffer
+	// and OOMs the container). 25 MP comfortably covers any legitimate
+	// avatar or station icon at every supported variant size.
+	maxImagePixels = 25_000_000
 )
 
 var allowedMediaMIMETypes = map[string]struct{}{
@@ -413,6 +418,15 @@ func (h *Handler) UploadMediaObject(c *gin.Context) {
 	if _, _, err := image.DecodeConfig(bytes.NewReader(payload)); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid image payload"})
 		return
+	}
+
+	if w, h, err := decodeImageDimensions(payload); err == nil {
+		// Bomb guard: refuse anything that would expand to an absurd buffer.
+		// Same threshold is enforced again inside the processing pipeline.
+		if int64(w)*int64(h) > maxImagePixels {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "image dimensions exceed maximum"})
+			return
+		}
 	}
 
 	if err := h.putMediaObject(c.Request.Context(), asset.StorageKeyOriginal, payload, detectedMIMEType); err != nil {
@@ -814,6 +828,9 @@ func (h *Handler) processUploadedAsset(ctx context.Context, asset *store.MediaAs
 	width, height, err := decodeImageDimensions(payload)
 	if err != nil {
 		return nil, "invalid image payload", nil
+	}
+	if int64(width)*int64(height) > maxImagePixels {
+		return nil, "image dimensions exceed maximum", nil
 	}
 
 	decodedImage, err := decodeImage(payload)

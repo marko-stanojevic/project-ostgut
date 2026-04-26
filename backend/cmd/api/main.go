@@ -179,6 +179,7 @@ func main() {
 	})
 	authGroup := router.Group("/auth")
 	authGroup.Use(authLimiter)
+	authGroup.Use(middleware.RequireJSON())
 	{
 		authGroup.POST("/login", h.Login)
 		authGroup.POST("/register", h.Register)
@@ -204,9 +205,11 @@ func main() {
 	// Protected routes (JWT required)
 	protected := router.Group("/")
 	protected.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
+	protected.Use(middleware.RequireJSON())
 	{
 		protected.GET("/users/me", h.GetProfile)
 		protected.PUT("/users/me", h.UpdateProfile)
+		protected.POST("/users/me/sessions/revoke-all", h.LogoutAll)
 		protected.GET("/users/me/player-preferences", h.GetPlayerPreferences)
 		protected.PUT("/users/me/player-preferences", h.UpdatePlayerPreferences)
 		protected.GET("/billing/subscription", h.GetSubscription)
@@ -223,6 +226,7 @@ func main() {
 	editor := router.Group("/editor")
 	editor.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
 	editor.Use(middleware.RequireRole(store.RoleEditor, store.RoleAdmin))
+	editor.Use(middleware.RequireJSON())
 	{
 		editor.GET("/overview", h.AdminOverview)
 		editor.GET("/stations", h.AdminListStations)
@@ -239,6 +243,7 @@ func main() {
 	admin := router.Group("/admin")
 	admin.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
 	admin.Use(middleware.RequireRole(store.RoleAdmin))
+	admin.Use(middleware.RequireJSON())
 	{
 		admin.GET("/overview", h.AdminOverview)
 		admin.GET("/stats", h.AdminStats)
@@ -249,6 +254,11 @@ func main() {
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: router,
+		// Slowloris guard. Header read must complete in 5s; full request
+		// body in 30s. Idle keep-alive caps at 60s. Tune from real traffic.
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/authtoken"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -347,6 +348,25 @@ func (h *Handler) Logout(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// LogoutAll revokes every active refresh token for the authenticated user.
+// Used when a user suspects compromise ("sign out all devices"). Sits behind
+// the JWT middleware on the protected group — not under /auth — because it
+// requires an access token to identify the user.
+// POST /users/me/sessions/revoke-all
+func (h *Handler) LogoutAll(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if err := h.auth.refresh.RevokeAllForUser(c.Request.Context(), userID); err != nil {
+		h.log.Error("logout-all: revoke refresh tokens", "user_id", userID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
 	}
 	c.Status(http.StatusNoContent)
 }

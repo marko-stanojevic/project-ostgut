@@ -8,7 +8,6 @@ import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { AccountMenu } from '@/components/account-menu'
 import { MobileTabBar } from '@/components/shell/mobile-tab-bar'
-import { GoogleCastScript } from '@/components/google-cast-script'
 import { SearchInput } from '@/components/search-input'
 import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
@@ -124,7 +123,6 @@ export default function DashboardLayout({
 
   return (
     <>
-      <GoogleCastScript />
       <div className="flex h-screen flex-col overflow-hidden">
         <header className="shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
           <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:gap-10 md:px-5 md:py-0">
