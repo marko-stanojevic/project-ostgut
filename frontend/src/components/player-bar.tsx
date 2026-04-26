@@ -9,6 +9,7 @@ import { PlayerDeviceMenu } from '@/components/player-device-menu'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { buildMetadataBadges } from '@/lib/metadata-badges'
+import { resolveDisplayStream } from '@/components/player/resolve-stream'
 import type { NowPlaying } from '@/hooks/useNowPlaying'
 import type { StationStream } from '@/types/player'
 import {
@@ -48,29 +49,6 @@ function getMetadataBadges(
   nowPlaying: NowPlaying | null,
 ): PlayerStatBadge[] {
   return buildMetadataBadges(stream, nowPlaying).map((label) => ({ label }))
-}
-
-function resolveDisplayStream(
-  station: { streams?: StationStream[] } | null,
-  currentStream: StationStream | null,
-): StationStream | null {
-  const streams = station?.streams ?? []
-  if (currentStream) {
-    const latest = streams.find((stream) => {
-      if (currentStream.id && stream.id === currentStream.id) return true
-      if (currentStream.resolvedUrl && stream.resolvedUrl === currentStream.resolvedUrl) return true
-      if (currentStream.url && stream.url === currentStream.url) return true
-      return stream.priority === currentStream.priority
-    })
-    return latest ?? currentStream
-  }
-
-  if (streams.length === 0) return null
-  const active = streams.filter((st) => st.isActive)
-  if (active.length > 0) {
-    return [...active].sort((a, b) => a.priority - b.priority)[0]
-  }
-  return [...streams].sort((a, b) => a.priority - b.priority)[0]
 }
 
 function PlayerMetadataTicker({ text, className }: { text: string; className?: string }) {
@@ -207,7 +185,7 @@ export function PlayerBar() {
           onClose={() => setFullScreen(false)}
         />
       )}
-    <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300 border-t border-[var(--player-bar-border)] bg-[image:var(--player-bar-bg)] text-player-bar-fg backdrop-blur-xl">
+    <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300 border-t border-player-bar-border bg-[image:var(--player-bar-bg)] text-player-bar-fg backdrop-blur-xl">
       <div
         className="relative grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 py-3 sm:px-5 sm:py-3.5"
       >
@@ -215,8 +193,8 @@ export function PlayerBar() {
         {/* Station identity — left */}
         <div className="flex min-w-0 max-w-[calc(50vw-5.5rem)] items-center justify-self-start gap-3 overflow-hidden sm:max-w-[calc(50vw-7.5rem)] sm:gap-3.5">
           <div
-            className={`absolute bottom-[0.2rem] left-4 flex h-[6.8rem] w-[6.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.68rem] bg-player-bar-artwork-bg shadow-[0_10px_30px_rgba(0,0,0,0.28)] transition-all duration-500 sm:bottom-[0.25rem] sm:left-5 sm:h-[8.4rem] sm:w-[8.4rem] sm:rounded-[0.82rem] ${isPlaying
-              ? 'shadow-[0_0_20px_var(--player-accent-glow),0_14px_34px_rgba(0,0,0,0.32)]'
+            className={`absolute bottom-[0.2rem] left-4 flex h-[6.8rem] w-[6.8rem] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-player-bar-artwork-bg shadow-player-artwork transition-all duration-500 sm:bottom-[0.25rem] sm:left-5 sm:h-[8.4rem] sm:w-[8.4rem] sm:rounded-2xl ${isPlaying
+              ? 'shadow-player-artwork-glow'
               : ''
               }`}
           >
@@ -230,7 +208,7 @@ export function PlayerBar() {
             <p className="truncate text-[1rem] font-semibold tracking-tight text-player-bar-fg sm:text-[1.4rem]">
               {station?.name ?? '—'}
             </p>
-            <div className={`flex h-3.5 min-w-0 items-center ${isError ? 'text-red-300' : 'text-player-bar-secondary'}`}>
+            <div className={`flex h-3.5 min-w-0 items-center ${isError ? 'text-destructive' : 'text-player-bar-secondary'}`}>
               {!isReconnecting && secondaryLine ? (
                 <PlayerMetadataTicker className="w-full min-w-0 text-[11px] sm:text-[13px]" text={secondaryLine} />
               ) : null}
@@ -310,8 +288,8 @@ export function PlayerBar() {
                       key={badge.label}
                       className={
                         badge.tone === 'accent'
-                          ? 'shrink-0 rounded-[0.34rem] border border-player-accent-border bg-player-accent-soft px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-[0.12em] text-player-accent'
-                          : 'shrink-0 rounded-[0.34rem] border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em] text-player-bar-muted'
+                          ? 'shrink-0 rounded-xs border border-player-accent-border bg-player-accent-soft px-1.5 py-0.5 text-[8px] font-medium tabular-nums uppercase tracking-wider text-player-accent'
+                          : 'shrink-0 rounded-xs border border-player-bar-chip-border bg-player-bar-chip-bg px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wider text-player-bar-muted'
                       }
                     >
                       {badge.label}
@@ -327,7 +305,7 @@ export function PlayerBar() {
                   aria-expanded={statsExpanded}
                   aria-label={statsExpanded ? 'Hide stats' : 'Show stats'}
                   onClick={() => setStatsExpanded((prev) => !prev)}
-                  className="flex h-10 shrink-0 items-center justify-center rounded-[0.7rem] px-2.5 text-[11px] font-medium uppercase tracking-[0.18em] text-player-bar-muted transition-colors hover:text-player-bar-icon-hover"
+                  className="flex h-10 shrink-0 items-center justify-center rounded-md px-2.5 ui-eyebrow text-player-bar-muted transition-colors hover:text-player-bar-icon-hover"
                 >
                   <span>Stats</span>
                 </TooltipTrigger>

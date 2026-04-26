@@ -366,7 +366,7 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="space-y-8">
-      <div className="rounded-[2rem] border border-border/60 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),rgba(255,255,255,0.72)_45%,rgba(255,255,255,0.58)),linear-gradient(135deg,rgba(245,241,232,0.88),rgba(255,255,255,0.62))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.04),rgba(255,255,255,0.02)_45%,rgba(255,255,255,0.01)),linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] sm:p-8">
+      <div className="ui-admin-hero rounded-3xl border border-border/60 p-6 shadow-sm sm:p-8">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl space-y-3">
             <p className="text-xs uppercase tracking-[0.26em] text-muted-foreground">{t('panel_label')}</p>

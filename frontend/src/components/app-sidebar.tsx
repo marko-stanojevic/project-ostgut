@@ -19,7 +19,7 @@ const settingsSections = [
 
 function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-5 text-[9px] font-semibold uppercase tracking-[0.36em] text-muted-foreground/50">
+    <p className="ui-eyebrow-tight px-5 text-muted-foreground/50">
       {children}
     </p>
   )
@@ -63,7 +63,7 @@ function NowPlayingIndicator() {
   if (!station || state === 'idle') return null
 
   return (
-    <span className="ml-auto flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.28em] text-muted-foreground/80">
+    <span className="ml-auto flex items-center gap-2 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/80">
       <span className={cn(
         'h-1.5 w-1.5 rounded-full',
         state === 'playing' ? 'ui-nav-live-dot animate-pulse' : 'bg-muted-foreground/40'

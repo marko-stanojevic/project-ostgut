@@ -33,11 +33,11 @@ export function AuthShell({
 
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center justify-center">
         <div className={cn(
-          'w-full rounded-[2rem] border border-border/50 bg-card/80 px-6 py-8 shadow-xl backdrop-blur-xl sm:px-8',
+          'w-full rounded-3xl border border-border/50 bg-card/80 px-6 py-8 shadow-xl backdrop-blur-xl sm:px-8',
           panelClassName
         )}>
           <div className="flex justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-foreground/15 bg-foreground text-background shadow-[0_10px_32px_rgba(12,12,12,0.16)]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-foreground/15 bg-foreground text-background shadow-auth-mark">
               {mark ?? <RadioIcon className="h-6 w-6" weight="fill" />}
             </div>
           </div>
@@ -45,12 +45,12 @@ export function AuthShell({
           <div className="mt-6 space-y-2 text-center">
             {badge ? (
               <div className="flex justify-center">
-                <div className="ui-editorial-badge rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em]">
+                <div className="ui-editorial-badge ui-eyebrow rounded-full px-3 py-1">
                   {badge}
                 </div>
               </div>
             ) : null}
-            <h1 className="text-4xl font-medium tracking-[-0.04em] text-foreground sm:text-5xl">{title}</h1>
+            <h1 className="text-4xl font-medium tracking-tight text-foreground sm:text-5xl">{title}</h1>
             {description ? (
               <p className="mx-auto max-w-sm text-sm leading-relaxed text-muted-foreground sm:text-base">
                 {description}

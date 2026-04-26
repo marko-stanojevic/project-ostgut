@@ -103,7 +103,7 @@ export function PlayerDeviceMenu() {
       </Tooltip>
       <DropdownMenuContent align="end" className="w-80 p-1.5">
         <div className="px-3 pt-2 pb-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-player-bar-muted">
+          <p className="ui-eyebrow text-player-bar-muted">
             Connect
           </p>
         </div>

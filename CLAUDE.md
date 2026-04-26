@@ -177,11 +177,16 @@ project-ostgut/
 ## Frontend conventions
 
 - **shadcn v4 / Radix v2**: uses `render` prop pattern, NOT `asChild`. Example: `<SidebarMenuButton render={<Link href="/" />}>`
-- **Tailwind v4**: uses `@import "tailwindcss"` + `@theme inline` block in `globals.css`. Do NOT use `@tailwind base/components/utilities`
-- **Theme**: oklch color tokens, dark mode via `next-themes` + `.dark` class
+- **Tailwind v4**: uses `@import "tailwindcss"` + `@theme inline` block in `globals.css`. Do NOT use `@tailwind base/components/utilities`. There is NO `tailwind.config.js`.
+- **Theme**: four themes (`light`, `dark`, `sepia`, `midnight`) selected via `next-themes` + `data-theme` attribute. Tokens are organized in **two tiers** in `src/app/globals.css`:
+  - **Tier 1 (per-theme blocks)**: only the values that visibly differ between themes (palette, glassy gradients, shadow tint).
+  - **Tier 2 (`:root` after the theme blocks)**: every component-scope token derived from the primitives via `color-mix(in oklab, ...)`. Adding a new theme requires editing only Tier 1.
+  - **Scale tokens**: radius (`--radius-{2xs..3xl,full}`), tracking (`--tracking-{tighter..widest}`), motion (`--motion-{fast,base,slow,emphasized}` + `--ease-{standard,emphasized,out-soft}`), safe area (`--safe-{top,bottom,left,right}` from `env()`).
+  - **Breakpoints**: `compact` (480px), `regular` (768px), `wide` (1280px), `carplay` (800px landscape) in addition to the Tailwind defaults.
+  - **Container queries**: `--container-{compact,regular,wide}` for component-scoped responsive layout.
 - **Auth**: `useAuth()` from `@/context/AuthContext` gives `{ user, session, signOut }`. `session.accessToken` is the JWT for backend calls
 - **API calls**: use `process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'` as base URL, always pass `Authorization: Bearer ${session.accessToken}` on protected endpoints
-- **Audio player**: global state in `PlayerContext` — persists across navigation. Player bar is pinned to bottom of the protected layout. Volume and last station survive page reload (localStorage) and are synced per-user to the backend
+- **Audio player**: global state in `PlayerContext` — persists across navigation. Player bar is pinned to bottom of the protected layout. Volume and last station survive page reload (localStorage) and are synced per-user to the backend. Shared player primitives (stream resolution, waveform bars) live in `src/components/player/` and are reused by both the bar and the full-screen view.
 
 ## Radio platform
 
