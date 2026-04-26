@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ──────────────────────────────────────────────
 # Stage 2 – runtime
 # ──────────────────────────────────────────────
-FROM alpine:3.22 AS runtime
+FROM alpine:3.23 AS runtime
 
 RUN apk add --no-cache ca-certificates ffmpeg \
     && adduser -D -u 65532 nonroot
