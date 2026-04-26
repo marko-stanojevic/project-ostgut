@@ -24,11 +24,11 @@ type adminOverviewResponse struct {
 }
 
 type adminOverviewSummary struct {
-	ApprovedStations     int `json:"approved_stations"`
-	FeaturedStations     int `json:"featured_stations"`
+	ApprovedStations      int `json:"approved_stations"`
+	FeaturedStations      int `json:"featured_stations"`
 	StationsNeedingAction int `json:"stations_needing_action"`
-	HealthyStations      int `json:"healthy_stations"`
-	ActiveStreams        int `json:"active_streams"`
+	HealthyStations       int `json:"healthy_stations"`
+	ActiveStreams         int `json:"active_streams"`
 }
 
 type adminOverviewMetric struct {
@@ -43,6 +43,7 @@ type adminOverviewSection struct {
 	ID          string                       `json:"id"`
 	Title       string                       `json:"title"`
 	Description string                       `json:"description"`
+	Severity    string                       `json:"severity"`
 	Count       int                          `json:"count"`
 	Stations    []adminOverviewStationHealth `json:"stations"`
 }
@@ -67,20 +68,20 @@ type adminOverviewIssue struct {
 }
 
 type adminOverviewAccumulator struct {
-	approvedStations     int
-	featuredStations     int
+	approvedStations      int
+	featuredStations      int
 	stationsNeedingAction int
-	healthyStations      int
-	activeStreams        int
-	probeFailures        int
-	metadataFailures     int
-	metadataBlocked      int
-	staleChecks          int
-	lowReliability       int
-	editorialGaps        int
-	operations           []adminOverviewStationHealth
-	metadata             []adminOverviewStationHealth
-	editorial            []adminOverviewStationHealth
+	healthyStations       int
+	activeStreams         int
+	probeFailures         int
+	metadataFailures      int
+	metadataBlocked       int
+	staleChecks           int
+	lowReliability        int
+	editorialGaps         int
+	operations            []adminOverviewStationHealth
+	metadata              []adminOverviewStationHealth
+	editorial             []adminOverviewStationHealth
 }
 
 // AdminOverview handles GET /admin/overview.
@@ -193,11 +194,11 @@ func (h *Handler) AdminOverview(c *gin.Context) {
 			{ID: "low_reliability", Label: "Low reliability", Value: acc.lowReliability, Severity: "warning", Description: "Approved stations whose best active stream reliability is still below the healthy threshold."},
 			{ID: "editorial_gaps", Label: "Editorial gaps", Value: acc.editorialGaps, Severity: "notice", Description: "Approved stations missing artwork or overview copy."},
 		},
-		Sections: []adminOverviewSection{
-			{ID: "operations", Title: "Operations watchlist", Description: "Stations with probe failures, unhealthy streams, or stale operational checks.", Count: len(acc.operations), Stations: limitAdminOverviewStations(acc.operations)},
-			{ID: "metadata", Title: "Metadata watchlist", Description: "Stations with metadata failures, disabled metadata, resolver gaps, or stale metadata checks.", Count: len(acc.metadata), Stations: limitAdminOverviewStations(acc.metadata)},
-			{ID: "editorial", Title: "Editorial gaps", Description: "Approved stations that are live in the catalog but still missing key presentation details.", Count: len(acc.editorial), Stations: limitAdminOverviewStations(acc.editorial)},
-		},
+		Sections: orderAdminOverviewSections([]adminOverviewSection{
+			{ID: "operations", Title: "Stream health", Description: "Stations with probe failures, unhealthy streams, or stale operational checks.", Severity: "critical", Count: len(acc.operations), Stations: limitAdminOverviewStations(acc.operations)},
+			{ID: "metadata", Title: "Metadata health", Description: "Stations with metadata failures, disabled metadata, resolver gaps, or stale metadata checks.", Severity: "warning", Count: len(acc.metadata), Stations: limitAdminOverviewStations(acc.metadata)},
+			{ID: "editorial", Title: "Editorial gaps", Description: "Approved stations that are live in the catalog but still missing key presentation details.", Severity: "notice", Count: len(acc.editorial), Stations: limitAdminOverviewStations(acc.editorial)},
+		}),
 		GeneratedAt: now.Format(time.RFC3339),
 	}
 
@@ -389,4 +390,11 @@ func adminOverviewIssueWeight(severity string) int {
 	default:
 		return 1
 	}
+}
+
+func orderAdminOverviewSections(sections []adminOverviewSection) []adminOverviewSection {
+	sort.SliceStable(sections, func(i, j int) bool {
+		return adminOverviewIssueWeight(sections[i].Severity) > adminOverviewIssueWeight(sections[j].Severity)
+	})
+	return sections
 }

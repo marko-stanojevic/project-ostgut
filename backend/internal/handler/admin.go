@@ -107,13 +107,13 @@ type adminStationResponse struct {
 }
 
 // adminStationWithStreams fetches the stream variants for s and builds the
-// full admin response. Falls back to the station's legacy stream_url on error.
-func (h *Handler) adminStationWithStreams(ctx context.Context, s *store.Station) adminStationResponse {
+// full admin response.
+func (h *Handler) adminStationWithStreams(ctx context.Context, s *store.Station) (adminStationResponse, error) {
 	streamMap, err := h.attachStreamsToStations(ctx, []*store.Station{s})
 	if err != nil {
-		return toAdminStationResponse(s, defaultStreamResponseForStation(s))
+		return adminStationResponse{}, err
 	}
-	return toAdminStationResponse(s, streamMap[s.ID])
+	return toAdminStationResponse(s, streamMap[s.ID]), nil
 }
 
 type adminStreamRequest struct {
@@ -136,38 +136,38 @@ func toAdminStationResponse(s *store.Station, streams []streamResponse) adminSta
 // Creates a station manually from admin input.
 func (h *Handler) AdminCreateStation(c *gin.Context) {
 	var req struct {
-		Name        string   `json:"name" binding:"required"`
-		StreamURL   string   `json:"stream_url" binding:"required"`
-		Homepage    string   `json:"homepage"`
-		Logo        string   `json:"logo"`
-		GenreTags   []string `json:"genre_tags"`
-		SubgenreTags []string `json:"subgenre_tags"`
-		Language    string   `json:"language"`
-		Country     string   `json:"country"`
-		City        string   `json:"city"`
-		StyleTags   []string `json:"style_tags"`
-		FormatTags  []string `json:"format_tags"`
-		TextureTags []string `json:"texture_tags"`
-		Status      string   `json:"status"`
-		Featured    bool     `json:"featured"`
-		Overview    *string  `json:"overview"`
-		EditorialReview *string `json:"editorial_review"`
-		InternalNotes   *string `json:"internal_notes"`
+		Name            string               `json:"name" binding:"required"`
+		Streams         []adminStreamRequest `json:"streams" binding:"required"`
+		Homepage        string               `json:"homepage"`
+		Logo            string               `json:"logo"`
+		GenreTags       []string             `json:"genre_tags"`
+		SubgenreTags    []string             `json:"subgenre_tags"`
+		Language        string               `json:"language"`
+		Country         string               `json:"country"`
+		City            string               `json:"city"`
+		StyleTags       []string             `json:"style_tags"`
+		FormatTags      []string             `json:"format_tags"`
+		TextureTags     []string             `json:"texture_tags"`
+		Status          string               `json:"status"`
+		Featured        bool                 `json:"featured"`
+		Overview        *string              `json:"overview"`
+		EditorialReview *string              `json:"editorial_review"`
+		InternalNotes   *string              `json:"internal_notes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and at least one stream are required"})
 		return
 	}
 
 	name := strings.TrimSpace(req.Name)
-	streamURL := strings.TrimSpace(req.StreamURL)
-	if name == "" || streamURL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name and stream_url are required"})
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
 		return
 	}
-	parsed, err := url.ParseRequestURI(streamURL)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "stream_url must be a valid absolute URL"})
+
+	streams, err := h.buildStationStreams(c, req.Streams)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -183,27 +183,23 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 	}
 
 	manual := store.ManualStationInput{
-		Name:        name,
-		StreamURL:   streamURL,
-		Homepage:    strings.TrimSpace(req.Homepage),
-		Logo:        strings.TrimSpace(req.Logo),
-		GenreTags:   req.GenreTags,
-		SubgenreTags: req.SubgenreTags,
-		Language:    strings.TrimSpace(req.Language),
-		Country:     strings.TrimSpace(req.Country),
-		City:        strings.TrimSpace(req.City),
-		StyleTags:   req.StyleTags,
-		FormatTags:  req.FormatTags,
-		TextureTags: req.TextureTags,
-		Status:      status,
-		Featured:    req.Featured,
-		Overview:    normalizeOptionalText(req.Overview),
+		Name:            name,
+		Homepage:        strings.TrimSpace(req.Homepage),
+		Logo:            strings.TrimSpace(req.Logo),
+		GenreTags:       req.GenreTags,
+		SubgenreTags:    req.SubgenreTags,
+		Language:        strings.TrimSpace(req.Language),
+		Country:         strings.TrimSpace(req.Country),
+		City:            strings.TrimSpace(req.City),
+		StyleTags:       req.StyleTags,
+		FormatTags:      req.FormatTags,
+		TextureTags:     req.TextureTags,
+		Status:          status,
+		Featured:        req.Featured,
+		Overview:        normalizeOptionalText(req.Overview),
 		EditorialReview: normalizeOptionalText(req.EditorialReview),
 		InternalNotes:   normalizeOptionalText(req.InternalNotes),
 	}
-
-	probe := radio.LightClassifyStreamURL(streamURL)
-	probe.Bitrate = resolveStreamBitrate(nil, streamURL, probe)
 
 	created, err := h.admin.stations.CreateManual(c.Request.Context(), manual)
 	if err != nil {
@@ -216,30 +212,11 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
-	_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), created.ID, store.StationStreamInput{
-		URL:                    streamURL,
-		ResolvedURL:            probe.ResolvedURL,
-		Kind:                   probe.Kind,
-		Container:              probe.Container,
-		Transport:              probe.Transport,
-		MimeType:               probe.MimeType,
-		Codec:                  probe.Codec,
-		Bitrate:                probe.Bitrate,
-		BitDepth:               probe.BitDepth,
-		SampleRateHz:           probe.SampleRateHz,
-		SampleRateConfidence:   probe.SampleRateConfidence,
-		Channels:               probe.Channels,
-		Priority:               1,
-		IsActive:               true,
-		LoudnessIntegratedLUFS: probe.LoudnessIntegratedLUFS,
-		LoudnessPeakDBFS:       probe.LoudnessPeakDBFS,
-		LoudnessSampleDuration: probe.LoudnessSampleDuration,
-		LoudnessMeasuredAt:     probe.LoudnessMeasuredAt,
-		LoudnessStatus:         probe.LoudnessStatus,
-		MetadataEnabled:        true,
-		MetadataType:           "auto",
-		HealthScore:            0,
-	})
+	if _, err := h.admin.streams.ReplaceForStation(c.Request.Context(), created.ID, streams); err != nil {
+		h.log.Error("admin create station streams", "station_id", created.ID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
 
 	created, err = h.admin.stations.GetByIDAdmin(c.Request.Context(), created.ID)
 	if err != nil {
@@ -248,7 +225,14 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, h.adminStationWithStreams(c.Request.Context(), created))
+	resp, err := h.adminStationWithStreams(c.Request.Context(), created)
+	if err != nil {
+		h.log.Error("admin create station streams", "station_id", created.ID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
 }
 
 // AdminProbeStationStream handles POST /admin/stations/:id/streams/:streamID/probe.
@@ -465,7 +449,14 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, h.adminStationWithStreams(c.Request.Context(), reloaded))
+	resp, err := h.adminStationWithStreams(c.Request.Context(), reloaded)
+	if err != nil {
+		h.log.Error("admin probe stream reload streams", "station_id", stationID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // AdminListStations handles GET /admin/stations?status=pending|approved|rejected
@@ -518,7 +509,14 @@ func (h *Handler) AdminGetStation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, h.adminStationWithStreams(c.Request.Context(), s))
+	resp, err := h.adminStationWithStreams(c.Request.Context(), s)
+	if err != nil {
+		h.log.Error("admin get station streams", "station_id", s.ID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // AdminGetStationIcon handles GET /admin/stations/:id/icon
@@ -578,24 +576,23 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 
 	var req struct {
-		Name        *string               `json:"name"`
-		StreamURL   *string               `json:"stream_url"`
-		Streams     *[]adminStreamRequest `json:"streams"`
-		Website     *string               `json:"website"`
-		Logo        *string               `json:"logo"`
-		GenreTags   *[]string             `json:"genre_tags"`
-		SubgenreTags *[]string            `json:"subgenre_tags"`
-		Language    *string               `json:"language"`
-		Country     *string               `json:"country"`
-		City        *string               `json:"city"`
-		StyleTags   *[]string             `json:"style_tags"`
-		FormatTags  *[]string             `json:"format_tags"`
-		TextureTags *[]string             `json:"texture_tags"`
-		Status      *string               `json:"status"`
-		Overview    *string               `json:"overview"`
-		EditorialReview *string           `json:"editorial_review"`
-		InternalNotes   *string           `json:"internal_notes"`
-		Featured    *bool                 `json:"featured"`
+		Name            *string               `json:"name"`
+		Streams         *[]adminStreamRequest `json:"streams"`
+		Website         *string               `json:"website"`
+		Logo            *string               `json:"logo"`
+		GenreTags       *[]string             `json:"genre_tags"`
+		SubgenreTags    *[]string             `json:"subgenre_tags"`
+		Language        *string               `json:"language"`
+		Country         *string               `json:"country"`
+		City            *string               `json:"city"`
+		StyleTags       *[]string             `json:"style_tags"`
+		FormatTags      *[]string             `json:"format_tags"`
+		TextureTags     *[]string             `json:"texture_tags"`
+		Status          *string               `json:"status"`
+		Overview        *string               `json:"overview"`
+		EditorialReview *string               `json:"editorial_review"`
+		InternalNotes   *string               `json:"internal_notes"`
+		Featured        *bool                 `json:"featured"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -604,22 +601,21 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 
 	// Merge: use incoming value if provided, else keep current.
 	u := store.EnrichmentUpdate{
-		Name:        current.Name,
-		StreamURL:   current.StreamURL,
-		Homepage:    current.Homepage,
-		Logo:        current.Logo,
-		GenreTags:   current.GenreTags,
-		SubgenreTags: current.SubgenreTags,
-		Language:    current.Language,
-		Country:     current.Country,
-		City:        current.City,
-		StyleTags:   current.StyleTags,
-		FormatTags:  current.FormatTags,
-		TextureTags: current.TextureTags,
-		Status:      current.Status,
+		Name:            current.Name,
+		Homepage:        current.Homepage,
+		Logo:            current.Logo,
+		GenreTags:       current.GenreTags,
+		SubgenreTags:    current.SubgenreTags,
+		Language:        current.Language,
+		Country:         current.Country,
+		City:            current.City,
+		StyleTags:       current.StyleTags,
+		FormatTags:      current.FormatTags,
+		TextureTags:     current.TextureTags,
+		Status:          current.Status,
 		EditorialReview: current.EditorialReview,
 		InternalNotes:   current.InternalNotes,
-		Featured:    current.Featured,
+		Featured:        current.Featured,
 	}
 	if req.Name != nil {
 		trimmed := strings.TrimSpace(*req.Name)
@@ -628,19 +624,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 			return
 		}
 		u.Name = trimmed
-	}
-	if req.StreamURL != nil {
-		trimmed := strings.TrimSpace(*req.StreamURL)
-		if trimmed == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "stream_url cannot be empty"})
-			return
-		}
-		parsed, err := url.ParseRequestURI(trimmed)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "stream_url must be a valid absolute URL"})
-			return
-		}
-		u.StreamURL = trimmed
 	}
 	if req.Website != nil {
 		u.Homepage = strings.TrimSpace(*req.Website)
@@ -696,14 +679,11 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	}
 
 	// Rebuild stream variants when the caller provides an explicit list.
-	// When only stream_url changed (no list), upsert the primary without probing.
-	var (
-		rebuiltStreams []store.StationStreamInput
-		primaryInput   *store.StationStreamInput
-	)
+	// When only streams changed, upsert the primary without probing.
+	var rebuiltStreams []store.StationStreamInput
 
 	if req.Streams != nil && len(*req.Streams) > 0 {
-		inputs, err := h.buildStationStreams(c, *req.Streams, u.StreamURL)
+		inputs, err := h.buildStationStreams(c, *req.Streams)
 		if err != nil {
 			h.log.Error("admin update station streams probe", "error", err)
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
@@ -711,37 +691,6 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		}
 		mergeExistingProbeData(inputs, currentStreams)
 		rebuiltStreams = inputs
-	} else if req.StreamURL != nil {
-		classified := radio.LightClassifyStreamURL(u.StreamURL)
-		classified.Bitrate = resolveStreamBitrate(nil, u.StreamURL, classified)
-		metadataEnabled := true
-		for _, stream := range currentStreams {
-			if stream.Priority != 1 {
-				continue
-			}
-			metadataEnabled = stream.MetadataEnabled
-			break
-		}
-		in := store.StationStreamInput{
-			URL:                  u.StreamURL,
-			ResolvedURL:          classified.ResolvedURL,
-			Kind:                 classified.Kind,
-			Container:            classified.Container,
-			Transport:            classified.Transport,
-			MimeType:             classified.MimeType,
-			Codec:                classified.Codec,
-			Bitrate:              classified.Bitrate,
-			BitDepth:             classified.BitDepth,
-			SampleRateHz:         classified.SampleRateHz,
-			SampleRateConfidence: classified.SampleRateConfidence,
-			Channels:             classified.Channels,
-			Priority:             1,
-			IsActive:             true,
-			MetadataEnabled:      metadataEnabled,
-			MetadataType:         metadata.TypeAuto,
-		}
-		mergeExistingProbeData([]store.StationStreamInput{in}, currentStreams)
-		primaryInput = &in
 	}
 
 	if len(rebuiltStreams) > 0 {
@@ -766,17 +715,20 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 		}
 	}
 
-	if primaryInput != nil {
-		_ = h.admin.streams.UpsertPrimaryForStation(c.Request.Context(), id, *primaryInput)
-	}
-
 	updated, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error("admin update station reload", "station_id", id, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, h.adminStationWithStreams(c.Request.Context(), updated))
+	resp, err := h.adminStationWithStreams(c.Request.Context(), updated)
+	if err != nil {
+		h.log.Error("admin update station streams", "station_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func normalizeOptionalText(raw *string) *string {
@@ -802,8 +754,8 @@ func normalizeMetadataType(raw string) string {
 	}
 }
 
-func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []adminStreamRequest {
-	streams := make([]adminStreamRequest, 0, len(raw)+1)
+func normalizeAdminStreams(raw []adminStreamRequest) []adminStreamRequest {
+	streams := make([]adminStreamRequest, 0, len(raw))
 	for _, stream := range raw {
 		if strings.TrimSpace(stream.URL) == "" {
 			continue
@@ -815,15 +767,6 @@ func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []admin
 			Bitrate:         stream.Bitrate,
 			MetadataEnabled: stream.MetadataEnabled,
 			MetadataType:    stream.MetadataType,
-		})
-	}
-	if len(streams) == 0 && strings.TrimSpace(fallbackURL) != "" {
-		active := true
-		streams = append(streams, adminStreamRequest{
-			URL:             strings.TrimSpace(fallbackURL),
-			Priority:        1,
-			IsActive:        &active,
-			MetadataEnabled: &active,
 		})
 	}
 
@@ -847,9 +790,8 @@ func normalizeAdminStreams(raw []adminStreamRequest, fallbackURL string) []admin
 func (h *Handler) buildStationStreams(
 	ctx *gin.Context,
 	raw []adminStreamRequest,
-	fallbackURL string,
 ) ([]store.StationStreamInput, error) {
-	streams := normalizeAdminStreams(raw, fallbackURL)
+	streams := normalizeAdminStreams(raw)
 	if len(streams) == 0 {
 		return nil, errors.New("at least one stream is required")
 	}

@@ -35,6 +35,16 @@ function CuratedDetailsContent() {
     const [isFavourited, setIsFavourited] = useState(false)
     const [copied, setCopied] = useState<'page' | 'stream' | null>(null)
 
+    const primaryStreamURL = useMemo(() => {
+        if (!station?.streams?.length) return ''
+
+        return [...station.streams]
+            .filter((stream) => stream.is_active)
+            .sort((a, b) => a.priority - b.priority)
+            .map((stream) => (stream.resolved_url || stream.url || '').trim())
+            .find((url) => url !== '') || ''
+    }, [station])
+
     const handleShare = () => {
         const url = window.location.href
         if (navigator.share) {
@@ -48,8 +58,8 @@ function CuratedDetailsContent() {
     }
 
     const handleCopyStream = () => {
-        if (!station) return
-        navigator.clipboard.writeText(station.stream_url).then(() => {
+        if (!primaryStreamURL) return
+        navigator.clipboard.writeText(primaryStreamURL).then(() => {
             setCopied('stream')
             setTimeout(() => setCopied(null), 2000)
         })

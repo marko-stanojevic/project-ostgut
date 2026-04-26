@@ -74,7 +74,6 @@ interface AdminStream {
 interface AdminStation {
     id: string
     name: string
-    stream_url: string
     streams?: AdminStream[]
     logo?: string
     website?: string
@@ -236,7 +235,7 @@ function toStationForm(station: AdminStation): StationForm {
         name: station.name,
         streams: station.streams && station.streams.length > 0
             ? [...station.streams].sort((a, b) => a.priority - b.priority).map((stream, index) => toStreamFormEntry(stream, index + 1))
-            : [{ ...createEmptyStream(1), url: station.stream_url }],
+            : [createEmptyStream(1)],
         logo: station.logo ?? '',
         website: station.website ?? '',
         genre_tags: (station.genre_tags ?? []).join(', '),
@@ -530,49 +529,60 @@ export default function StationEditorPage() {
     const allCurrentTags = [...new Set([...currentGenreTags, ...currentSubgenreTags, ...currentStyleTags, ...currentFormatTags, ...currentTextureTags])]
     const iconUrl = getPreferredMediaUrl(stationIcon) || logoURL
     const streamDetails = [...(station.streams ?? [])].sort((a, b) => a.priority - b.priority)
+    const savedStreamByPriority = new Map(streamDetails.map((stream) => [stream.priority, stream]))
+    const previewStreams = [...form.streams]
+        .filter((stream) => stream.url.trim() !== '')
+        .sort((a, b) => a.priority - b.priority)
+        .map((stream, index) => {
+            const trimmedUrl = stream.url.trim()
+            const savedStream = savedStreamByPriority.get(stream.priority)
+
+            return {
+                id: savedStream?.id ?? `preview-${index + 1}`,
+                url: trimmedUrl,
+                resolvedUrl: savedStream?.url === trimmedUrl && savedStream.resolved_url ? savedStream.resolved_url : trimmedUrl,
+                kind: savedStream?.kind ?? 'direct',
+                container: savedStream?.container ?? 'none',
+                transport: savedStream?.transport ?? (trimmedUrl.startsWith('https://') ? 'https' : 'http'),
+                mimeType: savedStream?.mime_type ?? '',
+                codec: savedStream?.codec,
+                lossless: savedStream?.lossless,
+                bitrate: savedStream?.bitrate,
+                bitDepth: savedStream?.bit_depth,
+                sampleRateHz: savedStream?.sample_rate_hz,
+                sampleRateConfidence: savedStream?.sample_rate_confidence,
+                channels: savedStream?.channels,
+                priority: stream.priority || index + 1,
+                isActive: savedStream?.is_active ?? true,
+                healthScore: savedStream?.health_score ?? 0,
+                loudnessIntegratedLufs: savedStream?.loudness_integrated_lufs,
+                loudnessPeakDbfs: savedStream?.loudness_peak_dbfs,
+                loudnessSampleDurationSeconds: savedStream?.loudness_sample_duration_seconds,
+                loudnessMeasuredAt: savedStream?.loudness_measured_at,
+                loudnessMeasurementStatus: savedStream?.loudness_measurement_status,
+                metadataEnabled: stream.metadata_enabled,
+                metadataType: savedStream?.metadata_type,
+                metadataSource: savedStream?.metadata_source,
+                metadataUrl: savedStream?.metadata_url,
+                metadataResolver: savedStream?.metadata_resolver,
+                metadataResolverCheckedAt: savedStream?.metadata_resolver_checked_at,
+                metadataDelayed: savedStream?.metadata_delayed,
+                lastCheckedAt: savedStream?.last_checked_at,
+                lastError: savedStream?.last_error,
+            }
+        })
+    const primaryPreviewStreamURL = previewStreams[0]?.url ?? ''
     const previewStation: PlayerStation | null = station ? {
         id: station.id,
         name: trimmedName || station.name,
-        streamUrl: primaryStreamURL || station.stream_url,
-        streams: streamDetails.map((stream) => ({
-            id: stream.id,
-            url: stream.url,
-            resolvedUrl: stream.resolved_url,
-            kind: stream.kind,
-            container: stream.container,
-            transport: stream.transport,
-            mimeType: stream.mime_type,
-            codec: stream.codec,
-            lossless: stream.lossless,
-            bitrate: stream.bitrate,
-            bitDepth: stream.bit_depth,
-            sampleRateHz: stream.sample_rate_hz,
-            sampleRateConfidence: stream.sample_rate_confidence,
-            channels: stream.channels,
-            priority: stream.priority,
-            isActive: stream.is_active,
-            healthScore: stream.health_score,
-            loudnessIntegratedLufs: stream.loudness_integrated_lufs,
-            loudnessPeakDbfs: stream.loudness_peak_dbfs,
-            loudnessSampleDurationSeconds: stream.loudness_sample_duration_seconds,
-            loudnessMeasuredAt: stream.loudness_measured_at,
-            loudnessMeasurementStatus: stream.loudness_measurement_status,
-            metadataEnabled: stream.metadata_enabled,
-            metadataType: stream.metadata_type,
-            metadataSource: stream.metadata_source,
-            metadataUrl: stream.metadata_url,
-            metadataResolver: stream.metadata_resolver,
-            metadataResolverCheckedAt: stream.metadata_resolver_checked_at,
-            metadataDelayed: stream.metadata_delayed,
-            lastCheckedAt: stream.last_checked_at,
-            lastError: stream.last_error,
-        })),
+        streamUrl: primaryPreviewStreamURL,
+        streams: previewStreams,
         logo: iconUrl || station.logo,
         genres: currentGenreTags,
         country: form.country.trim(),
         city: form.city.trim() || undefined,
-        bitrate: streamDetails[0]?.bitrate || station.streams?.[0]?.bitrate,
-        codec: streamDetails[0]?.codec || station.streams?.[0]?.codec,
+        bitrate: previewStreams[0]?.bitrate,
+        codec: previewStreams[0]?.codec,
     } : null
     const isPreviewActive = Boolean(previewStation && activeStation?.id === previewStation.id)
     const isPreviewPlaying = isPreviewActive && playerState === 'playing'
@@ -612,79 +622,69 @@ export default function StationEditorPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex items-center gap-3">
-                                <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-                                    {iconUrl ? (
-                                        <Image src={iconUrl} alt="" fill className="object-cover" unoptimized />
-                                    ) : (
-                                        <RadioIcon className="h-5 w-5 text-muted-foreground" />
-                                    )}
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-start">
+                                <div className="space-y-1">
+                                    <p className="text-xs text-muted-foreground">Station logo</p>
+                                    <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-muted">
+                                        {iconUrl ? (
+                                            <Image src={iconUrl} alt="" fill sizes="(min-width: 768px) 192px, 100vw" className="object-cover" unoptimized />
+                                        ) : (
+                                            <RadioIcon className="h-8 w-8 text-muted-foreground" />
+                                        )}
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-sm font-medium">{trimmedName || '-'}</p>
-                                    <p className="text-xs text-muted-foreground">{form.genre_tags || '-'} · {[form.city, form.country].filter(Boolean).join(', ') || '-'}</p>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <SourceField label="Genre tags" value={form.genre_tags} />
+                                    <SourceField label="Language" value={form.language} />
+                                    <SourceField label="Country" value={form.country} />
+                                    <SourceField label="City" value={form.city} />
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground">Station icon</p>
+                                        <input
+                                            ref={iconInputRef}
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            className="hidden"
+                                            onChange={handleStationIconUpload}
+                                        />
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => iconInputRef.current?.click()}
+                                            disabled={uploadingIcon}
+                                        >
+                                            <UploadSimpleIcon className="h-4 w-4" />
+                                            {uploadingIcon ? 'Uploading…' : 'Upload icon'}
+                                        </Button>
+                                        <p className="text-xs text-muted-foreground">JPG, PNG, or WebP up to 10 MB.</p>
+                                        {iconError && <p className="text-xs text-destructive">{iconError}</p>}
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-muted-foreground">Preview</p>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                if (!previewStation) return
+                                                if (isPreviewPlaying) {
+                                                    pause()
+                                                    return
+                                                }
+                                                play(previewStation)
+                                            }}
+                                            disabled={previewStreams.length === 0}
+                                        >
+                                            {isPreviewPlaying ? <PauseIcon className="h-4 w-4" weight="fill" /> : <PlayIcon className="h-4 w-4" weight="fill" />}
+                                            {isPreviewPlaying ? 'Pause station' : 'Play station'}
+                                        </Button>
+                                    </div>
+                                    <SourceField label="Website" value={websiteURL} />
                                 </div>
                             </div>
 
                             <Separator />
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <SourceField label="Genre tags" value={form.genre_tags} />
-                                <SourceField label="Language" value={form.language} />
-                                <SourceField label="Country" value={form.country} />
-                                <SourceField label="City" value={form.city} />
-                            </div>
-
-                            <Separator />
-
-                            <SourceField label="Primary Stream" value={primaryStreamURL} />
-                            <SourceField label="Website" value={websiteURL} />
-
-                            <Separator />
-
-                            <div>
-                                <p className="mb-1.5 text-xs text-muted-foreground">Station icon</p>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <input
-                                        ref={iconInputRef}
-                                        type="file"
-                                        accept="image/jpeg,image/png,image/webp"
-                                        className="hidden"
-                                        onChange={handleStationIconUpload}
-                                    />
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="default"
-                                        className="h-8 w-full gap-1.5 px-2.5 text-xs"
-                                        onClick={() => iconInputRef.current?.click()}
-                                        disabled={uploadingIcon}
-                                    >
-                                        <UploadSimpleIcon className="h-4 w-4" />
-                                        {uploadingIcon ? 'Uploading…' : 'Upload icon'}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-8 w-full gap-1.5 px-2.5 text-xs"
-                                        onClick={() => {
-                                            if (!previewStation) return
-                                            if (isPreviewPlaying) {
-                                                pause()
-                                                return
-                                            }
-                                            play(previewStation)
-                                        }}
-                                        disabled={!previewStation?.streamUrl}
-                                    >
-                                        {isPreviewPlaying ? <PauseIcon className="h-4 w-4" weight="fill" /> : <PlayIcon className="h-4 w-4" weight="fill" />}
-                                        {isPreviewPlaying ? 'Pause station' : 'Play station'}
-                                    </Button>
-                                </div>
-                                <p className="mt-2 text-xs text-muted-foreground">JPG, PNG, or WebP up to 10 MB.</p>
-                                {iconError && <p className="mt-2 text-xs text-destructive">{iconError}</p>}
-                            </div>
 
                             {allCurrentTags.length > 0 && (
                                 <div>
@@ -719,28 +719,6 @@ export default function StationEditorPage() {
                                 </div>
                             )}
 
-                            {primaryStreamURL && (
-                                <a
-                                    href={primaryStreamURL}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                                >
-                                    <ArrowSquareOutIcon className="h-3.5 w-3.5" />
-                                    Open stream
-                                </a>
-                            )}
-                            {websiteURL && (
-                                <a
-                                    href={websiteURL}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="ml-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                                >
-                                    <ArrowSquareOutIcon className="h-3.5 w-3.5" />
-                                    Open website
-                                </a>
-                            )}
                         </CardContent>
                     </Card>
 

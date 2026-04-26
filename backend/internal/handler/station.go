@@ -16,7 +16,6 @@ import (
 type stationResponse struct {
 	ID               string           `json:"id"`
 	Name             string           `json:"name"`
-	StreamURL        string           `json:"stream_url"`
 	Logo             string           `json:"logo,omitempty"`
 	Website          string           `json:"website,omitempty"`
 	Overview         *string          `json:"overview,omitempty"`
@@ -121,40 +120,6 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 	}
 }
 
-func defaultStreamResponseForStation(s *store.Station) []streamResponse {
-	if strings.TrimSpace(s.StreamURL) == "" {
-		return []streamResponse{}
-	}
-	transport := "http"
-	if strings.HasPrefix(strings.ToLower(s.StreamURL), "https://") {
-		transport = "https"
-	}
-
-	return []streamResponse{{
-		URL:                    s.StreamURL,
-		ResolvedURL:            s.StreamURL,
-		Kind:                   "direct",
-		Container:              "none",
-		Transport:              transport,
-		Lossless:               isLosslessStream("", "", s.StreamURL, s.StreamURL),
-		BitDepth:               0,
-		SampleRateHz:           0,
-		SampleRateConfidence:   "unknown",
-		Channels:               0,
-		Priority:               1,
-		IsActive:               true,
-		LoudnessSampleDuration: 0,
-		LoudnessStatus:         "unknown",
-		MetadataEnabled:        true,
-		MetadataType:           "auto",
-		MetadataSource:         nil,
-		MetadataURL:            nil,
-		MetadataResolver:       "server",
-		MetadataDelayed:        false,
-		HealthScore:            s.ReliabilityScore,
-	}}
-}
-
 func metadataResolverForResponse(s *store.StationStream) string {
 	if s == nil || !s.MetadataEnabled {
 		return "none"
@@ -199,7 +164,6 @@ func toStationResponse(s *store.Station, streams []streamResponse) stationRespon
 	return stationResponse{
 		ID:               s.ID,
 		Name:             s.Name,
-		StreamURL:        s.StreamURL,
 		Logo:             s.Logo,
 		Website:          s.Homepage,
 		Overview:         s.Overview,
@@ -234,7 +198,7 @@ func (h *Handler) attachStreamsToStations(ctx context.Context, stations []*store
 	for _, st := range stations {
 		raw := rawMap[st.ID]
 		if len(raw) == 0 {
-			result[st.ID] = defaultStreamResponseForStation(st)
+			result[st.ID] = []streamResponse{}
 			continue
 		}
 

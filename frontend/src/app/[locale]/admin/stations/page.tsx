@@ -55,7 +55,7 @@ interface AdminStation {
 
 interface CreateStationForm {
   name: string
-  stream_url: string
+  primary_stream_url: string
   genre_tags: string[]
   subgenre_tags: string[]
   country: string
@@ -120,7 +120,7 @@ export default function AdminStationsPage() {
   const [createError, setCreateError] = useState('')
   const [createForm, setCreateForm] = useState<CreateStationForm>({
     name: '',
-    stream_url: '',
+    primary_stream_url: '',
     genre_tags: [],
     subgenre_tags: [],
     country: '',
@@ -138,7 +138,7 @@ export default function AdminStationsPage() {
     featured: false,
   })
 
-  const streamURL = createForm.stream_url.trim()
+  const streamURL = createForm.primary_stream_url.trim()
   const logoURL = createForm.logo.trim()
   const homepageURL = createForm.homepage.trim()
 
@@ -248,7 +248,11 @@ export default function AdminStationsPage() {
           method: 'POST',
           body: JSON.stringify({
             name: createForm.name.trim(),
-            stream_url: createForm.stream_url.trim(),
+            streams: [{
+              url: createForm.primary_stream_url.trim(),
+              priority: 1,
+              metadata_enabled: true,
+            }],
             genre_tags: createForm.genre_tags,
             subgenre_tags: createForm.subgenre_tags,
             country: createForm.country.trim(),
@@ -271,7 +275,7 @@ export default function AdminStationsPage() {
       setCreateOpen(false)
       setCreateForm({
         name: '',
-        stream_url: '',
+        primary_stream_url: '',
         genre_tags: [],
         subgenre_tags: [],
         country: '',
@@ -477,8 +481,8 @@ export default function AdminStationsPage() {
                 <Input
                   required
                   type="url"
-                  value={createForm.stream_url}
-                  onChange={(e) => setCreateForm((p) => ({ ...p, stream_url: e.target.value }))}
+                  value={createForm.primary_stream_url}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, primary_stream_url: e.target.value }))}
                 />
                 {streamURL && (
                   <div className="flex items-center gap-2 text-xs">

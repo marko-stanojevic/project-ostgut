@@ -35,7 +35,7 @@ type Station struct {
 	ExternalID       string
 	Name             string
 	CustomName       *string
-	StreamURL        string
+	SeedStreamURL    string
 	Homepage         string
 	Logo             string
 	GenreTags        []string
@@ -81,42 +81,40 @@ type StationFilter struct {
 
 // EnrichmentUpdate carries editable station fields for admin updates.
 type EnrichmentUpdate struct {
-	Name        string
-	StreamURL   string
-	Homepage    string
-	Logo        string
-	GenreTags   []string
-	SubgenreTags []string
-	Language    string
-	Country     string
-	City        string
-	StyleTags   []string
-	FormatTags  []string
-	TextureTags []string
-	Status      string
-	Overview    *string
+	Name            string
+	Homepage        string
+	Logo            string
+	GenreTags       []string
+	SubgenreTags    []string
+	Language        string
+	Country         string
+	City            string
+	StyleTags       []string
+	FormatTags      []string
+	TextureTags     []string
+	Status          string
+	Overview        *string
 	EditorialReview *string
 	InternalNotes   *string
-	Featured    bool
+	Featured        bool
 }
 
 // ManualStationInput carries fields for creating a station directly from admin.
 type ManualStationInput struct {
-	Name        string
-	StreamURL   string
-	Homepage    string
-	Logo        string
-	GenreTags   []string
-	SubgenreTags []string
-	Language    string
-	Country     string
-	City        string
-	StyleTags   []string
-	FormatTags  []string
-	TextureTags []string
-	Status      string
-	Featured    bool
-	Overview    *string
+	Name            string
+	Homepage        string
+	Logo            string
+	GenreTags       []string
+	SubgenreTags    []string
+	Language        string
+	Country         string
+	City            string
+	StyleTags       []string
+	FormatTags      []string
+	TextureTags     []string
+	Status          string
+	Featured        bool
+	Overview        *string
 	EditorialReview *string
 	InternalNotes   *string
 }
@@ -132,7 +130,7 @@ func NewStationStore(pool *pgxpool.Pool) *StationStore {
 }
 
 const stationColumns = `
-	id, external_id, name, custom_name, stream_url, homepage, logo,
+	id, external_id, name, custom_name, homepage, logo,
 	genre_tags, subgenre_tags, search_tags, language, country, city,
 	style_tags, format_tags, texture_tags,
 	votes, click_count, reliability_score,
@@ -143,7 +141,7 @@ const stationColumns = `
 func scanStation(row pgx.Row) (*Station, error) {
 	var s Station
 	err := row.Scan(
-		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.StreamURL, &s.Homepage, &s.Logo,
+		&s.ID, &s.ExternalID, &s.Name, &s.CustomName, &s.Homepage, &s.Logo,
 		&s.GenreTags, &s.SubgenreTags, &s.SearchTags, &s.Language, &s.Country, &s.City,
 		&s.StyleTags, &s.FormatTags, &s.TextureTags,
 		&s.Votes, &s.ClickCount, &s.ReliabilityScore,
@@ -436,13 +434,13 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) (string, error) 
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
-			external_id, name, stream_url, homepage, logo,
+			external_id, name, homepage, logo,
 			genre_tags, subgenre_tags, search_tags, language, country, city,
 			style_tags, format_tags, texture_tags,
 			votes, click_count, reliability_score,
 			is_active, status, last_synced_at, updated_at
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'pending',NOW(),NOW()
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'pending',NOW(),NOW()
 		)
 		ON CONFLICT (external_id) DO UPDATE SET
 			votes             = EXCLUDED.votes,
@@ -451,10 +449,10 @@ func (s *StationStore) Upsert(ctx context.Context, st *Station) (string, error) 
 			is_active         = EXCLUDED.is_active,
 			last_synced_at    = NOW(),
 			updated_at        = NOW()
-			-- NOTE: name, stream_url, homepage, logo, taxonomy,
+			-- NOTE: name, homepage, logo, taxonomy,
 			-- editorial copy, and moderation state are intentionally not updated
 		RETURNING id`,
-		st.ExternalID, st.Name, st.StreamURL, st.Homepage, st.Logo,
+		st.ExternalID, st.Name, st.Homepage, st.Logo,
 		genreTags, subgenreTags, searchTags, st.Language, st.Country, st.City,
 		styleTags, formatTags, textureTags,
 		st.Votes, st.ClickCount, st.ReliabilityScore,
@@ -481,7 +479,7 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO stations (
-			external_id, name, stream_url, homepage, logo,
+			external_id, name, homepage, logo,
 			genre_tags, subgenre_tags, search_tags, language, country, city,
 			style_tags, format_tags, texture_tags,
 			votes, click_count, reliability_score,
@@ -489,15 +487,15 @@ func (s *StationStore) CreateManual(ctx context.Context, in ManualStationInput) 
 			last_editor_action_at, last_synced_at, updated_at
 		) VALUES (
 			'manual:' || gen_random_uuid()::text,
-			$1, $2, $3, $4,
-			$5, $6, $7, $8, $9, $10,
-			$11, $12, $13,
+			$1, $2, $3,
+			$4, $5, $6, $7, $8, $9,
+			$10, $11, $12,
 			0, 0, 0,
-			true, $14, $15, $16, $17, $18,
+			true, $13, $14, $15, $16, $17,
 			NOW(), NOW(), NOW()
 		)
 		RETURNING id`,
-		in.Name, in.StreamURL, in.Homepage, in.Logo,
+		in.Name, in.Homepage, in.Logo,
 		genreTags, subgenreTags, searchTags, in.Language, in.Country, in.City,
 		styleTags, formatTags, textureTags,
 		in.Featured, in.Status, in.Overview, in.EditorialReview, in.InternalNotes,
@@ -528,27 +526,26 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 	_, err := s.pool.Exec(ctx, `
 		UPDATE stations SET
 			name              = $1,
-			stream_url        = $2,
-			homepage          = $3,
-			logo              = $4,
-			genre_tags        = $5,
-			subgenre_tags     = $6,
-			search_tags       = $7,
-			language          = $8,
-			country           = $9,
-			city              = $10,
-			style_tags        = $11,
-			format_tags       = $12,
-			texture_tags      = $13,
-			status            = $14,
-			editorial_review  = $15,
-			internal_notes    = $16,
-			overview          = $17,
-			featured          = $18,
+			homepage          = $2,
+			logo              = $3,
+			genre_tags        = $4,
+			subgenre_tags     = $5,
+			search_tags       = $6,
+			language          = $7,
+			country           = $8,
+			city              = $9,
+			style_tags        = $10,
+			format_tags       = $11,
+			texture_tags      = $12,
+			status            = $13,
+			editorial_review  = $14,
+			internal_notes    = $15,
+			overview          = $16,
+			featured          = $17,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $19`,
-		u.Name, u.StreamURL, u.Homepage, u.Logo,
+		WHERE id = $18`,
+		u.Name, u.Homepage, u.Logo,
 		genreTags, subgenreTags, searchTags, u.Language, u.Country, u.City,
 		styleTags, formatTags, textureTags,
 		u.Status, u.EditorialReview, u.InternalNotes, u.Overview, u.Featured, id,

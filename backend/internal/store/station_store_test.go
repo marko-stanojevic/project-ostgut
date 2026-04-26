@@ -53,9 +53,8 @@ func TestStationStore_DuplicateApprovedName_RejectedByDB(t *testing.T) {
 	})
 
 	first, err := st.CreateManual(ctx, store.ManualStationInput{
-		Name:      base,
-		StreamURL: "https://example.invalid/first",
-		Status:    "approved",
+		Name:   base,
+		Status: "approved",
 	})
 	if err != nil {
 		t.Fatalf("first create: %v", err)
@@ -68,9 +67,8 @@ func TestStationStore_DuplicateApprovedName_RejectedByDB(t *testing.T) {
 	collidingName := "  " + strings.ToUpper(base) + " "
 
 	_, err = st.CreateManual(ctx, store.ManualStationInput{
-		Name:      collidingName,
-		StreamURL: "https://example.invalid/second",
-		Status:    "approved",
+		Name:   collidingName,
+		Status: "approved",
 	})
 	if !errors.Is(err, store.ErrDuplicateStationName) {
 		t.Fatalf("expected ErrDuplicateStationName on duplicate approved create, got: %v", err)
@@ -78,9 +76,8 @@ func TestStationStore_DuplicateApprovedName_RejectedByDB(t *testing.T) {
 
 	// A second pending row with the same name is allowed (partial index).
 	pending, err := st.CreateManual(ctx, store.ManualStationInput{
-		Name:      collidingName,
-		StreamURL: "https://example.invalid/pending",
-		Status:    "pending",
+		Name:   collidingName,
+		Status: "pending",
 	})
 	if err != nil {
 		t.Fatalf("pending create with same name should be allowed: %v", err)

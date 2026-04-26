@@ -2,10 +2,14 @@ import type { Station } from '@/types/player'
 import type { ApiStation } from '@/types/station'
 
 export function toStation(s: ApiStation): Station {
+    const primaryStream = [...(s.streams ?? [])]
+        .filter((stream) => stream.is_active)
+        .sort((a, b) => a.priority - b.priority)[0]
+
     return {
         id: s.id,
         name: s.name,
-        streamUrl: s.stream_url,
+        streamUrl: primaryStream ? (primaryStream.resolved_url || primaryStream.url || '').trim() : '',
         streams: s.streams?.map((st) => ({
             id: st.id,
             url: st.url,
