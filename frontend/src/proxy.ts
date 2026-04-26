@@ -78,10 +78,17 @@ function buildCSP(nonce: string): string {
     'https://*.newrelic.com',
     'https://js-agent.newrelic.com',
   ].filter(Boolean)
+  const scriptSrc = [
+    "'self'",
+    `'nonce-${nonce}'`,
+    "'strict-dynamic'",
+    process.env.NODE_ENV === 'development' ? "'unsafe-eval'" : '',
+    'https:',
+  ].filter(Boolean)
 
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https:`,
+    `script-src ${scriptSrc.join(' ')}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' data:",
@@ -112,7 +119,29 @@ function generateNonce(): string {
   return btoa(binary)
 }
 
-export default function middleware(req: NextRequest) {
+function mergeExistingRequestOverrides(responseHeaders: Headers, requestHeaders: Headers) {
+  const existing = responseHeaders.get('x-middleware-override-headers')
+  const keys = existing
+    ?.split(',')
+    .map((key) => key.trim().toLowerCase())
+    .filter(Boolean)
+
+  for (const key of keys ?? []) {
+    const value = responseHeaders.get(`x-middleware-request-${key}`)
+    if (value !== null) requestHeaders.set(key, value)
+  }
+}
+
+function forwardRequestHeaders(response: NextResponse, requestHeaders: Headers) {
+  const keys = [...requestHeaders.keys()]
+
+  for (const key of keys) {
+    response.headers.set(`x-middleware-request-${key}`, requestHeaders.get(key) ?? '')
+  }
+  response.headers.set('x-middleware-override-headers', keys.join(','))
+}
+
+export function proxy(req: NextRequest) {
   const isAuthenticated = hasSessionToken(req)
   const { pathname } = req.nextUrl
 
@@ -141,19 +170,18 @@ export default function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(`${localePath}/curated`, req.url))
   }
 
-  // Generate a per-request nonce and stamp it onto BOTH the request headers
-  // (so server components can read it via `headers().get('x-nonce')` and
-  // forward it to inline `<Script>` tags) and the response CSP (so the
-  // browser only executes scripts carrying that nonce).
+  // Generate a per-request nonce and forward it using Next's middleware
+  // request-header override protocol so server components can read it via
+  // `headers().get('x-nonce')` without mutating the incoming request object.
   const nonce = generateNonce()
   const csp = buildCSP(nonce)
-
-  // `Headers` is mutable; mutating req.headers makes the value visible to
-  // server components further down the stack. next-intl reads from req
-  // and emits a NextResponse we then decorate with the response CSP.
-  req.headers.set('x-nonce', nonce)
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-nonce', nonce)
 
   const res = handleI18n(req)
+  mergeExistingRequestOverrides(res.headers, requestHeaders)
+  forwardRequestHeaders(res, requestHeaders)
+
   res.headers.set('Content-Security-Policy', csp)
   // Reporting-Endpoints declares the named group referenced by `report-to`
   // in the CSP above. Same path the legacy `report-uri` posts to.

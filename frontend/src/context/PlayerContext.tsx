@@ -459,7 +459,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.pause()
       audio.src = ''
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioElement, clearReconnect, stopVolumeRamp])
 
   const applyPreferenceUpdate = useCallback(

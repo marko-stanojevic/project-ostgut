@@ -54,6 +54,30 @@ When the next change touches `PlayerContext` — not worth a standalone PR, but 
 
 ---
 
+## React Compiler advisory cleanup
+
+During the dependency stabilization pass for Next 16 / React 19, the newly-promoted React Compiler advisory rules were explicitly disabled in `frontend/eslint.config.mjs`:
+
+- `react-hooks/immutability`
+- `react-hooks/preserve-manual-memoization`
+- `react-hooks/set-state-in-effect`
+
+These are useful future cleanup signals, but turning them into errors during a package bump would require broad fetch/effect/player lifecycle refactors. That was not the right risk profile for stabilization.
+
+### When to revisit
+
+When we intentionally opt into React Compiler cleanup work. Treat it as a focused refactor pass, not as part of routine dependency updates.
+
+### Cleanup shape
+
+- Audit data-fetching effects that synchronously reset loading/result/error state.
+- Replace derived-state effects with render-time derivation where possible.
+- Review manual `useMemo` / `useCallback` dependency lists that React Compiler cannot preserve.
+- Revisit `PlayerContext` audio-element lifecycle after the separation-of-concerns refactor above; the compiler currently sees DOM audio mutation as local-state mutation.
+- Re-enable the three rules one at a time and keep each PR small enough to review behaviorally.
+
+---
+
 ## Now Playing — push vs poll
 
 This is no longer just a stateless poll endpoint. The current implementation is hybrid:

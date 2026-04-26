@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
       // Cap length so a hostile origin can't flood logs with megabyte bodies.
       const payload = text.length > 4096 ? `${text.slice(0, 4096)}…[truncated]` : text
       // Single-line JSON keeps it greppable in container log tails.
-      // eslint-disable-next-line no-console
       console.warn(
         JSON.stringify({
           msg: 'csp_violation',

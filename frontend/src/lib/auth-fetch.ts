@@ -45,5 +45,10 @@ export async function fetchJSONWithAuth<T>(
         return null as T
     }
 
-    return (await parseJsonSafely<T>(response)) as T
+    const data = await parseJsonSafely<T>(response)
+    if (data === null) {
+        throw new AuthFetchError('Expected JSON response', response.status)
+    }
+
+    return data
 }
