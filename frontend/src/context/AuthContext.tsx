@@ -11,6 +11,7 @@ interface AuthContextType {
   loading: boolean
   role: Role | null
   isAdmin: boolean
+  isEditor: boolean
   signUp: (email: string, password: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -64,6 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const role = (session?.user?.role as Role | undefined) ?? null
   const isAdmin = role === 'admin'
+  // Editors and admins both access the editor surface (catalog management).
+  // Admin-only operations gate themselves separately on isAdmin.
+  const isEditor = role === 'editor' || role === 'admin'
 
   return (
     <AuthContext.Provider
@@ -73,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         role,
         isAdmin,
+        isEditor,
         signUp,
         signIn,
         signOut,

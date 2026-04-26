@@ -90,6 +90,7 @@
   "account_menu": {
     "profile": "Perfil",
     "admin": "Admin",
+    "editor": "Editor",
     "settings": "Ajustes",
     "security": "Seguridad",
     "notifications": "Notificaciones",
@@ -322,7 +323,8 @@
     "creating": "Creando…",
     "fix_urls_error": "Por favor, corrija los campos de URL antes de crear la emisora.",
     "stations_label": "emisoras",
-    "users_label": "usuarios"
+    "users_label": "usuarios",
+    "go_to_editor": "Editor"
   },
   "station_detail": {
     "back": "Atrás",
@@ -345,5 +347,13 @@
     "copy_stream": "Copiar URL de transmisión",
     "editors_note": "Nota del editor",
     "about": "Acerca de"
+  },
+  "editor": {
+    "panel_label": "Editor",
+    "nav_overview": "Resumen",
+    "nav_stations": "Emisoras",
+    "overview_title": "Resumen",
+    "search_stations": "Buscar emisoras…",
+    "go_to_admin": "Admin"
   }
 }

@@ -90,6 +90,7 @@
   "account_menu": {
     "profile": "Profile",
     "admin": "Admin",
+    "editor": "Editor",
     "settings": "Settings",
     "security": "Security",
     "notifications": "Notifications",
@@ -322,7 +323,8 @@
     "creating": "Creating…",
     "fix_urls_error": "Please fix URL fields before creating the station.",
     "stations_label": "stations",
-    "users_label": "users"
+    "users_label": "users",
+    "go_to_editor": "Editor"
   },
   "station_detail": {
     "back": "Back",
@@ -345,5 +347,13 @@
     "copy_stream": "Copy stream URL",
     "editors_note": "Editor's Note",
     "about": "About"
+  },
+  "editor": {
+    "panel_label": "Editor",
+    "nav_overview": "Overview",
+    "nav_stations": "Stations",
+    "overview_title": "Overview",
+    "search_stations": "Search stations…",
+    "go_to_admin": "Admin"
   }
 }

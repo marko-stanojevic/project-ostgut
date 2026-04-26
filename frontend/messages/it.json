@@ -90,6 +90,7 @@
   "account_menu": {
     "profile": "Profilo",
     "admin": "Admin",
+    "editor": "Redazione",
     "settings": "Impostazioni",
     "security": "Sicurezza",
     "notifications": "Notifiche",
@@ -322,7 +323,8 @@
     "creating": "Creazione…",
     "fix_urls_error": "Correggi i campi URL prima di creare la stazione.",
     "stations_label": "stazioni",
-    "users_label": "utenti"
+    "users_label": "utenti",
+    "go_to_editor": "Redazione"
   },
   "station_detail": {
     "back": "Indietro",
@@ -345,5 +347,13 @@
     "copy_stream": "Copia URL stream",
     "editors_note": "Nota del redattore",
     "about": "Informazioni"
+  },
+  "editor": {
+    "panel_label": "Redazione",
+    "nav_overview": "Panoramica",
+    "nav_stations": "Stazioni",
+    "overview_title": "Panoramica",
+    "search_stations": "Cerca stazioni…",
+    "go_to_admin": "Admin"
   }
 }

@@ -90,6 +90,7 @@
   "account_menu": {
     "profile": "Profiel",
     "admin": "Admin",
+    "editor": "Redactie",
     "settings": "Instellingen",
     "security": "Beveiliging",
     "notifications": "Meldingen",
@@ -322,7 +323,8 @@
     "creating": "Aanmaken…",
     "fix_urls_error": "Corrigeer de URL-velden voor het aanmaken.",
     "stations_label": "zenders",
-    "users_label": "gebruikers"
+    "users_label": "gebruikers",
+    "go_to_editor": "Redactie"
   },
   "station_detail": {
     "back": "Terug",
@@ -345,5 +347,13 @@
     "copy_stream": "Stream-URL kopiëren",
     "editors_note": "Redactionele noot",
     "about": "Over"
+  },
+  "editor": {
+    "panel_label": "Redactie",
+    "nav_overview": "Overzicht",
+    "nav_stations": "Stations",
+    "overview_title": "Overzicht",
+    "search_stations": "Zoek stations…",
+    "go_to_admin": "Admin"
   }
 }

@@ -1,3 +1,16 @@
+// admin.go hosts the admin/editor station-management HTTP endpoints.
+//
+// Two roles consume this surface:
+//   - admin: full surface, including users and overview/diagnostics.
+//   - editor: station catalog only (stations CRUD, streams, probe, featured,
+//     editorial review, status). Mounted under /editor in cmd/api/main.go.
+//
+// The station-management methods (AdminListStations, AdminCreateStation,
+// AdminBulkAction, AdminGetStation, AdminUpdateStation,
+// AdminProbeStationStream, AdminGetStationIcon) serve both surfaces; the role
+// gate lives at the route group, not in the handler. The Admin* prefix is
+// kept for now to avoid a wide rename — the dependency wiring (h.admin.*) is
+// shared between the two surfaces.
 package handler
 
 import (
@@ -44,7 +57,7 @@ func (h *Handler) AdminStats(c *gin.Context) {
 	})
 }
 
-// AdminBulkAction handles POST /admin/stations/bulk
+// AdminBulkAction handles POST /editor/stations/bulk
 // Body: { "ids": ["uuid", ...], "status": "approved"|"rejected"|"pending" }
 func (h *Handler) AdminBulkAction(c *gin.Context) {
 	var req struct {
@@ -132,8 +145,8 @@ func toAdminStationResponse(s *store.Station, streams []streamResponse) adminSta
 	}
 }
 
-// AdminCreateStation handles POST /admin/stations.
-// Creates a station manually from admin input.
+// AdminCreateStation handles POST /editor/stations.
+// Creates a station manually from editorial input.
 func (h *Handler) AdminCreateStation(c *gin.Context) {
 	var req struct {
 		Name            string               `json:"name" binding:"required"`
@@ -235,7 +248,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// AdminProbeStationStream handles POST /admin/stations/:id/streams/:streamID/probe.
+// AdminProbeStationStream handles POST /editor/stations/:id/streams/:streamID/probe.
 // Query param `scope` can be `quality`, `metadata`, `resolver`, `loudness`, or `full`.
 func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 	stationID := strings.TrimSpace(c.Param("id"))
@@ -459,7 +472,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// AdminListStations handles GET /admin/stations?status=pending|approved|rejected
+// AdminListStations handles GET /editor/stations?status=pending|approved|rejected
 func (h *Handler) AdminListStations(c *gin.Context) {
 	status := c.DefaultQuery("status", "pending")
 	f := store.StationFilter{
@@ -497,7 +510,7 @@ func (h *Handler) AdminListStations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"stations": resp, "count": total})
 }
 
-// AdminGetStation handles GET /admin/stations/:id
+// AdminGetStation handles GET /editor/stations/:id
 func (h *Handler) AdminGetStation(c *gin.Context) {
 	s, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), c.Param("id"))
 	if errors.Is(err, store.ErrNotFound) {
@@ -519,7 +532,7 @@ func (h *Handler) AdminGetStation(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// AdminGetStationIcon handles GET /admin/stations/:id/icon
+// AdminGetStationIcon handles GET /editor/stations/:id/icon
 func (h *Handler) AdminGetStationIcon(c *gin.Context) {
 	stationID := c.Param("id")
 
@@ -551,7 +564,7 @@ func (h *Handler) AdminGetStationIcon(c *gin.Context) {
 	c.JSON(http.StatusOK, h.mediaResponse(asset))
 }
 
-// AdminUpdateStation handles PUT /admin/stations/:id.
+// AdminUpdateStation handles PUT /editor/stations/:id.
 // Accepts editable original station fields + moderation/editorial fields.
 func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	id := c.Param("id")

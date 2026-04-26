@@ -19,7 +19,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import {
     RadioIcon,
-    ArrowSquareOutIcon,
     ArrowLeftIcon,
     ArrowsClockwiseIcon,
     FloppyDiskIcon,
@@ -295,8 +294,6 @@ export default function StationEditorPage() {
     const accessToken = session?.accessToken
 
     const trimmedName = form.name.trim()
-    // Primary display URL — first non-empty stream entry.
-    const primaryStreamURL = form.streams.find(s => s.url.trim())?.url.trim() ?? ''
     const logoURL = form.logo.trim()
     const websiteURL = form.website.trim()
     const streamValidationMessages = form.streams.map((s) => getStreamURLValidationMessage(s.url))

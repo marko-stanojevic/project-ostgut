@@ -7,6 +7,7 @@ import { useRouter } from '@/i18n/navigation'
 import {
     SignOutIcon,
     ShieldCheckIcon,
+    RadioIcon,
     GearIcon,
     ArrowsLeftRightIcon,
     UserIcon,
@@ -68,7 +69,7 @@ function Avatar({ name, image, size = 32 }: { name?: string | null; image?: stri
 
 export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
     const router = useRouter()
-    const { user, session, signOut, isAdmin } = useAuth()
+    const { user, session, signOut, isAdmin, isEditor } = useAuth()
     const [mounted, setMounted] = useState(false)
     const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.image ?? null)
     const t = useTranslations('account_menu')
@@ -149,6 +150,12 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
                         <UserIcon className="h-4 w-4 text-muted-foreground" />
                         {t('profile')}
                     </DropdownMenuItem>
+                    {isEditor && (
+                        <DropdownMenuItem onClick={() => router.push('/editor/stations')} className="gap-2.5 px-3 py-2 text-sm">
+                            <RadioIcon className="h-4 w-4 text-muted-foreground" />
+                            {t('editor')}
+                        </DropdownMenuItem>
+                    )}
                     {isAdmin && (
                         <DropdownMenuItem onClick={() => router.push('/admin')} className="gap-2.5 px-3 py-2 text-sm">
                             <ShieldCheckIcon className="h-4 w-4 text-muted-foreground" />

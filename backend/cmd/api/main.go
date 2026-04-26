@@ -181,20 +181,32 @@ func main() {
 		protected.GET("/media/:id", h.GetMedia)
 	}
 
-	// Admin routes (JWT + role=admin required)
+	// Editor routes (JWT + role=editor or admin).
+	// Editors curate the station catalog and get the shared operational
+	// overview used to drive editorial actions. They cannot manage users or
+	// access admin-only user management routes.
+	editor := router.Group("/editor")
+	editor.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
+	editor.Use(middleware.RequireRole(store.RoleEditor, store.RoleAdmin))
+	{
+		editor.GET("/overview", h.AdminOverview)
+		editor.GET("/stations", h.AdminListStations)
+		editor.POST("/stations", h.AdminCreateStation)
+		editor.POST("/stations/bulk", h.AdminBulkAction)
+		editor.GET("/stations/:id", h.AdminGetStation)
+		editor.POST("/stations/:id/streams/:streamID/probe", h.AdminProbeStationStream)
+		editor.GET("/stations/:id/icon", h.AdminGetStationIcon)
+		editor.PUT("/stations/:id", h.AdminUpdateStation)
+	}
+
+	// Admin routes (JWT + role=admin required). Admin-only operations:
+	// overview/diagnostics, user management.
 	admin := router.Group("/admin")
 	admin.Use(middleware.AuthMiddleware(logger, cfg.JWTSecret))
 	admin.Use(middleware.RequireRole(store.RoleAdmin))
 	{
 		admin.GET("/overview", h.AdminOverview)
 		admin.GET("/stats", h.AdminStats)
-		admin.GET("/stations", h.AdminListStations)
-		admin.POST("/stations", h.AdminCreateStation)
-		admin.POST("/stations/bulk", h.AdminBulkAction)
-		admin.GET("/stations/:id", h.AdminGetStation)
-		admin.POST("/stations/:id/streams/:streamID/probe", h.AdminProbeStationStream)
-		admin.GET("/stations/:id/icon", h.AdminGetStationIcon)
-		admin.PUT("/stations/:id", h.AdminUpdateStation)
 		admin.GET("/users", h.AdminListUsers)
 		admin.PUT("/users/:id/role", h.AdminSetUserRole)
 	}
