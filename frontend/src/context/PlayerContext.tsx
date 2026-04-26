@@ -403,21 +403,25 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     })
     audio.addEventListener('pause', () => setState('paused'))
     audio.addEventListener('waiting', () => {
+      // Ignore spurious waiting events on a paused element (e.g. Safari firing
+      // waiting when a live stream has no buffered data after user-pause).
+      if (audio.paused) return
       setState('loading')
       // Start stall watchdog only if one isn't already running.
       if (!stallTimerRef.current) {
         stallTimerRef.current = setTimeout(() => {
           stallTimerRef.current = null
-          tryNextVariantRef.current?.()
+          if (!audio.paused) tryNextVariantRef.current?.()
         }, STALL_TIMEOUT_MS)
       }
     })
     audio.addEventListener('stalled', () => {
+      if (audio.paused) return
       setState('loading')
       if (!stallTimerRef.current) {
         stallTimerRef.current = setTimeout(() => {
           stallTimerRef.current = null
-          tryNextVariantRef.current?.()
+          if (!audio.paused) tryNextVariantRef.current?.()
         }, STALL_TIMEOUT_MS)
       }
     })
