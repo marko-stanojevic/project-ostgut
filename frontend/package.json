@@ -9,16 +9,16 @@
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
   },
   "dependencies": {
-    "@base-ui/react": "^1.4.0",
+    "@base-ui/react": "^1.4.1",
     "@newrelic/browser-agent": "^1.313.1",
-    "@paddle/paddle-js": "^1.6.2",
+    "@paddle/paddle-js": "^1.6.4",
     "@phosphor-icons/react": "^2.1.10",
-    "@tailwindcss/postcss": "^4.2.2",
+    "@tailwindcss/postcss": "^4.2.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hls.js": "^1.6.16",
-    "jose": "^5.9.6",
-    "lucide-react": "^1.8.0",
+    "jose": "^6.2.2",
+    "lucide-react": "^1.11.0",
     "next": "^16.2.4",
     "next-auth": "^5.0.0-beta.31",
     "next-intl": "^4.9.1",
@@ -33,15 +33,15 @@
     "hono": "4.12.14"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "autoprefixer": "^10.4.0",
-    "eslint": "^8.56.0",
-    "eslint-config-next": "^15.5.15",
-    "postcss": "^8.4.0",
-    "shadcn": "^4.2.0",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^10.2.1",
+    "eslint-config-next": "^16.2.4",
+    "postcss": "^8.5.12",
+    "shadcn": "^4.5.0",
     "tailwindcss": "^4.2.2",
-    "typescript": "5.3.3"
+    "typescript": "6.0.3"
   }
 }
