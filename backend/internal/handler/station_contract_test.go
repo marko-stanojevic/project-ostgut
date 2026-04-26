@@ -12,7 +12,6 @@ func TestToStationResponsePublishesEditorialReviewNotInternalNotes(t *testing.T)
 	station := &store.Station{
 		ID:              "station-1",
 		Name:            "NTS 1",
-		StreamURL:       "https://example.com/stream",
 		GenreTags:       []string{"jazz"},
 		SubgenreTags:    []string{"free jazz"},
 		SearchTags:      []string{"jazz", "free jazz", "curated"},

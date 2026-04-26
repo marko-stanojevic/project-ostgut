@@ -106,13 +106,13 @@ func (s *Syncer) sync(ctx context.Context) {
 			continue
 		}
 
-		probe := LightClassifyStreamURL(st.StreamURL)
+		probe := LightClassifyStreamURL(st.SeedStreamURL)
 		// Playlist containers (m3u, pls) must be resolved to find the actual
 		// audio URL. We also probe opaque direct URLs (no known extension/codec)
 		// to classify HLS/audio by content-type instead of filename suffix.
 		if shouldProbeIngestionStream(probe) {
 			probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-			probe = ProbeStream(probeCtx, s.probeClient, st.StreamURL)
+			probe = ProbeStream(probeCtx, s.probeClient, st.SeedStreamURL)
 			cancel()
 		}
 		err = s.streamStore.UpsertPrimaryForStation(ctx, stationID, store.StationStreamInput{
@@ -248,7 +248,7 @@ func curate(raw []radioBrowserStation) []*store.Station {
 		out = append(out, &store.Station{
 			ExternalID:       r.StationUUID,
 			Name:             name,
-			StreamURL:        r.URL,
+			SeedStreamURL:    r.URL,
 			Homepage:         r.Homepage,
 			Logo:             r.Favicon,
 			GenreTags:        genreTags,

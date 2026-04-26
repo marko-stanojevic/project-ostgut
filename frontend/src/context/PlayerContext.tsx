@@ -104,8 +104,7 @@ function detectPlaybackCapabilities(): PlaybackCapabilities {
 }
 
 // Returns the ordered list of playable variants for a station.
-// Uses backend-probed stream records when available; falls back to the
-// legacy streamUrl with URL-suffix HLS detection for old data.
+// Playback now depends on backend-probed stream records exclusively.
 function getPlayableVariants(s: Station, caps: PlaybackCapabilities): PlayableVariant[] {
   const active = (s.streams ?? []).filter((st: StationStream) => st.isActive)
   if (active.length > 0) {
@@ -130,13 +129,7 @@ function getPlayableVariants(s: Station, caps: PlaybackCapabilities): PlayableVa
       return variants
     }
   }
-  // Legacy fallback: detect HLS by extension only when no probe data exists.
-  const url = s.streamUrl
-  const path = url.split('?')[0].toLowerCase()
-  const kind = path.endsWith('.m3u8') ? 'hls' : 'direct'
-  if (kind === 'hls' && !caps.hls) return []
-  if (url.toLowerCase().includes('flac') && !caps.flac) return []
-  return [{ url, kind, codec: '', mimeType: '', lossless: url.toLowerCase().includes('flac') }]
+  return []
 }
 
 function getPlaybackStationSnapshot(next: Station, current: Station | null): Station {

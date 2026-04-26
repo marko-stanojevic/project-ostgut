@@ -469,21 +469,6 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 		}
 	}
 
-	primary := normalized[0]
-	for _, candidate := range normalized {
-		if candidate.Priority < primary.Priority {
-			primary = candidate
-		}
-	}
-
-	if _, err := tx.Exec(ctx, `
-		UPDATE stations SET stream_url = $1, updated_at = NOW() WHERE id = $2`,
-		primary.ResolvedURL,
-		stationID,
-	); err != nil {
-		return nil, fmt.Errorf("mirror primary stream into station: %w", err)
-	}
-
 	if err := s.syncStationReliability(ctx, tx, stationID); err != nil {
 		return nil, err
 	}

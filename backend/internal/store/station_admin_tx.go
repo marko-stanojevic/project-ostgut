@@ -30,17 +30,6 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 		return fmt.Errorf("at least one valid stream URL is required")
 	}
 
-	primary := normalized[0]
-	for _, candidate := range normalized {
-		if candidate.Priority < primary.Priority {
-			primary = candidate
-		}
-	}
-	stationStreamURL := primary.ResolvedURL
-	if stationStreamURL == "" {
-		stationStreamURL = primary.URL
-	}
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin station+streams update: %w", err)
@@ -57,28 +46,27 @@ func (s *StationStore) UpdateEnrichmentAndStreams(
 	if _, err := tx.Exec(ctx, `
 		UPDATE stations SET
 			name                  = $1,
-			stream_url            = $2,
-			homepage              = $3,
-			logo                  = $4,
-			genre_tags            = $5,
-			subgenre_tags         = $6,
-			search_tags           = $7,
-			language              = $8,
-			country               = $9,
-			city                  = $10,
-			style_tags            = $11,
-			format_tags           = $12,
-			texture_tags          = $13,
-			reliability_score     = $14,
-			status                = $15,
-			editorial_review      = $16,
-			internal_notes        = $17,
-			overview              = $18,
-			featured              = $19,
+			homepage              = $2,
+			logo                  = $3,
+			genre_tags            = $4,
+			subgenre_tags         = $5,
+			search_tags           = $6,
+			language              = $7,
+			country               = $8,
+			city                  = $9,
+			style_tags            = $10,
+			format_tags           = $11,
+			texture_tags          = $12,
+			reliability_score     = $13,
+			status                = $14,
+			editorial_review      = $15,
+			internal_notes        = $16,
+			overview              = $17,
+			featured              = $18,
 			last_editor_action_at = NOW(),
 			updated_at            = NOW()
-		WHERE id = $20`,
-		u.Name, stationStreamURL, u.Homepage, u.Logo,
+		WHERE id = $19`,
+		u.Name, u.Homepage, u.Logo,
 		genreTags, subgenreTags, searchTags, u.Language, u.Country, u.City,
 		styleTags, formatTags, textureTags,
 		deriveStationReliabilityFromStreams(normalized),

@@ -38,7 +38,6 @@ export interface ApiStream {
 export interface ApiStation {
     id: string
     name: string
-    stream_url: string
     streams?: ApiStream[]
     logo?: string
     genre_tags: string[]
