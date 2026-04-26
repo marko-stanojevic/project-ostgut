@@ -110,21 +110,33 @@ Each stream must include a `priority`:
 
 ## 🎚️ Quality Ordering
 
-Streams must be ordered:
+Streams must be ordered best → worst quality.
 
-> best → worst quality  
+Quality is determined by **effective bitrate first, codec second**:
 
-### Format priority
+1. Lossless / Hi-Res (FLAC, WAV) — always highest
+2. Higher bitrate beats lower bitrate
+3. At equal bitrate, AAC is preferred over MP3
 
-1. Lossless / Hi-Res (FLAC, WAV)  
-2. AAC  
-3. MP3  
+**Examples:**
+
+| Stream  | Priority  |
+|---------|-----------|
+| FLAC    | 0 (best)  |
+| 320 AAC | 1         |
+| 320 MP3 | 2         |
+| 256 AAC | 3         |
+| 256 MP3 | 4         |
+| 128 AAC | 5         |
+| 128 MP3 | 6 (worst) |
+
+> A higher-bitrate MP3 outranks a lower-bitrate AAC. AAC only wins when bitrates are equal.
 
 ---
 
 ## 🔗 Stream Type Preference
 
-For equal quality:
+For streams of equal quality:
 
 Prefer:
 
@@ -133,6 +145,8 @@ Prefer:
 - `.m3u8`  
 
 Avoid direct URLs unless necessary.
+
+Prefer `https://` over `http://` when both are available and reachable.
 
 ---
 

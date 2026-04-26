@@ -450,6 +450,38 @@
       }
     },
     {
+      "label": "Editorial: Download + Import from staging",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "./scripts/download-and-import-editorial.sh staging"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Editorial: Download + Import from production",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "./scripts/download-and-import-editorial.sh production"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Setup: Frontend Dependencies",
       "type": "shell",
       "command": "sh",
