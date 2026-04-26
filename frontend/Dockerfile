@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-alpine3.22 AS deps
+FROM node:24-slim AS deps
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 
 # Build stage
-FROM node:20-alpine3.22 AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
@@ -50,7 +50,7 @@ RUN if [ -f .next/standalone/server.js ]; then \
     fi
 
 # Runtime stage
-FROM gcr.io/distroless/nodejs20-debian13:nonroot
+FROM gcr.io/distroless/nodejs24-debian13:nonroot
 
 WORKDIR /app
 
