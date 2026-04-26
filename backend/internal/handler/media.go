@@ -203,7 +203,7 @@ func (h *Handler) CreateUploadIntent(c *gin.Context) {
 		return
 	}
 
-	uploadURL := requestBaseURL(c) + "/media/upload/" + asset.ID + "?token=" + url.QueryEscape(token)
+	uploadURL := h.apiBaseURL(c) + "/media/upload/" + asset.ID + "?token=" + url.QueryEscape(token)
 
 	c.JSON(http.StatusOK, gin.H{
 		"assetId":   asset.ID,
@@ -565,6 +565,17 @@ func requestBaseURL(c *gin.Context) string {
 		host = c.Request.Host
 	}
 	return scheme + "://" + host
+}
+
+// apiBaseURL returns the externally-resolvable base URL for this API. It
+// prefers the value configured via PUBLIC_API_BASE_URL so signed upload URLs
+// can never be redirected to attacker-controlled hosts via Host / X-Forwarded
+// header injection. Falls back to the request-derived value only in local dev.
+func (h *Handler) apiBaseURL(c *gin.Context) string {
+	if h.publicAPIBaseURL != "" {
+		return h.publicAPIBaseURL
+	}
+	return requestBaseURL(c)
 }
 
 func (h *Handler) createMediaUploadToken(assetID, blobKey string, expiresAt time.Time) (string, error) {

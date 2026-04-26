@@ -1,8 +1,12 @@
 package handler
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -145,10 +149,11 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	// TODO: replace with email send (e.g. via SendGrid / Resend / SES)
+	// TODO: replace with email send (e.g. via SendGrid / Resend / SES).
+	// Until then, log only that a token was generated — never the token itself.
 	h.log.Info("password reset token generated",
 		"email", req.Email,
-		"reset_url", "/auth/reset-password?token="+token,
+		"token_prefix", token[:8],
 	)
 
 	c.JSON(http.StatusOK, gin.H{"message": "if that email is registered, a reset link has been sent"})
@@ -189,16 +194,57 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 
 // OAuthLogin finds or creates a user for an OAuth provider sign-in and
 // returns an access + refresh token pair.
+//
+// Trust model: this endpoint is the bridge between NextAuth (which has
+// already verified the provider's id_token) and the backend session. To
+// prevent arbitrary HTTP clients from minting tokens for any email, the
+// caller must HMAC-SHA256 the canonical handshake string
+//
+//	provider | provider_id | email | email_verified | timestamp
+//
+// with OAUTH_SHARED_SECRET (shared only with the Next.js server) and send
+// the hex digest in `signature`. Timestamps older than the configured skew
+// are rejected to prevent replay.
+//
 // POST /auth/oauth
 func (h *Handler) OAuthLogin(c *gin.Context) {
 	var req struct {
-		Provider   string `json:"provider" binding:"required"`
-		ProviderID string `json:"provider_id" binding:"required"`
-		Email      string `json:"email" binding:"required,email"`
-		Name       string `json:"name"`
+		Provider      string `json:"provider" binding:"required"`
+		ProviderID    string `json:"provider_id" binding:"required"`
+		Email         string `json:"email" binding:"required,email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Timestamp     int64  `json:"timestamp" binding:"required"`
+		Signature     string `json:"signature" binding:"required"`
 	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Reject stale or future-dated handshakes (5-minute window).
+	now := time.Now().Unix()
+	if diff := now - req.Timestamp; diff > 300 || diff < -60 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "oauth handshake expired"})
+		return
+	}
+
+	// The provider must have asserted the email is verified — otherwise an
+	// attacker could register a Google/GitHub account claiming a victim's
+	// email and take over an existing credentials user on first sign-in.
+	if !req.EmailVerified {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "email not verified by provider"})
+		return
+	}
+
+	canonical := req.Provider + "|" + req.ProviderID + "|" + req.Email + "|" +
+		strconv.FormatBool(req.EmailVerified) + "|" + strconv.FormatInt(req.Timestamp, 10)
+	mac := hmac.New(sha256.New, []byte(h.auth.oauthSecret))
+	mac.Write([]byte(canonical))
+	expected := mac.Sum(nil)
+	provided, err := hex.DecodeString(req.Signature)
+	if err != nil || !hmac.Equal(expected, provided) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid oauth signature"})
 		return
 	}
 
@@ -238,6 +284,17 @@ func (h *Handler) Refresh(c *gin.Context) {
 	}
 
 	userID, newRefresh, err := h.auth.refresh.Rotate(c.Request.Context(), req.RefreshToken, store.DefaultRefreshTokenTTL)
+	if errors.Is(err, store.ErrRefreshTokenReused) {
+		// Theft signal: the same token was rotated twice. The legitimate
+		// client and an attacker both hold this string. Burn every session
+		// for this user and force re-auth on every device.
+		h.log.Warn("refresh token reuse detected; revoking all sessions", "user_id", userID)
+		if revokeErr := h.auth.refresh.RevokeAllForUser(c.Request.Context(), userID); revokeErr != nil {
+			h.log.Error("refresh: revoke all on reuse", "user_id", userID, "error", revokeErr)
+		}
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session revoked"})
+		return
+	}
 	if errors.Is(err, store.ErrRefreshTokenInvalid) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired refresh token"})
 		return

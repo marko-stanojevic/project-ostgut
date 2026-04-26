@@ -229,6 +229,22 @@ resource "azurerm_container_app" "backend" {
         secret_name = "jwt-secret"
       }
       env {
+        name        = "OAUTH_SHARED_SECRET"
+        secret_name = "oauth-shared-secret"
+      }
+      env {
+        name  = "PUBLIC_API_BASE_URL"
+        value = "https://${var.backend_custom_domain}"
+      }
+      env {
+        # Container Apps fronts the workload with its own ingress proxy.
+        # Trust the full address space so c.ClientIP() returns the real
+        # caller IP for rate-limit bucket keys; the container is not
+        # reachable except through that ingress.
+        name  = "TRUSTED_PROXIES"
+        value = "0.0.0.0/0,::/0"
+      }
+      env {
         name        = "PADDLE_API_KEY"
         secret_name = "paddle-api-key"
       }
@@ -278,6 +294,10 @@ resource "azurerm_container_app" "backend" {
   secret {
     name  = "jwt-secret"
     value = var.jwt_secret
+  }
+  secret {
+    name  = "oauth-shared-secret"
+    value = var.oauth_shared_secret
   }
   secret {
     name  = "paddle-api-key"
@@ -389,6 +409,10 @@ resource "azurerm_container_app" "frontend" {
         secret_name = "auth-secret"
       }
       env {
+        name        = "OAUTH_SHARED_SECRET"
+        secret_name = "oauth-shared-secret-fe"
+      }
+      env {
         name        = "AUTH_GITHUB_ID"
         secret_name = "auth-github-id"
       }
@@ -402,6 +426,12 @@ resource "azurerm_container_app" "frontend" {
   secret {
     name  = "auth-secret"
     value = var.auth_secret
+  }
+  secret {
+    # Same value as the backend's `oauth-shared-secret`; declared per app
+    # because Container Apps secret references are scoped to the app.
+    name  = "oauth-shared-secret-fe"
+    value = var.oauth_shared_secret
   }
   secret {
     name  = "auth-github-id"

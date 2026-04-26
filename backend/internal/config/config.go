@@ -19,6 +19,21 @@ type Config struct {
 	// backend's own access tokens. Independent of the frontend AUTH_SECRET.
 	JWTSecret string
 
+	// OAuthSharedSecret is the HMAC secret shared with the Next.js server.
+	// The Next.js server signs (provider, providerID, email, emailVerified, ts)
+	// when calling POST /auth/oauth so the backend can verify the handshake
+	// originated from a trusted process and not an arbitrary HTTP client.
+	OAuthSharedSecret string
+
+	// PublicAPIBaseURL is the externally-resolvable base URL of this API
+	// (e.g. https://api.staging.worksfine.app). Used to build absolute URLs
+	// (signed media upload URLs) without trusting client-supplied Host headers.
+	PublicAPIBaseURL string
+
+	// TrustedProxies is the list of CIDRs Gin will trust for X-Forwarded-*.
+	// Empty disables proxy trust (c.ClientIP returns the direct peer).
+	TrustedProxies []string
+
 	// AllowedOrigins is the list of origins permitted by the CORS middleware.
 	// Comma-separated, e.g. "http://localhost:3000,https://app.example.com"
 	AllowedOrigins []string
@@ -82,16 +97,43 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("JWT_SECRET must be set")
 	}
 
+	env := getEnv("ENV", "local")
+
+	oauthSharedSecret := os.Getenv("OAUTH_SHARED_SECRET")
+	if oauthSharedSecret == "" {
+		if env == "production" || env == "staging" {
+			return nil, fmt.Errorf("OAUTH_SHARED_SECRET must be set in %s", env)
+		}
+		// Local dev: fall back to JWT_SECRET so the dev loop keeps working.
+		oauthSharedSecret = jwtSecret
+	}
+
 	allowedOrigins := splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000"))
+	if env == "production" || env == "staging" {
+		if len(allowedOrigins) == 0 {
+			return nil, fmt.Errorf("ALLOWED_ORIGINS must be set in %s", env)
+		}
+		for _, o := range allowedOrigins {
+			if o == "*" {
+				return nil, fmt.Errorf("ALLOWED_ORIGINS must not contain '*' in %s", env)
+			}
+			if !strings.HasPrefix(o, "https://") {
+				return nil, fmt.Errorf("ALLOWED_ORIGINS entries must be https:// in %s, got %q", env, o)
+			}
+		}
+	}
 	browserMetadataProbeOrigins := splitCSV(getEnv("BROWSER_METADATA_PROBE_ORIGINS", strings.Join(allowedOrigins, ",")))
 
 	cfg := &Config{
 		Port:                        port,
 		DatabaseURL:                 databaseURL,
 		JWTSecret:                   jwtSecret,
+		OAuthSharedSecret:           oauthSharedSecret,
+		PublicAPIBaseURL:            strings.TrimRight(os.Getenv("PUBLIC_API_BASE_URL"), "/"),
+		TrustedProxies:              splitCSV(os.Getenv("TRUSTED_PROXIES")),
 		AllowedOrigins:              allowedOrigins,
 		BrowserMetadataProbeOrigins: browserMetadataProbeOrigins,
-		Env:                         getEnv("ENV", "local"),
+		Env:                         env,
 		LogLevel:                    getEnv("LOG_LEVEL", "info"),
 		PaddleAPIKey:                os.Getenv("PADDLE_API_KEY"),
 		PaddleWebhookSecret:         os.Getenv("PADDLE_WEBHOOK_SECRET"),

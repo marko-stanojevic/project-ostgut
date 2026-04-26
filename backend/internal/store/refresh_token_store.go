@@ -17,9 +17,17 @@ import (
 // DefaultRefreshTokenTTL is the lifetime of a freshly issued refresh token.
 const DefaultRefreshTokenTTL = 30 * 24 * time.Hour
 
-// ErrRefreshTokenInvalid is returned when a refresh token is unknown, expired,
-// or already revoked. Callers should respond with 401 and force re-auth.
+// ErrRefreshTokenInvalid is returned when a refresh token is unknown or
+// expired. Callers should respond with 401 and force re-auth.
 var ErrRefreshTokenInvalid = errors.New("refresh token invalid")
+
+// ErrRefreshTokenReused is returned when a refresh token that has already
+// been revoked (rotated) is presented again. This is the canonical signal
+// of refresh-token theft: the legitimate client and the attacker each hold
+// the same string, and exactly one of them has already exchanged it. The
+// caller is expected to revoke every active session for the user and emit
+// a security event.
+var ErrRefreshTokenReused = errors.New("refresh token reused")
 
 // RefreshTokenIssue holds the raw secret returned to the client and the
 // expiry persisted in the database.
@@ -87,6 +95,21 @@ func (s *RefreshTokenStore) Rotate(ctx context.Context, oldToken string, ttl tim
 		hashToken(oldToken),
 	).Scan(&userID)
 	if errors.Is(err, pgx.ErrNoRows) {
+		// Distinguish "never existed / expired" from "already revoked".
+		// A revoked-but-not-expired token presented again is a strong theft
+		// signal: somebody used it, then somebody used it again. Tell the
+		// caller so they can revoke every session for this user.
+		var reusedUserID string
+		reuseErr := tx.QueryRow(ctx,
+			`SELECT user_id FROM refresh_tokens
+			 WHERE token_hash = $1
+			   AND revoked_at IS NOT NULL
+			   AND expires_at > NOW()`,
+			hashToken(oldToken),
+		).Scan(&reusedUserID)
+		if reuseErr == nil {
+			return reusedUserID, nil, ErrRefreshTokenReused
+		}
 		return "", nil, ErrRefreshTokenInvalid
 	}
 	if err != nil {

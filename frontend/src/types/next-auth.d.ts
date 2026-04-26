@@ -5,7 +5,7 @@ export type Role = 'user' | 'editor' | 'admin'
 declare module 'next-auth' {
   interface Session {
     accessToken?: string
-    error?: 'refresh_failed' | 'no_refresh_token'
+    error?: 'refresh_failed' | 'no_refresh_token' | 'oauth_exchange_failed'
     user: {
       id: string
       role: Role
@@ -31,6 +31,6 @@ declare module 'next-auth/jwt' {
     /** Unix epoch milliseconds when the refresh token expires. */
     refreshTokenExpiresAt?: number
     role?: Role
-    error?: 'refresh_failed' | 'no_refresh_token'
+    error?: 'refresh_failed' | 'no_refresh_token' | 'oauth_exchange_failed'
   }
 }

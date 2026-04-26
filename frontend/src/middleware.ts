@@ -56,7 +56,13 @@ export default function middleware(req: NextRequest) {
 
   if (isProtected && !isAuthenticated) {
     const loginUrl = new URL(`${localePath}/auth/login`, req.url)
-    loginUrl.searchParams.set('callbackUrl', pathname)
+    // Only echo the path back as callbackUrl — never an absolute URL,
+    // schema-relative URL, or anything that could redirect off-origin
+    // after sign-in. `pathname` is always origin-relative here, but be
+    // explicit so a future refactor doesn't reintroduce the open redirect.
+    if (pathname.startsWith('/') && !pathname.startsWith('//')) {
+      loginUrl.searchParams.set('callbackUrl', pathname)
+    }
     return NextResponse.redirect(loginUrl)
   }
 

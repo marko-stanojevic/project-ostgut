@@ -90,6 +90,12 @@ variable "auth_secret" {
   sensitive   = true
 }
 
+variable "oauth_shared_secret" {
+  type        = string
+  description = "HMAC secret shared between the Next.js server and the backend. Used to sign POST /auth/oauth handshakes so the endpoint cannot be called by arbitrary HTTP clients."
+  sensitive   = true
+}
+
 variable "allowed_origins" {
   type        = string
   description = "Comma-separated list of allowed CORS origins, e.g. https://app.example.com"
