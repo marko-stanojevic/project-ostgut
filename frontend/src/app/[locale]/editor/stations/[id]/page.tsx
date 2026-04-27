@@ -32,6 +32,7 @@ import {
     CircleNotchIcon,
     WaveformIcon,
     TrashIcon,
+    CaretDownIcon,
 } from '@phosphor-icons/react'
 
 interface StreamFormEntry {
@@ -187,6 +188,59 @@ function persistedStreamForForm(stream: StreamFormEntry, savedByID: Map<string, 
     const saved = savedByID.get(stream.id)
     if (!saved) return undefined
     return saved.url.trim() === stream.url.trim() ? saved : undefined
+}
+
+function streamRowKey(stream: StreamFormEntry, index: number) {
+    return stream.id ?? `new-${index}`
+}
+
+function buildStreamHealthBadge(stream: StreamFormEntry, persistedStream: AdminStream | undefined, validationMessage: string): StatusBadgeItem {
+    if (validationMessage) return { label: 'Invalid URL', tone: 'danger' }
+    if (!stream.url.trim()) return { label: 'Draft', tone: 'warning' }
+    if (!persistedStream) return { label: 'Unsaved', tone: 'warning' }
+    if (persistedStream.last_error) return { label: 'Probe error', tone: 'danger' }
+    if (typeof persistedStream.health_score === 'number') {
+        const score = Math.round(persistedStream.health_score * 100)
+        return {
+            label: `Health ${score}%`,
+            tone: score >= 75 ? 'success' : score >= 50 ? 'warning' : 'danger',
+        }
+    }
+    return { label: 'Health unknown' }
+}
+
+function buildMetadataHealthBadge(
+    stream: StreamFormEntry,
+    persistedStream: AdminStream | undefined,
+    metadataDiagnosis: MetadataDiagnosis | null,
+    validationMessage: string,
+): StatusBadgeItem {
+    if (!stream.metadata_enabled) return { label: 'Disabled', tone: 'warning' }
+    if (validationMessage) return { label: 'Blocked', tone: 'danger' }
+    if (!stream.url.trim()) return { label: 'Draft', tone: 'warning' }
+    if (!persistedStream || !metadataDiagnosis) return { label: 'Unprobed', tone: 'warning' }
+
+    return {
+        label: metadataDiagnosis.primary.label,
+        tone: metadataDiagnosis.primary.tone,
+    }
+}
+
+function buildStreamQualityBadges(stream: StreamFormEntry, persistedStream: AdminStream | undefined): StatusBadgeItem[] {
+    if (!persistedStream) {
+        const formBitrate = Number(stream.bitrate)
+        return Number.isFinite(formBitrate) && formBitrate > 0
+            ? [{ label: `${formBitrate} kbps` }, { label: 'Unprobed', tone: 'warning' }]
+            : [{ label: 'Unprobed', tone: 'warning' }]
+    }
+
+    const badges: StatusBadgeItem[] = [{ label: persistedStream.kind }]
+    if (persistedStream.codec) badges.push({ label: persistedStream.codec })
+    if (persistedStream.lossless) badges.push({ label: 'Lossless', tone: 'success' })
+    if (persistedStream.bit_depth > 0) badges.push({ label: `${persistedStream.bit_depth}-bit` })
+    if (persistedStream.bitrate > 0) badges.push({ label: `${persistedStream.bitrate} kbps` })
+
+    return badges
 }
 
 function SourceField({ label, value }: { label: string; value?: string }) {
@@ -369,6 +423,7 @@ export default function StationEditorPage() {
     const [uploadingIcon, setUploadingIcon] = useState(false)
     const [iconError, setIconError] = useState('')
     const [probingAction, setProbingAction] = useState('')
+    const [expandedStreamRows, setExpandedStreamRows] = useState<Set<string>>(() => new Set())
 
     const [form, setForm] = useState<StationForm>({
         name: '',
@@ -787,9 +842,42 @@ export default function StationEditorPage() {
                             <div className="space-y-2">
                                 {streamRows.map(({ form: stream, persisted: persistedStream }, i) => {
                                     const metadataDiagnosis = persistedStream ? buildMetadataDiagnosis(persistedStream, stream) : null
+                                    const rowKey = streamRowKey(stream, i)
+                                    const isExpanded = expandedStreamRows.has(rowKey)
+                                    const streamHealthBadge = buildStreamHealthBadge(stream, persistedStream, streamValidationMessages[i] ?? '')
+                                    const metadataHealthBadge = buildMetadataHealthBadge(stream, persistedStream, metadataDiagnosis, streamValidationMessages[i] ?? '')
+                                    const streamQualityBadges = buildStreamQualityBadges(stream, persistedStream)
 
                                     return (
-                                    <div key={stream.id ?? `new-${i}`} className="space-y-3 rounded-lg bg-muted/20 p-3">
+                                    <div key={rowKey} className="rounded-lg bg-muted/20">
+                                        <button
+                                            type="button"
+                                            className="flex w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            aria-expanded={isExpanded}
+                                            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} stream ${i + 1}`}
+                                            onClick={() => setExpandedStreamRows((prev) => {
+                                                const next = new Set(prev)
+                                                if (next.has(rowKey)) {
+                                                    next.delete(rowKey)
+                                                } else {
+                                                    next.add(rowKey)
+                                                }
+                                                return next
+                                            })}
+                                        >
+                                            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                                                <StatusBadge item={{ label: `Priority ${stream.priority || i + 1}` }} />
+                                                <StatusBadge item={streamHealthBadge} />
+                                                <StatusBadge item={metadataHealthBadge} />
+                                                {streamQualityBadges.map((item) => (
+                                                    <StatusBadge key={item.label} item={item} />
+                                                ))}
+                                            </div>
+                                            <CaretDownIcon className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {isExpanded && (
+                                        <div className="space-y-3 px-3 pb-3">
                                         <div className="flex items-center gap-2">
                                             <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
                                             <div className="flex-1 space-y-1">
@@ -1173,6 +1261,8 @@ export default function StationEditorPage() {
                                                     </div>
                                                 </div>
                                             </div>
+                                        )}
+                                        </div>
                                         )}
                                     </div>
                                     )
