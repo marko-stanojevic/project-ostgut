@@ -218,15 +218,6 @@ a "placeholder" notice.
 - Verify it serves at `https://<production-domain>/.well-known/security.txt`
   with `Content-Type: text/plain` over HTTPS.
 
-### 4.3 Threat model document
-**Why:** Forces explicit decisions on what we choose not to defend against
-("we accept that Paddle webhook signature is the only billing trust
-anchor") so reviewers can challenge the assumptions.
-
-**What to do:** One-page OWASP Top 10 table mapped to endpoints with
-status (Mitigated / Accepted / TODO). Update on every PR that changes the
-auth surface.
-
 ### 4.4 External pen test before public launch
 **Why:** A focused 5-day test on the full app finds issues this kind of
 audit cannot — business-logic bugs, race conditions in billing, real
