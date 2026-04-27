@@ -1,119 +1,228 @@
 # Stream Probing
 
-OSTGUT stores two URLs per stream variant: the **source URL** (what the admin entered, or what Radio Browser returned) and a **resolved URL** (the actual playable audio endpoint after following any indirection). Probing is the process that produces the resolved URL and fills in codec, transport, kind, and health metadata.
+OSTGUT treats stream probing as bounded evidence collection, not URL filtering. URL shape is only a cheap hint. A live probe can follow redirects, resolve playlist indirection, inspect response headers, parse early audio bytes, test browser metadata readability, and then persist operational decisions used by playback, diagnostics, and future probe scheduling.
 
-For how probe results feed the station reliability score and how metadata detection is stored separately, see [Reliability And Metadata](./reliability-and-metadata.md).
-
----
-
-## What gets stored
-
-Every row in `station_streams` has two URL columns:
-
-| column         | meaning                                                                                                               |
-|----------------|-----------------------------------------------------------------------------------------------------------------------|
-| `url`          | The URL as originally entered — a direct stream, `.pls`, `.m3u`, or `.m3u8`. Never overwritten after the first write. |
-| `resolved_url` | The final playable endpoint after following playlist indirection and HTTP redirects. Updated on every probe.          |
-
-For a direct audio URL, both columns are the same URL (after redirect following).
-
-For a `.pls` or `.m3u` URL, `url` stays as the playlist address and `resolved_url` is the first audio entry extracted from the playlist body. The player uses `resolved_url` for playback; re-probes re-read `url` to refresh `resolved_url` when CDN endpoints rotate.
-
-For `.m3u8` (HLS), both columns are identical — HLS manifests are not resolved further, they are the stream.
+For how probe results feed station reliability and metadata routing, see [Reliability And Metadata](./reliability-and-metadata.md).
 
 ---
 
-## When probing happens
+## Stored Stream Fields
 
-### 1. Admin create
+Every playable variant lives in `station_streams`.
 
-On `POST /admin/stations`, the primary `stream_url` is classified and stored without a live network probe. The goal is to keep editorial saves fast and predictable. Operational truth is established afterward by manual probes or the scheduled background worker.
+| Column | Meaning |
+|---|---|
+| `url` | Source URL as entered by an admin or imported from Radio Browser. This may be direct audio, `.pls`, `.m3u`, or `.m3u8`. |
+| `resolved_url` | Final playable endpoint after HTTP redirects and playlist resolution. The player prefers this field and falls back to `url`. |
+| `kind` | Playback family: `direct`, `playlist`, or `hls`. |
+| `container` | Playlist/container hint: `none`, `m3u`, `m3u8`, or `pls`. |
+| `transport` | Observed transport/protocol family: `http`, `https`, `icy`, `shoutcast`, or `icecast`. |
+| `mime_type` | Response content type observed during probing, normalized without parameters. |
+| `codec`, `bit_depth`, `sample_rate_hz`, `sample_rate_confidence`, `channels` | Audio evidence from content type, URL hints, or parsed early stream bytes. |
+| `health_score` | Operational score for the stream variant. Successful probes raise it gradually; failed probes lower it faster. |
+| `last_checked_at` | Last stream quality/probe check timestamp. |
+| `last_error` | Human-readable last probe error, kept for admin/debugging. |
+| `last_probe_error_code` | Typed last probe failure code used for scheduling and diagnostics. Empty string means the latest stream probe succeeded. |
+| `next_probe_at` | The next time the recurring worker may spend maintenance budget on this stream. |
+| `metadata_enabled`, `metadata_type`, `metadata_source`, `metadata_url`, `metadata_resolver`, `metadata_resolver_checked_at`, `metadata_delayed` | Metadata routing and detection evidence. |
+| `loudness_*` | Loudness evidence produced only by explicit loudness-aware probes. |
 
-### 2. Admin update — explicit stream list
-
-On `PUT /admin/stations/:id` when the body includes a `streams` array, each URL is classified and stored without a live remote probe. Existing stream rows are replaced atomically via `ReplaceForStation`.
-
-### 3. Admin update — single stream URL change
-
-On `PUT /admin/stations/:id` when only `stream_url` changes (no `streams` array), the new URL is classified and written back via `UpsertPrimaryForStation` without a live remote probe.
-
-### 4. Manual admin probes
-
-The admin station detail page owns the explicit operational probes:
-
-- `Probe quality`
-  - runs a stream probe with a **12-second timeout**
-  - updates `resolved_url`, codec/container/transport fields, `health_score`, `last_checked_at`, and `last_error`
-  - does not touch loudness or now-playing snapshot
-- `Probe resolver`
-  - checks whether the stream should route metadata through `client` or `server`
-  - updates `metadata_resolver` and `metadata_resolver_checked_at`
-  - also stores a client-readable `metadata_url` hint when the browser-capability probe finds one
-- `Probe metadata`
-  - refreshes the stored resolver
-  - refreshes cached now-playing snapshot in `stream_now_playing`
-  - persists detected backend `metadata_source` and `metadata_url` hints back to `station_streams`
-  - updates `metadata_delayed` if the stream needed the extended ICY timeout budget to return metadata
-- `Probe loudness`
-  - runs loudness sampling only
-  - updates loudness fields without touching resolver or now-playing snapshot
-- `Probe full`
-  - combines quality, resolver, metadata snapshot, loudness, and metadata detection hint updates
-
-### 5. Ingestion sync (every 6 h)
-
-The Radio Browser syncer uses `url_resolved` from the Radio Browser API, which is already pre-resolved for most stations. Ingestion uses `LightClassifyStreamURL` (URL-suffix classification, no network request) for all URLs. If the light classification returns `kind = playlist` (`.pls` or `.m3u`), a real `ProbeStream` call with an **8-second timeout** follows to resolve the audio URL. Roughly 5% of ingested URLs are playlists; the rest skip the network probe entirely.
-
-### 6. Background re-probe (every 12 h)
-
-The `Prober` goroutine runs once on startup, then on a 12-hour cycle. It fetches all `is_active = true` stream rows ordered by `last_checked_at ASC NULLS FIRST` (stalest first) and re-probes each one.
-
-Up to **10 concurrent workers** run in parallel. Each stream gets:
-
-- a **10-second** stream probe budget for URL/codec/signal refresh
-- a separate **8-second** metadata resolver probe budget for browser-capability checks
-
-Results are written back via `UpdateProbeResult`, which refreshes `resolved_url`, `kind`, `container`, `transport`, `mime_type`, `last_checked_at`, `last_error`, `health_score`, and `metadata_resolver`. Codec and bitrate are only updated when the probe returns non-empty values, so existing known-good data is never overwritten with empty probe results.
-
-The background re-probe does not fetch live now-playing snapshots and does not update `metadata_source`. It only refreshes routing state (`metadata_resolver`, `metadata_resolver_checked_at`, and sometimes `metadata_url`) plus stream health/probe fields.
-
-The background cycle does **not** measure loudness. Loudness is intentionally reserved for explicit loudness-aware probes.
+For direct audio URLs, `url` and `resolved_url` usually match except for HTTP redirects. For `.pls` and `.m3u`, `url` stays as the playlist address while `resolved_url` becomes the first resolved playable entry. For `.m3u8`, `kind = hls` and the manifest URL remains the playable URL.
 
 ---
 
-## Probe failure behaviour
+## Probe Evidence Pipeline
 
-A probe failure during background re-probe is non-fatal and only updates operational fields on the stream row. Admin saves are no longer blocked by live probe failures because saves do not probe. Common reasons for probe failures:
+The implementation lives primarily in `backend/internal/radio/stream_probe.go`.
 
-- geo-blocking (stream responds 403 from server location)
-- rate-limiting or connection refused
-- context deadline exceeded (slow CDN, firewall drop)
-- playlist with no valid entries
-- non-audio content-type
+### 1. Light classification
 
-A stream with a probe error is still offered to the player. The player uses `resolved_url` when available, falling back to the stored source URL.
+`LightClassifyStreamURL` parses the URL and derives cheap hints from the path:
+
+- `.m3u8` -> `kind = hls`, `container = m3u8`
+- `.m3u` -> `kind = playlist`, `container = m3u`
+- `.pls` -> `kind = playlist`, `container = pls`
+- `.mp3`, `.aac`, `.aacp`, `.flac` -> codec hints
+- `https://` -> `transport = https`; otherwise HTTP-family transport
+
+This step performs no network request. It is used during editorial saves and as the base result for live probes.
+
+### 2. URL and redirect safety
+
+`ProbeStreamWithOptions` rejects invalid URLs, non-HTTP(S) schemes, and disallowed private/local targets before network I/O. Redirects are also bounded:
+
+- max redirect count: `5`
+- max redirect host changes: `2`
+- redirect target must remain HTTP(S)
+- redirect target must not be private/local/disallowed
+
+Failures are stored with typed `last_probe_error_code` values such as `invalid_url`, `unsupported_scheme`, `disallowed_host`, `too_many_redirects`, or `too_many_host_changes`.
+
+### 3. Bounded HTTP probe
+
+Live probes use `GET` with:
+
+- `Range: bytes=0-65535`
+- `Icy-Metadata: 1`
+- `Connection: close`
+- a one-shot request connection
+
+The body read is limited so never-ending radio streams do not pin workers indefinitely. The recurring worker gives stream quality probes a 10-second context budget.
+
+### 4. Content and byte evidence
+
+After a successful response, the probe combines:
+
+- final redirected URL
+- response `Content-Type`
+- ICY headers such as `Icy-Metaint`, `Icy-Name`, and `Icy-Br`
+- early response bytes
+
+Content type can override path hints for playlist/HLS detection. Early bytes are parsed for:
+
+- FLAC `STREAMINFO`
+- MP3 frame headers
+- AAC ADTS frame headers
+
+Parsed audio bytes are stronger evidence than URL suffixes. URL filtering remains only a fallback hint.
+
+### 5. Playlist resolution
+
+For `kind = playlist`, the probe reads up to 64 KiB of playlist body and resolves the first playable entry:
+
+- `.pls` via `FileN=` entries
+- `.m3u` via non-comment entries
+- relative playlist entries are resolved against the playlist URL
+- recursion depth is limited to `3`
+
+Playlist failures use typed codes such as `playlist_depth_exceeded`, `playlist_empty`, and `playlist_read_failed`.
+
+### 6. Metadata resolver probe
+
+Recurring and manual resolver/full probes separately test browser metadata support using `ProbeClientMetadataSupport`:
+
+- ICY CORS preflight/read support
+- Icecast `status-json.xsl`
+- Shoutcast `currentsong`
+- Shoutcast `7.html`
+- configured/hinted metadata URLs when present
+
+HLS streams use an HLS ID3 check. If ID3 metadata is not supported, HLS metadata routing becomes `none` rather than forcing server polling.
+
+Metadata resolver checks use a separate 8-second budget in the recurring worker.
 
 ---
 
-## How the player uses probe data
+## Probe Modes
 
-`getPlayableVariants(station)` in `PlayerContext` reads `station.streams`, filters to `is_active = true`, sorts by `priority`, and maps each entry to `{ url: resolvedUrl || url, kind }`. The `kind` field drives the playback engine choice:
+### Admin create
 
-- `kind = "hls"` → HLS.js (or native Safari HLS)
-- anything else → `<audio>` element with direct src
+`POST /admin/stations` stores stream rows immediately. Stream URLs are light-classified but not fully probed during the save. New stream rows default `next_probe_at = NOW()`, so approved stations become eligible for recurring maintenance immediately.
 
-On fatal playback error (source unreachable, codec unsupported), the player tries the next variant in priority order before falling back to exponential backoff on the same variant.
+### Admin update
 
-For metadata specifically:
+`PUT /admin/stations/:id` stores explicit stream arrays without blocking on remote networks. If an existing URL is kept, known probe evidence is preserved across the save, including `resolved_url`, audio fields, metadata resolver fields, health, `next_probe_at`, `last_checked_at`, `last_error`, and `last_probe_error_code`.
 
-- `metadata_resolver = client` means the frontend attempts metadata directly in the browser
-- `metadata_resolver = server` means the frontend consumes cached snapshots and SSE updates from the backend only when no browser-readable client path is available
-- `metadata_resolver = none` means the player should not attempt metadata polling for that stream
+If a station is moved to `approved`, its streams are marked due immediately by setting `next_probe_at = NOW()`.
 
-Client resolution is the preferred route whenever the browser can read metadata directly. `server` is a fallback for streams whose metadata is not browser-readable under real browser constraints such as CORS or missing client-readable metadata endpoints.
+### Manual admin probes
+
+The admin station detail page owns explicit, user-triggered probes:
+
+- `Probe quality`: stream reachability, resolved URL, content/codec fields, health, typed failure code, and next probe schedule
+- `Probe resolver`: metadata routing only
+- `Probe metadata`: metadata snapshot and detected metadata source hints
+- `Probe loudness`: loudness only
+- `Probe full`: quality, resolver, metadata, loudness, and detection hints
+
+Manual probes can run on pending stations. That preserves editorial ability to validate a candidate before approval.
+
+### Ingestion sync
+
+Radio Browser ingestion imports stations as `pending`. It uses `url_resolved` from Radio Browser when available, light-classifies the stream, and only performs a short live probe for playlist or opaque direct URLs that need resolution/classification. Imported streams are not part of recurring maintenance until their station becomes `approved`.
+
+### Recurring approved-stream maintenance
+
+The `Prober` goroutine runs once on startup and then every 12 hours. It does not blindly probe every stream. It asks `StationStreamStore.ListDueActiveForApprovedStations` for active streams that satisfy all of:
+
+- stream row is active
+- station row is active
+- station status is `approved`
+- `next_probe_at <= now`
+
+The batch limit is `500`, and up to `10` workers probe in parallel. Rows are ordered by `next_probe_at ASC, last_checked_at ASC NULLS FIRST` so the oldest due work is handled first.
+
+Recurring probes do not measure loudness and do not fetch now-playing snapshots. They update stream quality fields, health, typed failure code, `next_probe_at`, and metadata resolver routing.
 
 ---
 
-## Probe depth limit
+## Probe Scheduling
 
-Playlist resolution is recursive up to depth 3. A `.pls` pointing to a `.m3u` pointing to another `.m3u` will resolve correctly; a fourth level of indirection returns an error.
+The worker writes `next_probe_at` after every quality probe using `radio.NextProbeAt`:
+
+| Latest result | Next recurring probe |
+|---|---:|
+| Success | `checked_at + 12h` |
+| `timeout`, `request_failed` | `checked_at + 1h` |
+| `http_status` | `checked_at + 6h` |
+| Static/policy/playlist-shape failures (`invalid_url`, `unsupported_scheme`, `disallowed_host`, redirect policy failures, playlist depth/empty/read failures) | `checked_at + 24h` |
+| Unknown typed failure | `checked_at + 3h` |
+
+This makes stream maintenance budget-sensitive:
+
+- stable approved streams are checked at the normal cadence
+- transient network failures retry sooner
+- static failures back off longer instead of being hammered every cycle
+- pending/rejected catalog candidates cost no recurring probe budget
+
+---
+
+## Failure Codes
+
+`last_error` remains human-readable. `last_probe_error_code` is the machine-readable scheduling/diagnostic signal.
+
+Current codes:
+
+- `invalid_url`
+- `unsupported_scheme`
+- `disallowed_host`
+- `too_many_redirects`
+- `redirect_unsupported_scheme`
+- `too_many_host_changes`
+- `timeout`
+- `request_failed`
+- `http_status`
+- `playlist_depth_exceeded`
+- `playlist_empty`
+- `playlist_read_failed`
+
+Empty string means the latest quality probe succeeded.
+
+---
+
+## Health Score
+
+The recurring prober updates stream health in `backend/internal/radio/prober.go`:
+
+- success: `+0.08`, capped at `1.0`
+- failure: `-0.20`, floored at `0.0`
+
+This intentionally recovers slowly and degrades quickly. A brief successful recovery should not instantly erase repeated failures, while a newly failing approved stream should become visible to operations quickly.
+
+---
+
+## Player Use
+
+The player reads station stream variants, filters active rows, sorts by priority, and plays `resolved_url || url`.
+
+- `kind = hls` uses HLS playback
+- other kinds use normal audio element playback
+- playback errors try the next variant before falling back to retry/backoff
+
+Metadata routing is controlled by `metadata_resolver`:
+
+- `client`: frontend attempts browser-readable metadata directly
+- `server`: frontend consumes backend snapshots/SSE
+- `none`: frontend does not attempt metadata polling for that stream
+
+Probe errors do not automatically remove a stream from playback. They inform admin diagnostics, station reliability, and the next maintenance schedule.

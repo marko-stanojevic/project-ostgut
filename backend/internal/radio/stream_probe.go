@@ -21,6 +21,54 @@ const streamProbeUserAgent = "OSTGUT/1.0 (radio@worksfine.app)"
 const maxProbeRedirects = 5
 const maxProbeHostChanges = 2
 
+type ProbeFailureCode string
+
+const (
+	ProbeFailureInvalidURL                ProbeFailureCode = "invalid_url"
+	ProbeFailureUnsupportedScheme         ProbeFailureCode = "unsupported_scheme"
+	ProbeFailureDisallowedHost            ProbeFailureCode = "disallowed_host"
+	ProbeFailureTooManyRedirects          ProbeFailureCode = "too_many_redirects"
+	ProbeFailureRedirectUnsupportedScheme ProbeFailureCode = "redirect_unsupported_scheme"
+	ProbeFailureTooManyHostChanges        ProbeFailureCode = "too_many_host_changes"
+	ProbeFailureTimeout                   ProbeFailureCode = "timeout"
+	ProbeFailureRequestFailed             ProbeFailureCode = "request_failed"
+	ProbeFailureHTTPStatus                ProbeFailureCode = "http_status"
+	ProbeFailurePlaylistDepthExceeded     ProbeFailureCode = "playlist_depth_exceeded"
+	ProbeFailurePlaylistEmpty             ProbeFailureCode = "playlist_empty"
+	ProbeFailurePlaylistReadFailed        ProbeFailureCode = "playlist_read_failed"
+)
+
+type ProbeError struct {
+	Code ProbeFailureCode
+	Err  error
+}
+
+func (e ProbeError) Error() string {
+	if e.Err == nil {
+		return string(e.Code)
+	}
+	return e.Err.Error()
+}
+
+func (e ProbeError) Unwrap() error {
+	return e.Err
+}
+
+func probeFailure(code ProbeFailureCode, format string, args ...any) error {
+	return ProbeError{Code: code, Err: fmt.Errorf(format, args...)}
+}
+
+func probeFailureCode(err error) ProbeFailureCode {
+	var probeErr ProbeError
+	if errors.As(err, &probeErr) && probeErr.Code != "" {
+		return probeErr.Code
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ProbeFailureTimeout
+	}
+	return ProbeFailureRequestFailed
+}
+
 type StreamProbeResult struct {
 	URL                    string
 	ResolvedURL            string
@@ -40,6 +88,7 @@ type StreamProbeResult struct {
 	LoudnessMeasuredAt     *time.Time
 	LoudnessStatus         string
 	LastError              *string
+	LastErrorCode          string
 	LastCheckedAt          time.Time
 }
 
@@ -60,6 +109,7 @@ func LightClassifyStreamURL(rawURL string) StreamProbeResult {
 			Transport:      "http",
 			LoudnessStatus: "unknown",
 			LastError:      &msg,
+			LastErrorCode:  string(ProbeFailureInvalidURL),
 			LastCheckedAt:  now,
 		}
 	}
@@ -96,16 +146,19 @@ func ProbeStreamWithOptions(ctx context.Context, client *http.Client, rawURL str
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		msg := "stream URL must be a valid absolute URL"
 		base.LastError = &msg
+		base.LastErrorCode = string(ProbeFailureInvalidURL)
 		return base
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
 		msg := "stream URL must use http or https"
 		base.LastError = &msg
+		base.LastErrorCode = string(ProbeFailureUnsupportedScheme)
 		return base
 	}
 	if isDisallowedProbeURL(u) {
 		msg := "stream URL points to a disallowed host"
 		base.LastError = &msg
+		base.LastErrorCode = string(ProbeFailureDisallowedHost)
 		return base
 	}
 
@@ -115,19 +168,19 @@ func ProbeStreamWithOptions(ctx context.Context, client *http.Client, rawURL str
 	safeClient := *client
 	safeClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= maxProbeRedirects {
-			return fmt.Errorf("too many redirects")
+			return probeFailure(ProbeFailureTooManyRedirects, "too many redirects")
 		}
 		if req == nil || req.URL == nil {
-			return errors.New("invalid redirect URL")
+			return ProbeError{Code: ProbeFailureInvalidURL, Err: errors.New("invalid redirect URL")}
 		}
 		if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
-			return fmt.Errorf("redirect uses unsupported scheme")
+			return probeFailure(ProbeFailureRedirectUnsupportedScheme, "redirect uses unsupported scheme")
 		}
 		if isDisallowedProbeURL(req.URL) {
-			return fmt.Errorf("redirect target is disallowed")
+			return probeFailure(ProbeFailureDisallowedHost, "redirect target is disallowed")
 		}
 		if redirectHostChangeCount(via, req.URL) > maxProbeHostChanges {
-			return fmt.Errorf("too many redirect host changes")
+			return probeFailure(ProbeFailureTooManyHostChanges, "too many redirect host changes")
 		}
 		return nil
 	}
@@ -136,6 +189,7 @@ func ProbeStreamWithOptions(ctx context.Context, client *http.Client, rawURL str
 	if err != nil {
 		msg := err.Error()
 		base.LastError = &msg
+		base.LastErrorCode = string(probeFailureCode(err))
 		return base
 	}
 	return resolved
@@ -144,19 +198,19 @@ func ProbeStreamWithOptions(ctx context.Context, client *http.Client, rawURL str
 func probeRecursive(ctx context.Context, client *http.Client, target string, depth int, opts StreamProbeOptions) (StreamProbeResult, error) {
 	const maxDepth = 3
 	if depth > maxDepth {
-		return StreamProbeResult{}, fmt.Errorf("playlist resolution depth exceeded")
+		return StreamProbeResult{}, probeFailure(ProbeFailurePlaylistDepthExceeded, "playlist resolution depth exceeded")
 	}
 	targetURL, err := url.Parse(strings.TrimSpace(target))
 	if err != nil || targetURL == nil {
-		return StreamProbeResult{}, fmt.Errorf("invalid probe URL")
+		return StreamProbeResult{}, probeFailure(ProbeFailureInvalidURL, "invalid probe URL")
 	}
 	if isDisallowedProbeURL(targetURL) {
-		return StreamProbeResult{}, fmt.Errorf("probe URL target is disallowed")
+		return StreamProbeResult{}, probeFailure(ProbeFailureDisallowedHost, "probe URL target is disallowed")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return StreamProbeResult{}, fmt.Errorf("build request: %w", err)
+		return StreamProbeResult{}, ProbeError{Code: ProbeFailureInvalidURL, Err: fmt.Errorf("build request: %w", err)}
 	}
 	// Radio endpoints often keep streaming bytes forever and can confuse
 	// keep-alive reuse; force one-shot probe connections.
@@ -168,12 +222,21 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return StreamProbeResult{}, fmt.Errorf("probe request failed: %w", err)
+		code := ProbeFailureRequestFailed
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			code = ProbeFailureTimeout
+		} else {
+			var probeErr ProbeError
+			if errors.As(err, &probeErr) {
+				code = probeErr.Code
+			}
+		}
+		return StreamProbeResult{}, ProbeError{Code: code, Err: fmt.Errorf("probe request failed: %w", err)}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		return StreamProbeResult{}, fmt.Errorf("probe status %d", resp.StatusCode)
+		return StreamProbeResult{}, probeFailure(ProbeFailureHTTPStatus, "probe status %d", resp.StatusCode)
 	}
 
 	finalURL := target
@@ -182,7 +245,7 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 	}
 	finalParsed, _ := url.Parse(finalURL)
 	if finalParsed == nil || isDisallowedProbeURL(finalParsed) {
-		return StreamProbeResult{}, fmt.Errorf("resolved URL target is disallowed")
+		return StreamProbeResult{}, probeFailure(ProbeFailureDisallowedHost, "resolved URL target is disallowed")
 	}
 	kindByPath, containerByPath := classifyPath(finalParsed.Path)
 
@@ -202,7 +265,7 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 	}
 
 	transport := "http"
-	if finalParsed != nil && strings.EqualFold(finalParsed.Scheme, "https") {
+	if strings.EqualFold(finalParsed.Scheme, "https") {
 		transport = "https"
 	}
 	if resp.Header.Get("Icy-Metaint") != "" || resp.Header.Get("Icy-Name") != "" {
@@ -269,7 +332,7 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
-		return result, fmt.Errorf("read playlist body: %w", err)
+		return result, ProbeError{Code: ProbeFailurePlaylistReadFailed, Err: fmt.Errorf("read playlist body: %w", err)}
 	}
 
 	var nested string
@@ -280,7 +343,7 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 		nested = firstM3UEntry(string(body), finalParsed)
 	}
 	if nested == "" {
-		return result, fmt.Errorf("playlist contains no playable URL")
+		return result, probeFailure(ProbeFailurePlaylistEmpty, "playlist contains no playable URL")
 	}
 
 	next, err := probeRecursive(ctx, client, nested, depth+1, opts)

@@ -72,6 +72,13 @@ func NewMetadataPoller(streams *store.StationStreamStore, now *store.StreamNowPl
 	}
 }
 
+// ActiveStreamCount returns the number of streams with a live server-side metadata poll loop.
+func (p *MetadataPoller) ActiveStreamCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.channels)
+}
+
 // Run blocks until ctx is cancelled. The poller does its work via subscription
 // callbacks, so Run only owns shutdown coordination.
 func (p *MetadataPoller) Run(ctx context.Context) {

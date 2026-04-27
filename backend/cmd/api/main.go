@@ -74,6 +74,9 @@ func main() {
 	stationStreamStore := store.NewStationStreamStore(pool)
 	streamNowPlayingStore := store.NewStreamNowPlayingStore(pool)
 	mediaAssetStore := store.NewMediaAssetStore(pool)
+	diagnosticsStore := store.NewDiagnosticsStore(pool)
+	syncer := radio.NewSyncer(stationStore, stationStreamStore, logger)
+	prober := radio.NewProber(stationStreamStore, logger, cfg.BrowserMetadataProbeOrigins)
 	h := handler.New(
 		handler.Dependencies{
 			UserStore:             userStore,
@@ -83,6 +86,9 @@ func main() {
 			StationStreamStore:    stationStreamStore,
 			StreamNowPlayingStore: streamNowPlayingStore,
 			MediaAssetStore:       mediaAssetStore,
+			DiagnosticsStore:      diagnosticsStore,
+			StationSyncer:         syncer,
+			StreamProber:          prober,
 		},
 		handler.Options{
 			Log:                         logger,
@@ -105,11 +111,9 @@ func main() {
 	// Start background station sync (Radio Browser ingestion).
 	syncCtx, syncCancel := context.WithCancel(context.Background())
 	defer syncCancel()
-	syncer := radio.NewSyncer(stationStore, stationStreamStore, logger)
 	go syncer.Run(syncCtx)
 
 	// Start background stream re-probe (refreshes resolved_url, codec, health).
-	prober := radio.NewProber(stationStreamStore, logger, cfg.BrowserMetadataProbeOrigins)
 	go prober.Run(syncCtx)
 
 	// Start metadata server-poller worker (drives upstream fetches for streams
@@ -248,6 +252,10 @@ func main() {
 	admin.Use(middleware.RequireJSON())
 	{
 		admin.GET("/overview", h.AdminOverview)
+		admin.GET("/diagnostics/api", h.AdminAPIDiagnostics)
+		admin.GET("/diagnostics/database", h.AdminDatabaseDiagnostics)
+		admin.GET("/diagnostics/jobs", h.AdminJobsDiagnostics)
+		admin.POST("/jobs/:jobID/trigger", h.AdminTriggerJob)
 		admin.GET("/stats", h.AdminStats)
 		admin.GET("/users", h.AdminListUsers)
 		admin.PUT("/users/:id/role", h.AdminSetUserRole)
