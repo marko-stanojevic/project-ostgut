@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Alert } from '@/components/ui/alert'
 import { CheckIcon, ArrowLeftIcon } from '@phosphor-icons/react'
-import { API_URL } from '@/lib/api'
 import { AuthShell } from '@/components/auth/auth-shell'
+import { requestPasswordReset } from '@/lib/auth-api'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -24,15 +24,7 @@ export default function ForgotPasswordPage() {
     setLoading(true)
 
     try {
-      const res = await fetch(`${API_URL}/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to send reset email')
-      }
+      await requestPasswordReset(email)
       setSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send reset email')

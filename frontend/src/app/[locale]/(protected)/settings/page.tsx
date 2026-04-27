@@ -20,10 +20,10 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { SubscriptionCard } from '@/components/subscription-card'
-import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
 import { completeUpload, createUploadIntent } from '@/lib/media-upload'
 import { defaultTheme, themeOptions, type AppTheme } from '@/lib/theme'
+import { getUserProfile, updateUserProfile } from '@/lib/user-profile'
 import {
   UserIcon,
   CreditCardIcon,
@@ -35,17 +35,7 @@ import {
   UploadSimpleIcon,
 } from '@phosphor-icons/react'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-
 type SettingsSection = 'overview' | 'plan' | 'profile' | 'security' | 'notifications' | 'preferences'
-
-type ProfileResponse = {
-  id: string
-  email: string
-  name: string
-  role: 'user' | 'editor' | 'admin'
-  avatar?: MediaAssetResponse | null
-}
 
 // ─── Overview ────────────────────────────────────────────────────────────────
 
@@ -117,7 +107,7 @@ function ProfileSection() {
   useEffect(() => {
     if (!session?.accessToken) return
     let active = true
-    fetchJSONWithAuth<ProfileResponse>(`${API}/users/me`, session.accessToken, { cache: 'no-store' })
+    getUserProfile(session.accessToken, { cache: 'no-store' })
       .then((data) => {
         if (!active) return
         setDisplayName(data.name ?? '')
@@ -131,12 +121,7 @@ function ProfileSection() {
     if (!session?.accessToken || !displayName.trim()) return
     setSaving(true)
     try {
-      const res = await fetch(`${API}/users/me`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-        body: JSON.stringify({ name: displayName.trim() }),
-      })
-      if (!res.ok) throw new Error('Failed')
+      await updateUserProfile(session.accessToken, { name: displayName.trim() })
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch {

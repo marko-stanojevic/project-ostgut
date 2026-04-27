@@ -19,7 +19,7 @@ import {
   ArrowsInIcon,
 } from '@phosphor-icons/react'
 import type { StationStream } from '@/types/player'
-import type { NowPlaying } from '@/hooks/useNowPlaying'
+import type { NowPlaying } from '@/lib/now-playing'
 
 interface FullScreenPlayerProps {
   nowPlaying: NowPlaying | null

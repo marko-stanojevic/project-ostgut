@@ -27,3 +27,12 @@ export async function fetchStationDetail(id: string, revalidate = 60): Promise<S
         return { station: null, error: 'Unable to load station.' }
     }
 }
+
+export async function fetchStationByID(id: string, init?: RequestInit) {
+    const response = await fetch(`${API_URL}/stations/${id}`, init)
+    if (!response.ok) {
+        throw new Error(`Station request failed with status ${response.status}`)
+    }
+
+    return (await response.json()) as ApiStationDetail
+}

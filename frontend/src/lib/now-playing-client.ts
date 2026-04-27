@@ -1,6 +1,6 @@
 'use client'
 
-import type { NowPlaying } from '@/hooks/useNowPlaying'
+import type { NowPlaying } from '@/lib/now-playing'
 import {
   normalizeResolvedClientMetadata,
   resolveSupplementalMetadata,

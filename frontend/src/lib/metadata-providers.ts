@@ -1,7 +1,7 @@
 'use client'
 
 import type { StationStream } from '@/types/player'
-import type { NowPlaying } from '@/hooks/useNowPlaying'
+import type { NowPlaying } from '@/lib/now-playing'
 import { metadataDebugLog } from '@/lib/metadata-observability'
 import { isPlaceholderMetadataTitle } from '@/lib/metadata-title'
 

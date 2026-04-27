@@ -6,15 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { getCheckoutConfig, getSubscription, type CheckoutConfig, type Subscription } from '@/lib/billing'
 import { initializePaddle, type Paddle } from '@paddle/paddle-js'
-
-interface Subscription {
-  plan: string
-  status: string
-  trial_ends_at?: string
-  current_period_ends_at?: string
-  paddle_customer_id?: string
-}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
@@ -54,33 +47,27 @@ function statusLabel(status: string) {
 export function SubscriptionCard() {
   const { session, user } = useAuth()
   const [sub, setSub] = useState<Subscription | null>(null)
+  const [checkoutConfig, setCheckoutConfig] = useState<CheckoutConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [paddle, setPaddle] = useState<Paddle | null>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-
   // Load subscription
   useEffect(() => {
     if (!session?.accessToken) return
-    fetch(`${apiUrl}/billing/subscription`, {
-      headers: { Authorization: `Bearer ${session.accessToken}` },
-    })
-      .then((r) => r.json())
+    getSubscription(session.accessToken)
       .then((data) => setSub(data))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [session?.accessToken, apiUrl])
+  }, [session?.accessToken])
 
   // Initialize Paddle.js
   useEffect(() => {
     if (!session?.accessToken) return
-    fetch(`${apiUrl}/billing/checkout-config`, {
-      headers: { Authorization: `Bearer ${session.accessToken}` },
-    })
-      .then((r) => r.json())
+    getCheckoutConfig(session.accessToken)
       .then(async (cfg) => {
         if (!cfg.client_token || !cfg.price_id) return
+        setCheckoutConfig(cfg)
         const p = await initializePaddle({
           token: cfg.client_token,
           environment: process.env.NEXT_PUBLIC_PADDLE_ENV === 'production' ? 'production' : 'sandbox',
@@ -88,21 +75,15 @@ export function SubscriptionCard() {
         if (p) setPaddle(p)
       })
       .catch(() => {})
-  }, [session?.accessToken, apiUrl])
+  }, [session?.accessToken])
 
   const handleUpgrade = async () => {
-    if (!paddle || !session?.accessToken) return
+    if (!paddle || !checkoutConfig?.price_id) return
     setCheckoutLoading(true)
 
     try {
-      // Fetch price_id from checkout-config
-      const cfgRes = await fetch(`${apiUrl}/billing/checkout-config`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      })
-      const cfg = await cfgRes.json()
-
       paddle.Checkout.open({
-        items: [{ priceId: cfg.price_id, quantity: 1 }],
+        items: [{ priceId: checkoutConfig.price_id, quantity: 1 }],
         customer: sub?.paddle_customer_id ? { id: sub.paddle_customer_id } : undefined,
         customData: { user_id: user?.id ?? '' },
       })
@@ -172,7 +153,7 @@ export function SubscriptionCard() {
               <Button
                 className="mt-2"
                 onClick={handleUpgrade}
-                disabled={checkoutLoading || !paddle}
+                disabled={checkoutLoading || !paddle || !checkoutConfig?.price_id}
               >
                 {checkoutLoading ? 'Opening checkout…' : 'Upgrade to Pro'}
               </Button>

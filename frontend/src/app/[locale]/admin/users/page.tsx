@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
 import { useAdminSearch } from '../admin-search-context'
-import { fetchJSONWithAuth } from '@/lib/auth-fetch'
+import { listAdminUsers, setAdminUserRole, type AdminUser, type AdminUserRole } from '@/lib/admin-users'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const PAGE_SIZE = 50
 
 const userSkeletonCells = [
@@ -34,20 +33,11 @@ const userSkeletonCells = [
   { tdClassName: 'px-4 py-3 text-right', skeletonClassName: 'h-5 w-10 ml-auto' },
 ]
 
-type Role = 'user' | 'editor' | 'admin'
-
-const ROLE_OPTIONS: Role[] = ['user', 'editor', 'admin']
-
-interface AdminUser {
-  id: string
-  email: string
-  name: string | null
-  role: Role
-}
+const ROLE_OPTIONS: AdminUserRole[] = ['user', 'editor', 'admin']
 
 interface PendingRoleChange {
   user: AdminUser
-  nextRole: Role
+  nextRole: AdminUserRole
 }
 
 export default function AdminUsersPage() {
@@ -69,22 +59,15 @@ export default function AdminUsersPage() {
     if (!session?.accessToken) return
     setLoading(true)
     setError('')
-    const params = new URLSearchParams({
-      limit: String(PAGE_SIZE),
-      offset: String(page * PAGE_SIZE),
-    })
-    if (appliedSearch) {
-      params.set('q', appliedSearch)
-    }
 
     try {
-      const data = await fetchJSONWithAuth<{ users?: AdminUser[]; total?: number }>(
-        `${API}/admin/users?${params}`,
-        session.accessToken,
-      )
-      const usersList = data.users ?? []
-      setUsers(usersList)
-      setTotal(data.total ?? usersList.length)
+      const data = await listAdminUsers(session.accessToken, {
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        query: appliedSearch,
+      })
+      setUsers(data.users)
+      setTotal(data.total)
     } catch (err) {
       setUsers([])
       setTotal(0)
@@ -101,7 +84,7 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
-  const requestRoleChange = (user: AdminUser, nextRole: Role) => {
+  const requestRoleChange = (user: AdminUser, nextRole: AdminUserRole) => {
     if (nextRole === user.role) return
     // Prevent self-demotion: an admin cannot change their own role.
     if (user.email === currentUser?.email && user.role === 'admin') return
@@ -114,14 +97,7 @@ export default function AdminUsersPage() {
     setError('')
 
     try {
-      await fetchJSONWithAuth(
-        `${API}/admin/users/${pendingChange.user.id}/role`,
-        session.accessToken,
-        {
-          method: 'PUT',
-          body: JSON.stringify({ role: pendingChange.nextRole }),
-        },
-      )
+      await setAdminUserRole(session.accessToken, pendingChange.user.id, pendingChange.nextRole)
       setPendingChange(null)
       await fetchUsers()
     } catch (err) {
@@ -189,7 +165,7 @@ export default function AdminUsersPage() {
                       <div className="flex justify-end">
                         <Select
                           value={u.role}
-                          onValueChange={(value) => requestRoleChange(u, value as Role)}
+                          onValueChange={(value) => requestRoleChange(u, value as AdminUserRole)}
                           disabled={lockSelfAdmin}
                         >
                           <SelectTrigger size="sm" aria-label={`Role for ${u.email}`}>

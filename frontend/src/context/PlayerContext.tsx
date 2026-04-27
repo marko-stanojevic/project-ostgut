@@ -23,11 +23,10 @@ import { emitHlsID3NowPlaying } from '@/lib/hls-id3'
 import { usePlayerStorage } from '@/hooks/usePlayerStorage'
 import { usePlayerSync } from '@/hooks/usePlayerSync'
 import { toStation } from '@/lib/station'
-import type { ApiStation } from '@/types/station'
+import { fetchStationByID } from '@/lib/station-detail'
 
 // Re-export Station so existing consumers don't need to change their imports.
 export type { Station } from '@/types/player'
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 type HlsCtor = typeof import('hls.js').default
 
 let hlsCtorPromise: Promise<HlsCtor | null> | null = null
@@ -528,11 +527,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!station?.id) return
 
     const controller = new AbortController()
-    fetch(`${API}/stations/${station.id}`, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) return null
-        return (await res.json()) as ApiStation
-      })
+    fetchStationByID(station.id, { signal: controller.signal })
       .then((data) => {
         if (!data) return
         const full = toStation(data)

@@ -1,4 +1,4 @@
-import type { NowPlaying } from '@/hooks/useNowPlaying'
+import type { NowPlaying } from '@/lib/now-playing'
 import type { StationStream } from '@/types/player'
 import { formatMetadataLabel } from '@/lib/metadata-title'
 
