@@ -9,8 +9,7 @@ import {
     normalizeUpdatedAt,
     isTimestampNewer,
 } from '@/types/player'
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+import { getPlayerPreferences, updatePlayerPreferences } from '@/lib/player-preferences'
 
 interface RemoteUpdate {
     volume: number
@@ -55,12 +54,7 @@ export function usePlayerSync({
 
         const loadRemotePreferences = async () => {
             try {
-                const res = await fetch(`${API}/users/me/player-preferences`, {
-                    headers: { Authorization: `Bearer ${accessToken}` },
-                })
-                if (!res.ok) return
-
-                const payload = (await res.json()) as Partial<PlayerPreferencesPayload>
+                const payload = await getPlayerPreferences(accessToken)
                 const remoteUpdatedAt = normalizeUpdatedAt(payload.updatedAt)
 
                 if (!isTimestampNewer(remoteUpdatedAt, updatedAt)) {
@@ -99,15 +93,7 @@ export function usePlayerSync({
         const timeoutID = window.setTimeout(() => {
             const payload: PlayerPreferencesPayload = { volume, station, normalizationEnabled, updatedAt }
 
-            fetch(`${API}/users/me/player-preferences`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify(payload),
-                signal: controller.signal,
-            }).catch(() => {
+            updatePlayerPreferences(accessToken, payload, { signal: controller.signal }).catch(() => {
                 // Keep local preferences when network sync is unavailable.
             })
         }, 700)

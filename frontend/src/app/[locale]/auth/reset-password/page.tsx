@@ -10,7 +10,7 @@ import { Field, FieldLabel, FieldDescription } from '@/components/ui/field'
 import { Alert } from '@/components/ui/alert'
 import { ArrowLeftIcon, WarningCircleIcon } from '@phosphor-icons/react'
 import { AuthShell } from '@/components/auth/auth-shell'
-import { API_URL } from '@/lib/api'
+import { resetPassword } from '@/lib/auth-api'
 
 function ResetPasswordForm() {
   const router = useRouter()
@@ -55,15 +55,7 @@ function ResetPasswordForm() {
 
     setLoading(true)
     try {
-      const res = await fetch(`${API_URL}/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to reset password')
-      }
+      await resetPassword(token, password)
       router.push('/auth/login')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset password')

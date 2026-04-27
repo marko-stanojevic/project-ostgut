@@ -127,6 +127,7 @@ func main() {
 		logger.Warn("New Relic agent disabled", "reason", err)
 		nrApp = nil
 	}
+	db.StartPoolStatsReporter(syncCtx, pool, logger, time.Minute, nrApp)
 
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)

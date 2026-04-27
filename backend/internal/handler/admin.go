@@ -92,8 +92,9 @@ func (h *Handler) AdminBulkAction(c *gin.Context) {
 func (h *Handler) AdminListUsers(c *gin.Context) {
 	limit := queryInt(c, "limit", 50)
 	offset := queryInt(c, "offset", 0)
+	query := strings.TrimSpace(c.Query("q"))
 
-	users, total, err := h.admin.users.ListUsers(c.Request.Context(), limit, offset)
+	users, total, err := h.admin.users.ListUsers(c.Request.Context(), limit, offset, query)
 	if err != nil {
 		h.log.Error("admin list users", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -116,7 +117,8 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 // adminStationResponse extends the public response with editorial + status fields.
 type adminStationResponse struct {
 	stationResponse
-	Status string `json:"status"`
+	Status        string  `json:"status"`
+	InternalNotes *string `json:"internal_notes,omitempty"`
 }
 
 // adminStationWithStreams fetches the stream variants for s and builds the
@@ -142,6 +144,7 @@ func toAdminStationResponse(s *store.Station, streams []streamResponse) adminSta
 	return adminStationResponse{
 		stationResponse: toStationResponse(s, streams),
 		Status:          s.Status,
+		InternalNotes:   s.InternalNotes,
 	}
 }
 

@@ -47,6 +47,12 @@ Once the product is live and users exist, this section will be removed and compa
 
 **Error handling: fail loudly and early.** When something goes wrong, crash with a clear message rather than defaulting silently. Defensive programming (null checks, fallbacks) is overhead. If the backend returns unexpected data, let it error; fix the contract. In production, add recovery paths.
 
+**When reviewing, report suspicious code.** If you spot something fishy while reviewing the codebase, call it out explicitly and suggest a refinement or refactor instead of silently working around it.
+
+**Track workarounds and deferred issues.** When introducing or keeping a workaround, temporary exception, toolchain quirk, or follow-up issue, record it immediately in the appropriate backlog doc: use `docs/pending-issues.md` for general engineering/product follow-ups and `docs/pending-security-issues.md` for security or dependency vulnerability follow-ups. Keep notes concise and include the safe resolution path.
+
+**Lockfiles are part of the contract.** If a dependency manifest changes, the corresponding lockfile must be updated in the same change. Treat `package.json` and `package-lock.json` as one unit during reviews and refactors.
+
 ## Architectural Discipline (Required)
 
 Every change — feature, bug fix, refactor — is an architectural decision. Treat it as such. Plumbing-style fixes ("thread one more bool through three layers", "add another `if` branch", "sniff a string for a type") are forbidden as the default approach. Slow down, identify the root cause, and fix the design.
@@ -187,6 +193,7 @@ project-ostgut/
 - **API calls**: use `process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'` as base URL, always pass `Authorization: Bearer ${session.accessToken}` on protected endpoints
 - **Audio player**: global state in `PlayerContext` — persists across navigation. Player bar is pinned to bottom of the protected layout. Volume and last station survive page reload (localStorage) and are synced per-user to the backend. Shared player primitives (stream resolution, waveform bars) live in `src/components/player/` and are reused by both the bar and the full-screen view.
 - **Device playback handoff**: the web player supports Google Cast and Safari AirPlay from the in-player device menu. Keep system device routing system-native; do not reintroduce generic browser output switching.
+- **Frontend container runtime**: staging and production frontend images must remain distroless. Node upgrades are allowed, but do not switch the runtime stage to a general-purpose base image.
 
 ## Radio platform
 
@@ -233,3 +240,4 @@ project-ostgut/
 - Do not use `postgres://` scheme for golang-migrate (use `pgx5://`)
 - Do not auto-approve stations during ingestion, sync, bootstrap, or recovery flows; only an admin user may approve a station for public visibility
 - Do not commit secrets — all secrets flow through GitHub Secrets → OpenTofu vars → Container App secrets
+- Do not replace the frontend staging/production runtime image with a non-distroless base image

@@ -31,9 +31,11 @@ ensure_node() {
     . "$NVM_DIR/nvm.sh"
 
     if has_cmd nvm; then
-        nvm install 20
-        nvm alias default 20
-        nvm use 20 >/dev/null
+        local node_version
+        node_version="$(cat /workspace/project-ostgut/.nvmrc)"
+        nvm install "$node_version"
+        nvm alias default "$node_version"
+        nvm use "$node_version" >/dev/null
     fi
 }
 
@@ -141,8 +143,10 @@ print_info "Ensuring correct Node.js version..."
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
     . "$HOME/.nvm/nvm.sh"
     if has_cmd nvm; then
-        nvm use 20
-        print_success "Node.js v20 activated"
+        node_version="$(cat /workspace/project-ostgut/.nvmrc)"
+        nvm install "$node_version" >/dev/null
+        nvm use "$node_version" >/dev/null
+        print_success "Node.js v${node_version} activated"
     else
         print_info "nvm is unavailable; continuing with current Node.js version"
     fi
@@ -151,7 +155,7 @@ else
 fi
 
 print_info "Installing npm dependencies..."
-npm install
+npm ci
 print_success "Frontend dependencies installed"
 
 print_info "Creating .env.local file (if not exists)..."

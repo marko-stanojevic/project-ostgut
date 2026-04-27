@@ -3,7 +3,7 @@
 # ──────────────────────────────────────────────
 # Stage 1 – build
 # ──────────────────────────────────────────────
-FROM golang:1.26-alpine AS builder
+FROM golang:1.25.9-alpine AS builder
 
 # Install ca-certificates so TLS calls work inside the container.
 RUN apk add --no-cache ca-certificates git

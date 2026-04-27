@@ -23,11 +23,10 @@ import { emitHlsID3NowPlaying } from '@/lib/hls-id3'
 import { usePlayerStorage } from '@/hooks/usePlayerStorage'
 import { usePlayerSync } from '@/hooks/usePlayerSync'
 import { toStation } from '@/lib/station'
-import type { ApiStation } from '@/types/station'
+import { fetchStationByID } from '@/lib/station-detail'
 
 // Re-export Station so existing consumers don't need to change their imports.
 export type { Station } from '@/types/player'
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 type HlsCtor = typeof import('hls.js').default
 
 let hlsCtorPromise: Promise<HlsCtor | null> | null = null
@@ -177,7 +176,7 @@ function getPreferredVariantURL(stationID: string | undefined): string {
   const raw = window.localStorage.getItem(LAST_SUCCESSFUL_STREAM_KEY)
   if (!raw) return ''
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const parsed = parsePreferredVariantMap(JSON.parse(raw))
     const value = parsed?.[stationID]
     return typeof value === 'string' ? value : ''
   } catch {
@@ -191,12 +190,20 @@ function rememberPreferredVariant(stationID: string | undefined, streamURL: stri
   if (!trimmed) return
   try {
     const raw = window.localStorage.getItem(LAST_SUCCESSFUL_STREAM_KEY)
-    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+    const parsed = raw ? parsePreferredVariantMap(JSON.parse(raw)) : {}
     parsed[stationID] = trimmed
     window.localStorage.setItem(LAST_SUCCESSFUL_STREAM_KEY, JSON.stringify(parsed))
   } catch {
     // Ignore storage errors; playback should not fail because persistence did.
   }
+}
+
+function parsePreferredVariantMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
 }
 
 // Reconnect delays: 3 s → 6 s → 12 s → … capped at 30 s.
@@ -528,11 +535,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!station?.id) return
 
     const controller = new AbortController()
-    fetch(`${API}/stations/${station.id}`, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) return null
-        return (await res.json()) as ApiStation
-      })
+    fetchStationByID(station.id, { signal: controller.signal })
       .then((data) => {
         if (!data) return
         const full = toStation(data)

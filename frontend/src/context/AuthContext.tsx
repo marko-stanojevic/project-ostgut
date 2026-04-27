@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect } from 'react'
 import { useSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from 'next-auth/react'
 import type { Session } from 'next-auth'
 import type { Role } from '@/types/next-auth'
+import { signUpWithEmail } from '@/lib/auth-api'
 
 interface AuthContextType {
   user: Session['user'] | null
@@ -36,16 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session?.error])
 
   const signUp = async (email: string, password: string) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-    const res = await fetch(`${apiUrl}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.error || 'Signup failed')
-    }
+    await signUpWithEmail(email, password)
   }
 
   const signIn = async (email: string, password: string) => {

@@ -39,7 +39,7 @@ brew install --cask docker
 ## What Gets Set Up Automatically
 
 - Go 1.25.9
-- Node.js 20
+- Node.js 24 LTS
 - PostgreSQL 16
 - golang-migrate
 - golangci-lint

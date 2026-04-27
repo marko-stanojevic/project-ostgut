@@ -20,9 +20,10 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { SubscriptionCard } from '@/components/subscription-card'
-import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
+import { uploadMediaAsset } from '@/lib/media-upload'
 import { defaultTheme, themeOptions, type AppTheme } from '@/lib/theme'
+import { getUserProfile, updateUserProfile } from '@/lib/user-profile'
 import {
   UserIcon,
   CreditCardIcon,
@@ -34,33 +35,7 @@ import {
   UploadSimpleIcon,
 } from '@phosphor-icons/react'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-
 type SettingsSection = 'overview' | 'plan' | 'profile' | 'security' | 'notifications' | 'preferences'
-
-type ProfileResponse = {
-  id: string
-  email: string
-  name: string
-  role: 'user' | 'editor' | 'admin'
-  avatar?: MediaAssetResponse | null
-}
-
-type UploadIntentResponse = {
-  assetId: string
-  uploadUrl: string
-  blobKey: string
-  expiresAt: string
-  constraints: {
-    maxBytes: number
-    allowedMimeTypes: string[]
-  }
-}
-
-type CompleteUploadResponse = {
-  status: string
-  asset: MediaAssetResponse
-}
 
 // ─── Overview ────────────────────────────────────────────────────────────────
 
@@ -132,7 +107,7 @@ function ProfileSection() {
   useEffect(() => {
     if (!session?.accessToken) return
     let active = true
-    fetchJSONWithAuth<ProfileResponse>(`${API}/users/me`, session.accessToken, { cache: 'no-store' })
+    getUserProfile(session.accessToken, { cache: 'no-store' })
       .then((data) => {
         if (!active) return
         setDisplayName(data.name ?? '')
@@ -146,12 +121,7 @@ function ProfileSection() {
     if (!session?.accessToken || !displayName.trim()) return
     setSaving(true)
     try {
-      const res = await fetch(`${API}/users/me`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
-        body: JSON.stringify({ name: displayName.trim() }),
-      })
-      if (!res.ok) throw new Error('Failed')
+      await updateUserProfile(session.accessToken, { name: displayName.trim() })
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch {
@@ -172,18 +142,12 @@ function ProfileSection() {
     setAvatarError('')
     setUploadingAvatar(true)
     try {
-      const intent = await fetchJSONWithAuth<UploadIntentResponse>(`${API}/media/upload-intent`, session.accessToken, {
-        method: 'POST',
-        body: JSON.stringify({ kind: 'avatar', contentType: file.type, contentLength: file.size }),
-      })
-      const uploadResponse = await fetch(intent.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
-      if (!uploadResponse.ok) throw new Error('Upload failed')
-      const completed = await fetchJSONWithAuth<CompleteUploadResponse>(`${API}/media/complete`, session.accessToken, {
-        method: 'POST',
-        body: JSON.stringify({ assetId: intent.assetId, blobKey: intent.blobKey }),
-      })
-      if (completed.status === 'rejected') throw new Error(completed.asset.rejection_reason || 'Image was rejected')
-      setAvatar(completed.asset)
+      const asset = await uploadMediaAsset(session.accessToken, {
+        kind: 'avatar',
+        contentType: file.type,
+        contentLength: file.size,
+      }, file)
+      setAvatar(asset)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (error) {

@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { headers } from 'next/headers'
+import { Suspense } from 'react'
 import { cn } from '@/lib/utils'
 import { NewRelicAgent } from '@/components/NewRelicAgent'
 import { GoogleCastScript } from '@/components/google-cast-script'
+import { WebVitalsReporter } from '@/components/web-vitals-reporter'
 
 const geistSans = Geist({
   subsets: ['latin'],
@@ -40,11 +42,19 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 }
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // The CSP nonce is generated per request in middleware.ts and stamped on
-  // the request headers. Reading it here lets us thread it into every inline
-  // script we own; without it the browser refuses to execute them.
+async function RequestScopedScripts() {
   const nonce = (await headers()).get('x-nonce') ?? undefined
+
+  return (
+    <>
+      <NewRelicAgent nonce={nonce} />
+      <WebVitalsReporter />
+      <GoogleCastScript nonce={nonce} />
+    </>
+  )
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
@@ -52,8 +62,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={cn('font-sans', geistSans.variable, geistMono.variable)}
     >
       <body className="bg-background text-foreground antialiased">
-        <NewRelicAgent nonce={nonce} />
-        <GoogleCastScript nonce={nonce} />
+        <Suspense fallback={null}>
+          <RequestScopedScripts />
+        </Suspense>
         {children}
       </body>
     </html>

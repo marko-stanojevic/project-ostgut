@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { usePathname, useRouter } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
@@ -22,6 +22,7 @@ function ExploreSearchInner() {
   const searchParams = useSearchParams()
   const t = useTranslations('search')
   const [value, setValue] = useState(searchParams.get('q') ?? '')
+  const [, startTransition] = useTransition()
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -36,7 +37,9 @@ function ExploreSearchInner() {
       if (q.trim()) params.set('q', q.trim())
       const qs = params.toString()
       const target = getSearchTarget(pathname)
-      router.push(qs ? `${target}?${qs}` : target, { scroll: false })
+      startTransition(() => {
+        router.push(qs ? `${target}?${qs}` : target, { scroll: false })
+      })
     }, 200)
   }
 
@@ -53,7 +56,9 @@ function ExploreSearchInner() {
     params.delete('q')
     const qs = params.toString()
     const target = getSearchTarget(pathname)
-    router.replace(qs ? `${target}?${qs}` : target, { scroll: false })
+    startTransition(() => {
+      router.replace(qs ? `${target}?${qs}` : target, { scroll: false })
+    })
   }
 
   return (

@@ -49,6 +49,12 @@ Once the product is live and users exist, this section will be removed and compa
 
 **Error handling: fail loudly and early.** When something goes wrong, crash with a clear message rather than defaulting silently. Defensive programming (null checks, fallbacks) is overhead. If the backend returns unexpected data, let it error; fix the contract. In production, add recovery paths.
 
+**When reviewing, report suspicious code.** If you spot something fishy while reviewing the codebase, call it out explicitly and suggest a refinement or refactor instead of silently working around it.
+
+**Track workarounds and deferred issues.** When introducing or keeping a workaround, temporary exception, toolchain quirk, or follow-up issue, record it immediately in the appropriate backlog doc: use `docs/pending-issues.md` for general engineering/product follow-ups and `docs/pending-security-issues.md` for security or dependency vulnerability follow-ups. Keep notes concise and include the safe resolution path.
+
+**Lockfiles are part of the contract.** If a dependency manifest changes, the corresponding lockfile must be updated in the same change. Treat `package.json` and `package-lock.json` as one unit during reviews and refactors.
+
 ## Architectural Discipline (Required)
 
 Every change — feature, bug fix, refactor — is an architectural decision. Treat it as such. Plumbing-style fixes ("thread one more bool through three layers", "add another `if` branch", "sniff a string for a type") are forbidden as the default approach. Slow down, identify the root cause, and fix the design.
@@ -197,6 +203,9 @@ const res = await fetch(`${apiUrl}/some/endpoint`, {
 ### Audio player
 Global state lives in `PlayerContext`. Always use the context to set/read the current station — never manage playback state locally in a page component. Volume and last station are persisted to localStorage and synced to the backend on change.
 
+### Frontend container runtime
+The frontend container for staging and production must remain distroless. Upgrade the Node major when needed, but do not replace the runtime stage with a general-purpose Linux image.
+
 ## Radio station model
 
 ```typescript
@@ -241,3 +250,4 @@ interface Station {
 - Hardcoded secrets or connection strings
 - Large station lists without pagination (max ~50 per view)
 - Playback state managed locally in a page component
+- A non-distroless frontend runtime image for staging or production

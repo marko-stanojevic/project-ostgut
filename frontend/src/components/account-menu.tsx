@@ -16,8 +16,8 @@ import {
     PaletteIcon,
 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
-import { fetchJSONWithAuth } from '@/lib/auth-fetch'
-import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
+import { getPreferredMediaUrl } from '@/lib/media'
+import { getUserProfile } from '@/lib/user-profile'
 import { cn } from '@/lib/utils'
 import {
     DropdownMenu,
@@ -30,12 +30,6 @@ import {
 interface AccountMenuProps {
     className?: string
     avatarSize?: number
-}
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-
-type AccountProfileResponse = {
-    avatar?: MediaAssetResponse | null
 }
 
 function Avatar({ name, image, size = 32 }: { name?: string | null; image?: string | null; size?: number }) {
@@ -85,7 +79,7 @@ export function AccountMenu({ className, avatarSize = 32 }: AccountMenuProps) {
 
         let active = true
 
-        fetchJSONWithAuth<AccountProfileResponse>(`${API}/users/me`, session.accessToken, {
+        getUserProfile(session.accessToken, {
             cache: 'no-store',
         })
             .then((data) => {

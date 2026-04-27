@@ -6,7 +6,7 @@ import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
 import { useEditorSearch } from '../editor-search-context'
-import { fetchJSONWithAuth } from '@/lib/auth-fetch'
+import { bulkUpdateEditorStations, createEditorStation, listEditorStations, normalizeModerationStatus, type AdminStation, type StationModerationStatus } from '@/lib/editor-stations'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,6 @@ import {
   ArrowSquareOutIcon,
 } from '@phosphor-icons/react'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const PAGE_SIZE = 50
 
 const stationSkeletonCells = [
@@ -40,18 +39,6 @@ const stationSkeletonCells = [
   { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-20' },
   { tdClassName: 'px-4 py-3', skeletonClassName: 'h-7 w-16 ml-auto' },
 ]
-
-interface AdminStation {
-  id: string
-  name: string
-  logo?: string
-  genre_tags: string[]
-  country: string
-  city: string
-  featured: boolean
-  status: string
-  editorial_review?: string
-}
 
 interface CreateStationForm {
   name: string
@@ -76,10 +63,6 @@ interface CreateStationForm {
 const statusVariants = {
   pending: { variant: 'secondary' as const, icon: ClockIcon },
   approved: { variant: 'default' as const, icon: CheckCircleIcon },
-}
-
-function normalizeModerationStatus(value: string | null | undefined): 'pending' | 'approved' {
-  return value === 'approved' ? 'approved' : 'pending'
 }
 
 function isValidAbsoluteURL(value: string) {
@@ -153,20 +136,15 @@ export default function AdminStationsPage() {
     setError('')
     setSelected(new Set())
 
-    const params = new URLSearchParams({
-      status: activeTab,
-      limit: String(PAGE_SIZE),
-      offset: String(page * PAGE_SIZE),
-    })
-    if (appliedSearch) params.set('q', appliedSearch)
-
     try {
-      const data = await fetchJSONWithAuth<{ stations?: AdminStation[]; count?: number }>(
-        `${API}/editor/stations?${params}`,
-        session.accessToken,
-      )
-      setStations(data.stations ?? [])
-      setTotal(data.count ?? 0)
+      const data = await listEditorStations(session.accessToken, {
+        status: activeTab,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        query: appliedSearch,
+      })
+      setStations(data.stations)
+      setTotal(data.count)
     } catch (err) {
       setStations([])
       setTotal(0)
@@ -206,20 +184,13 @@ export default function AdminStationsPage() {
     }
   }
 
-  const bulkAction = async (status: string) => {
+  const bulkAction = async (status: StationModerationStatus) => {
     if (selected.size === 0 || !session?.accessToken) return
     setBulkLoading(true)
     setError('')
 
     try {
-      await fetchJSONWithAuth(
-        `${API}/editor/stations/bulk`,
-        session.accessToken,
-        {
-          method: 'POST',
-          body: JSON.stringify({ ids: Array.from(selected), status }),
-        },
-      )
+      await bulkUpdateEditorStations(session.accessToken, Array.from(selected), status)
       await fetchStations()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bulk update failed')
@@ -241,36 +212,29 @@ export default function AdminStationsPage() {
     setCreateError('')
 
     try {
-      const created = await fetchJSONWithAuth<AdminStation>(
-        `${API}/editor/stations`,
-        session.accessToken,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            name: createForm.name.trim(),
-            streams: [{
-              url: createForm.primary_stream_url.trim(),
-              priority: 1,
-              metadata_enabled: true,
-            }],
-            genre_tags: createForm.genre_tags,
-            subgenre_tags: createForm.subgenre_tags,
-            country: createForm.country.trim(),
-            city: createForm.city.trim(),
-            language: createForm.language.trim(),
-            logo: createForm.logo.trim(),
-            homepage: createForm.homepage.trim(),
-            style_tags: createForm.style_tags,
-            format_tags: createForm.format_tags,
-            texture_tags: createForm.texture_tags,
-            overview: createForm.overview.trim() || null,
-            editorial_review: createForm.editorial_review.trim() || null,
-            internal_notes: createForm.internal_notes.trim() || null,
-            status: createForm.status,
-            featured: createForm.featured,
-          }),
-        },
-      )
+      const created = await createEditorStation(session.accessToken, {
+        name: createForm.name.trim(),
+        streams: [{
+          url: createForm.primary_stream_url.trim(),
+          priority: 1,
+          metadata_enabled: true,
+        }],
+        genre_tags: createForm.genre_tags,
+        subgenre_tags: createForm.subgenre_tags,
+        country: createForm.country.trim(),
+        city: createForm.city.trim(),
+        language: createForm.language.trim(),
+        logo: createForm.logo.trim(),
+        homepage: createForm.homepage.trim(),
+        style_tags: createForm.style_tags,
+        format_tags: createForm.format_tags,
+        texture_tags: createForm.texture_tags,
+        overview: createForm.overview.trim() || null,
+        editorial_review: createForm.editorial_review.trim() || null,
+        internal_notes: createForm.internal_notes.trim() || null,
+        status: createForm.status,
+        featured: createForm.featured,
+      })
 
       setCreateOpen(false)
       setCreateForm({

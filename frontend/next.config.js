@@ -24,6 +24,8 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  typedRoutes: true,
+  cacheComponents: true,
   ...(output ? { output } : {}),
   outputFileTracingIncludes: {
     '/**': ['./node_modules/@swc/helpers/**'],

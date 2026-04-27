@@ -4,22 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { emitMetadataTelemetry, metadataDebugLog } from '@/lib/metadata-observability'
 import { HLS_ID3_EVENT, type HlsNowPlayingDetail } from '@/lib/hls-id3'
 import { fetchClientNowPlaying } from '@/lib/now-playing-client'
+import { fetchServerNowPlaying, getNowPlayingStreamURL, parseServerNowPlaying, type NowPlaying } from '@/lib/now-playing'
 import type { StationStream } from '@/types/player'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 const CLIENT_POLL_MS = 30_000
-
-export interface NowPlaying {
-  title: string
-  artist?: string
-  song?: string
-  source: string
-  metadataUrl?: string
-  supported: boolean
-  status: 'ok' | 'unsupported' | 'disabled' | 'error'
-  error?: string
-  resolver?: 'none' | 'server' | 'client'
-}
 
 export function useNowPlaying(
   stationId: string | null | undefined,
@@ -201,31 +189,40 @@ export function useNowPlaying(
       }
     }
 
-    const params = new URLSearchParams()
-    if (streamId) {
-      params.set('stream_id', streamId)
-    }
-    const query = params.toString()
-    const sseURL = `${API}/stations/${stationId}/now-playing/stream${query ? `?${query}` : ''}`
+    const sseURL = getNowPlayingStreamURL(stationId, streamId)
 
     if (typeof window !== 'undefined' && typeof window.EventSource !== 'undefined') {
       metadataDebugLog('resolver-server-subscribe', { stationId, streamId, url: sseURL })
       eventSourceRef.current = new EventSource(sseURL)
       eventSourceRef.current.onmessage = (event) => {
         if (cancelled) return
-        const data = { ...(JSON.parse(event.data) as NowPlaying), resolver: 'server' as const }
-        setNowPlaying(data.status === 'ok' && data.title ? data : null)
-        setSettled(true)
-        emitMetadataTelemetry('metadata_server_result', {
-          stationId,
-          streamId,
-          resolver: 'server',
-          result: data.status === 'ok' && data.title ? 'success' : 'miss',
-          source: data.source,
-          metadataType: streamMetadataType || 'auto',
-          streamUrl: streamURL,
-          error: data.error,
-        })
+        try {
+          const data = parseServerNowPlaying(JSON.parse(event.data))
+          setNowPlaying(data.status === 'ok' && data.title ? data : null)
+          setSettled(true)
+          emitMetadataTelemetry('metadata_server_result', {
+            stationId,
+            streamId,
+            resolver: 'server',
+            result: data.status === 'ok' && data.title ? 'success' : 'miss',
+            source: data.source,
+            metadataType: streamMetadataType || 'auto',
+            streamUrl: streamURL,
+            error: data.error,
+          })
+        } catch (error) {
+          setNowPlaying(null)
+          setSettled(true)
+          emitMetadataTelemetry('metadata_server_result', {
+            stationId,
+            streamId,
+            resolver: 'server',
+            result: 'miss',
+            metadataType: streamMetadataType || 'auto',
+            streamUrl: streamURL,
+            error: formatError(error),
+          })
+        }
       }
       eventSourceRef.current.onerror = () => {
         if (!cancelled) {
@@ -246,16 +243,9 @@ export function useNowPlaying(
       const controller = new AbortController()
       currentController = controller
       try {
-        const url = `${API}/stations/${stationId}/now-playing${query ? `?${query}` : ''}`
-        const res = await fetch(url, { signal: controller.signal })
-        if (!res.ok) {
-          setNowPlaying(null)
-          setSettled(true)
-          return
-        }
-        const data = { ...((await res.json()) as NowPlaying), resolver: 'server' as const }
+        const data = await fetchServerNowPlaying(stationId, streamId, { signal: controller.signal })
         if (!cancelled) {
-          setNowPlaying(data.status === 'ok' && data.title ? data : null)
+          setNowPlaying(data?.status === 'ok' && data.title ? data : null)
           setSettled(true)
         }
       } catch (error) {

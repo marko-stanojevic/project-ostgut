@@ -10,7 +10,7 @@ import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { buildMetadataBadges } from '@/lib/metadata-badges'
 import { resolveDisplayStream } from '@/components/player/resolve-stream'
-import type { NowPlaying } from '@/hooks/useNowPlaying'
+import type { NowPlaying } from '@/lib/now-playing'
 import type { StationStream } from '@/types/player'
 import {
   PlayIcon,

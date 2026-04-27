@@ -206,15 +206,28 @@ func (s *UserStore) UpsertOAuthUser(ctx context.Context, provider, providerID, e
 }
 
 // ListUsers returns a paginated list of users ordered by creation date.
-func (s *UserStore) ListUsers(ctx context.Context, limit, offset int) ([]*User, int, error) {
+func (s *UserStore) ListUsers(ctx context.Context, limit, offset int, query string) ([]*User, int, error) {
 	var total int
-	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM users
+		WHERE $1 = ''
+		   OR email ILIKE '%' || $1 || '%'
+		   OR COALESCE(name, '') ILIKE '%' || $1 || '%'`,
+		query,
+	).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count users: %w", err)
 	}
 
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, email, COALESCE(name,''), role FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-		limit, offset,
+		`SELECT id, email, COALESCE(name,''), role
+		 FROM users
+		 WHERE $3 = ''
+		    OR email ILIKE '%' || $3 || '%'
+		    OR COALESCE(name, '') ILIKE '%' || $3 || '%'
+		 ORDER BY created_at DESC
+		 LIMIT $1 OFFSET $2`,
+		limit, offset, query,
 	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list users: %w", err)

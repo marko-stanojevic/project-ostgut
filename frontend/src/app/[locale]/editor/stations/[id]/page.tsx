@@ -6,8 +6,9 @@ import { useRouter } from '@/i18n/navigation'
 import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer, type Station as PlayerStation } from '@/context/PlayerContext'
-import { fetchJSONWithAuth } from '@/lib/auth-fetch'
+import { getEditorStation, getEditorStationIcon, probeEditorStationStream, updateEditorStation, type AdminStation, type AdminStream, type EditorStationPayload, type StreamProbeScope } from '@/lib/editor-stations'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
+import { uploadMediaAsset } from '@/lib/media-upload'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,68 +31,6 @@ import {
     WaveformIcon,
     TrashIcon,
 } from '@phosphor-icons/react'
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-
-interface AdminStream {
-    id: string
-    url: string
-    resolved_url: string
-    kind: string
-    container: string
-    transport: string
-    mime_type: string
-    codec: string
-    lossless: boolean
-    bitrate: number
-    bit_depth: number
-    sample_rate_hz: number
-    sample_rate_confidence: string
-    channels: number
-    priority: number
-    is_active: boolean
-    loudness_integrated_lufs?: number
-    loudness_peak_dbfs?: number
-    loudness_sample_duration_seconds?: number
-    loudness_measured_at?: string
-    loudness_measurement_status?: string
-    metadata_enabled: boolean
-    metadata_type: string
-    metadata_source?: string
-    metadata_url?: string
-    metadata_delayed?: boolean
-    metadata_error?: string
-    metadata_error_code?: string
-    metadata_last_fetched_at?: string
-    metadata_resolver?: 'none' | 'server' | 'client'
-    metadata_resolver_checked_at?: string
-    health_score: number
-    last_checked_at?: string
-    last_error?: string
-}
-
-interface AdminStation {
-    id: string
-    name: string
-    streams?: AdminStream[]
-    logo?: string
-    website?: string
-    genre_tags: string[]
-    subgenre_tags: string[]
-    search_tags: string[]
-    language: string
-    country: string
-    city: string
-    style_tags: string[]
-    format_tags: string[]
-    texture_tags: string[]
-    reliability_score: number
-    featured: boolean
-    status: string
-    overview?: string
-    editorial_review?: string
-    internal_notes?: string
-}
 
 interface StreamFormEntry {
     url: string
@@ -118,22 +57,6 @@ interface StationForm {
     featured: boolean
     editorial_review: string
     internal_notes: string
-}
-
-type UploadIntentResponse = {
-    assetId: string
-    uploadUrl: string
-    blobKey: string
-    expiresAt: string
-    constraints: {
-        maxBytes: number
-        allowedMimeTypes: string[]
-    }
-}
-
-type CompleteUploadResponse = {
-    status: string
-    asset: MediaAssetResponse
 }
 
 const ADMIN_TAG_BADGE_CLASS = 'ui-admin-tag-badge rounded-none border-transparent font-medium text-[10px] uppercase tracking-wide'
@@ -239,7 +162,7 @@ function toStationForm(station: AdminStation): StationForm {
         website: station.website ?? '',
         genre_tags: (station.genre_tags ?? []).join(', '),
         subgenre_tags: (station.subgenre_tags ?? []).join(', '),
-        language: station.language,
+        language: station.language ?? '',
         country: station.country,
         city: station.city ?? '',
         style_tags: (station.style_tags ?? []).join(', '),
@@ -317,20 +240,14 @@ export default function StationEditorPage() {
             setProbeError('')
 
             try {
-                const s = await fetchJSONWithAuth<AdminStation>(
-                    `${API}/editor/stations/${id}`,
-                    accessToken,
-                )
+                const s = await getEditorStation(accessToken, id)
                 if (cancelled) return
 
                 setStation(s)
                 setForm(toStationForm(s))
 
                 try {
-                    const icon = await fetchJSONWithAuth<MediaAssetResponse>(
-                        `${API}/editor/stations/${id}/icon`,
-                        accessToken,
-                    )
+                    const icon = await getEditorStationIcon(accessToken, id)
                     if (!cancelled) {
                         setStationIcon(icon)
                     }
@@ -373,42 +290,15 @@ export default function StationEditorPage() {
         setUploadingIcon(true)
 
         try {
-            const intent = await fetchJSONWithAuth<UploadIntentResponse>(`${API}/media/upload-intent`, accessToken, {
-                method: 'POST',
-                body: JSON.stringify({
-                    kind: 'station_icon',
-                    ownerId: id,
-                    contentType: file.type,
-                    contentLength: file.size,
-                }),
-            })
+            const asset = await uploadMediaAsset(accessToken, {
+                kind: 'station_icon',
+                ownerId: id,
+                contentType: file.type,
+                contentLength: file.size,
+            }, file)
 
-            const uploadResponse = await fetch(intent.uploadUrl, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': file.type,
-                },
-                body: file,
-            })
-
-            if (!uploadResponse.ok) {
-                throw new Error('Upload failed')
-            }
-
-            const completed = await fetchJSONWithAuth<CompleteUploadResponse>(`${API}/media/complete`, accessToken, {
-                method: 'POST',
-                body: JSON.stringify({
-                    assetId: intent.assetId,
-                    blobKey: intent.blobKey,
-                }),
-            })
-
-            if (completed.status === 'rejected') {
-                throw new Error(completed.asset.rejection_reason || 'Image was rejected')
-            }
-
-            setStationIcon(completed.asset)
-            const uploadedUrl = getPreferredMediaUrl(completed.asset)
+            setStationIcon(asset)
+            const uploadedUrl = getPreferredMediaUrl(asset)
             if (uploadedUrl) {
                 setForm((prev) => ({ ...prev, logo: uploadedUrl }))
             }
@@ -432,7 +322,7 @@ export default function StationEditorPage() {
         setError('')
         setSaved(false)
 
-        const body: Record<string, unknown> = {
+        const body: EditorStationPayload = {
             name: trimmedName,
             streams: form.streams
                 .filter(s => s.url.trim())
@@ -463,10 +353,7 @@ export default function StationEditorPage() {
         }
 
         try {
-            const updated = await fetchJSONWithAuth<AdminStation>(`${API}/editor/stations/${id}`, accessToken, {
-                method: 'PUT',
-                body: JSON.stringify(body),
-            })
+            const updated = await updateEditorStation(accessToken, id, body)
 
             setStation(updated)
             setForm(toStationForm(updated))
@@ -479,18 +366,14 @@ export default function StationEditorPage() {
         }
     }
 
-    const handleProbeStream = async (streamID: string, scope: 'quality' | 'metadata' | 'resolver' | 'loudness' | 'full') => {
+    const handleProbeStream = async (streamID: string, scope: StreamProbeScope) => {
         if (!accessToken) return
 
         setProbingAction(`${streamID}:${scope}`)
         setProbeError('')
 
         try {
-            const updated = await fetchJSONWithAuth<AdminStation>(
-                `${API}/editor/stations/${id}/streams/${streamID}/probe?scope=${scope}`,
-                accessToken,
-                { method: 'POST' },
-            )
+            const updated = await probeEditorStationStream(accessToken, id, streamID, scope)
 
             setStation(updated)
             setSaved(true)

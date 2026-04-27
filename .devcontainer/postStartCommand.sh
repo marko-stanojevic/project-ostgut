@@ -14,7 +14,9 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
 # Set Node.js version
-has_cmd nvm && nvm use 20 > /dev/null 2>&1 || true
+if has_cmd nvm && [ -f /workspace/project-ostgut/.nvmrc ]; then
+    nvm use "$(cat /workspace/project-ostgut/.nvmrc)" > /dev/null 2>&1 || true
+fi
 
 # Ensure database migrations are up-to-date
 cd /workspace/project-ostgut/backend
