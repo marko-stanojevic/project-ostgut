@@ -254,13 +254,6 @@ verification only.
 
 ## Tier 6 — nice-to-have, not gated on launch
 
-### 6.2 SBOM generation
-**Why:** Some enterprise customers ask for it, and it's useful when
-responding to a CVE ("am I shipping vulnerable-package-X?").
-
-**What to do:** `syft` step in CI, attach SPDX JSON as a workflow artifact,
-publish on each release.
-
 ### 6.4 Style-src nonces (drop `'unsafe-inline'`)
 **Why:** Lower priority than script nonces because `<style>` can't execute
 code, but `style="background: url(…)"` can still exfiltrate via attribute
