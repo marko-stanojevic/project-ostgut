@@ -6,8 +6,13 @@ import type { JWT } from 'next-auth/jwt'
 import { createHmac } from 'node:crypto'
 import { authConfig } from './auth.config'
 import type { Role } from '@/types/next-auth'
-
-const API_URL = process.env.API_URL || 'http://localhost:8080'
+import {
+  exchangeOAuthIdentity,
+  loginWithPassword,
+  refreshBackendTokens,
+  revokeBackendRefreshToken,
+  type BackendAuthResponse,
+} from '@/lib/backend-auth-api'
 
 /**
  * HMAC secret shared with the backend's OAUTH_SHARED_SECRET. The OAuth
@@ -25,19 +30,6 @@ const OAUTH_SHARED_SECRET = process.env.OAUTH_SHARED_SECRET || process.env.AUTH_
  */
 const REFRESH_LEEWAY_MS = 60_000
 
-type BackendAuthResponse = {
-  accessToken: string
-  accessTokenExpiresAt: string
-  refreshToken: string
-  refreshTokenExpiresAt: string
-  user: {
-    id: string
-    email: string
-    name?: string | null
-    role: Role
-  }
-}
-
 function applyAuthResponse(token: JWT, data: BackendAuthResponse): JWT {
   token.id = data.user.id
   token.email = data.user.email
@@ -51,23 +43,6 @@ function applyAuthResponse(token: JWT, data: BackendAuthResponse): JWT {
   return token
 }
 
-async function refreshBackendTokens(refreshToken: string): Promise<BackendAuthResponse | null> {
-  try {
-    const res = await fetch(`${API_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-      signal: AbortSignal.timeout(10_000),
-      cache: 'no-store',
-    })
-    if (!res.ok) return null
-    return (await res.json()) as BackendAuthResponse
-  } catch (err) {
-    console.error('Failed to refresh backend access token:', err)
-    return null
-  }
-}
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
@@ -79,16 +54,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const res = await fetch(`${API_URL}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: credentials.email,
-            password: credentials.password,
-          }),
-        })
-        if (!res.ok) return null
-        const data = (await res.json()) as BackendAuthResponse
+        const data = await loginWithPassword(String(credentials.email ?? ''), String(credentials.password ?? ''))
+        if (!data) return null
         // Stash the backend tokens on the NextAuth user; the jwt callback
         // copies them onto the session token below.
         return {
@@ -151,22 +118,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? createHmac('sha256', OAUTH_SHARED_SECRET).update(canonical).digest('hex')
             : ''
 
-          const res = await fetch(`${API_URL}/auth/oauth`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              provider: account.provider,
-              provider_id: account.providerAccountId,
-              email: token.email,
-              email_verified: emailVerified,
-              name: token.name ?? '',
-              timestamp,
-              signature,
-            }),
-            signal: AbortSignal.timeout(10_000),
+          const data = await exchangeOAuthIdentity({
+            provider: account.provider,
+            provider_id: account.providerAccountId,
+            email: token.email,
+            email_verified: emailVerified,
+            name: token.name ?? '',
+            timestamp,
+            signature,
           })
-          if (res.ok) {
-            const data = (await res.json()) as BackendAuthResponse
+          if (data) {
             applyAuthResponse(token, data)
           } else {
             token.error = 'oauth_exchange_failed'
@@ -190,7 +151,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token
       }
 
-      const refreshed = await refreshBackendTokens(token.refreshToken)
+      let refreshed: BackendAuthResponse | null = null
+      try {
+        refreshed = await refreshBackendTokens(token.refreshToken)
+      } catch (err) {
+        console.error('Failed to refresh backend access token:', err)
+      }
       if (!refreshed) {
         token.error = 'refresh_failed'
         // Wipe the refresh token to prevent re-trying every request — the
@@ -221,13 +187,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         'token' in message ? (message.token?.refreshToken as string | undefined) : undefined
       if (!refreshToken) return
       try {
-        await fetch(`${API_URL}/auth/logout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-          signal: AbortSignal.timeout(5_000),
-          cache: 'no-store',
-        })
+        await revokeBackendRefreshToken(refreshToken)
       } catch (err) {
         console.error('Failed to revoke refresh token on sign-out:', err)
       }
