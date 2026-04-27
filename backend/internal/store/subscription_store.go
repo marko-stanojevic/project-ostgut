@@ -22,6 +22,16 @@ type Subscription struct {
 	PaddleSubscriptionID *string
 }
 
+// SubscriptionAdminSummary contains subscription integrity metrics for the admin overview.
+type SubscriptionAdminSummary struct {
+	Total    int
+	Trialing int
+	Active   int
+	PastDue  int
+	Canceled int
+	Paused   int
+}
+
 // SubscriptionStore executes queries against the subscriptions table.
 type SubscriptionStore struct {
 	pool *pgxpool.Pool
@@ -30,6 +40,25 @@ type SubscriptionStore struct {
 // NewSubscriptionStore creates a SubscriptionStore backed by the given pool.
 func NewSubscriptionStore(pool *pgxpool.Pool) *SubscriptionStore {
 	return &SubscriptionStore{pool: pool}
+}
+
+// AdminSummary returns subscription-status aggregates for the admin overview.
+func (s *SubscriptionStore) AdminSummary(ctx context.Context) (*SubscriptionAdminSummary, error) {
+	var summary SubscriptionAdminSummary
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COUNT(*) FILTER (WHERE status = 'trialing')::int,
+			COUNT(*) FILTER (WHERE status = 'active')::int,
+			COUNT(*) FILTER (WHERE status = 'past_due')::int,
+			COUNT(*) FILTER (WHERE status = 'canceled')::int,
+			COUNT(*) FILTER (WHERE status = 'paused')::int
+		FROM subscriptions`,
+	).Scan(&summary.Total, &summary.Trialing, &summary.Active, &summary.PastDue, &summary.Canceled, &summary.Paused)
+	if err != nil {
+		return nil, fmt.Errorf("admin subscription summary: %w", err)
+	}
+	return &summary, nil
 }
 
 // GetByUserID returns the subscription for the given user.

@@ -119,6 +119,16 @@ type ManualStationInput struct {
 	InternalNotes   *string
 }
 
+// StationAdminSummary contains catalog pipeline metrics for the admin overview.
+type StationAdminSummary struct {
+	Total            int
+	Pending          int
+	Approved         int
+	Rejected         int
+	ChangedLast7Days int
+	LastSyncedAt     *time.Time
+}
+
 // StationStore executes queries against the stations table.
 type StationStore struct {
 	pool *pgxpool.Pool
@@ -127,6 +137,25 @@ type StationStore struct {
 // NewStationStore creates a StationStore backed by the given pool.
 func NewStationStore(pool *pgxpool.Pool) *StationStore {
 	return &StationStore{pool: pool}
+}
+
+// AdminSummary returns catalog pipeline aggregates for the admin overview.
+func (s *StationStore) AdminSummary(ctx context.Context) (*StationAdminSummary, error) {
+	var summary StationAdminSummary
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE is_active = true)::int,
+			COUNT(*) FILTER (WHERE is_active = true AND status = 'pending')::int,
+			COUNT(*) FILTER (WHERE is_active = true AND status = 'approved')::int,
+			COUNT(*) FILTER (WHERE is_active = true AND status = 'rejected')::int,
+			COUNT(*) FILTER (WHERE is_active = true AND updated_at >= NOW() - INTERVAL '7 days')::int,
+			MAX(last_synced_at) FILTER (WHERE is_active = true)
+		FROM stations`,
+	).Scan(&summary.Total, &summary.Pending, &summary.Approved, &summary.Rejected, &summary.ChangedLast7Days, &summary.LastSyncedAt)
+	if err != nil {
+		return nil, fmt.Errorf("admin station summary: %w", err)
+	}
+	return &summary, nil
 }
 
 const stationColumns = `

@@ -52,6 +52,20 @@ func NewRefreshTokenStore(pool *pgxpool.Pool) *RefreshTokenStore {
 	return &RefreshTokenStore{pool: pool}
 }
 
+// CountActive returns active, unexpired refresh-token sessions.
+func (s *RefreshTokenStore) CountActive(ctx context.Context) (int, error) {
+	var count int
+	err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int
+		FROM refresh_tokens
+		WHERE revoked_at IS NULL AND expires_at > NOW()`,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count active refresh tokens: %w", err)
+	}
+	return count, nil
+}
+
 // Issue generates a fresh refresh token for the user and stores its hash.
 func (s *RefreshTokenStore) Issue(ctx context.Context, userID string, ttl time.Duration) (*RefreshTokenIssue, error) {
 	if ttl <= 0 {

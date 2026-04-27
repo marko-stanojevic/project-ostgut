@@ -84,10 +84,10 @@ type adminOverviewAccumulator struct {
 	editorial             []adminOverviewStationHealth
 }
 
-// AdminOverview handles GET /admin/overview.
-// It summarizes approved-station health so the admin landing page can surface
-// concrete operational and editorial actions instead of only moderation counts.
-func (h *Handler) AdminOverview(c *gin.Context) {
+// EditorOverview handles GET /editor/overview.
+// It summarizes approved-station health so editors can act on concrete
+// operational and editorial issues instead of only moderation counts.
+func (h *Handler) EditorOverview(c *gin.Context) {
 	stations, err := h.admin.stations.ListAllByStatus(c.Request.Context(), "approved")
 	if err != nil {
 		h.log.Error("admin overview list approved", "error", err)
