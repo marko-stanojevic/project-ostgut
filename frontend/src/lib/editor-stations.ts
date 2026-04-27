@@ -1,6 +1,6 @@
 import { API_URL } from '@/lib/api'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
-import type { MediaAssetResponse } from '@/lib/media'
+import { parseMediaAsset } from '@/lib/media'
 
 export type StationModerationStatus = 'pending' | 'approved'
 export type StreamProbeScope = 'quality' | 'metadata' | 'resolver' | 'loudness' | 'full'
@@ -152,7 +152,9 @@ export function getEditorStation(accessToken: string, stationID: string) {
 }
 
 export function getEditorStationIcon(accessToken: string, stationID: string) {
-    return fetchJSONWithAuth<MediaAssetResponse>(`${API_URL}/editor/stations/${stationID}/icon`, accessToken)
+    return fetchJSONWithAuth<unknown>(`${API_URL}/editor/stations/${stationID}/icon`, accessToken).then((payload) =>
+        parseMediaAsset(payload, 'station icon'),
+    )
 }
 
 export function updateEditorStation(accessToken: string, stationID: string, payload: EditorStationPayload) {

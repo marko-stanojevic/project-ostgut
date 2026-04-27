@@ -1,6 +1,9 @@
 import { API_URL } from '@/lib/api'
+import { requireArray, requireDateString, requireNumber, requireRecord, requireString } from '@/lib/api-contract'
 import { fetchJSONWithAuth } from '@/lib/auth-fetch'
-import type { MediaAssetResponse } from '@/lib/media'
+import { parseMediaAsset, type MediaAssetResponse } from '@/lib/media'
+
+const MEDIA_UPLOAD_CONTRACT = 'media upload payload'
 
 export interface UploadIntentResponse {
     assetId: string
@@ -26,17 +29,17 @@ export interface CreateUploadIntentPayload {
 }
 
 export function createUploadIntent(accessToken: string, payload: CreateUploadIntentPayload) {
-    return fetchJSONWithAuth<UploadIntentResponse>(`${API_URL}/media/upload-intent`, accessToken, {
+    return fetchJSONWithAuth<unknown>(`${API_URL}/media/upload-intent`, accessToken, {
         method: 'POST',
         body: JSON.stringify(payload),
-    })
+    }).then(parseUploadIntentResponse)
 }
 
 export function completeUpload(accessToken: string, assetId: string, blobKey: string) {
-    return fetchJSONWithAuth<CompleteUploadResponse>(`${API_URL}/media/complete`, accessToken, {
+    return fetchJSONWithAuth<unknown>(`${API_URL}/media/complete`, accessToken, {
         method: 'POST',
         body: JSON.stringify({ assetId, blobKey }),
-    })
+    }).then(parseCompleteUploadResponse)
 }
 
 export async function uploadMediaAsset(
@@ -62,4 +65,32 @@ export async function uploadMediaAsset(
     }
 
     return completed.asset
+}
+
+function parseUploadIntentResponse(payload: unknown): UploadIntentResponse {
+    const response = requireRecord(payload, 'upload intent response', MEDIA_UPLOAD_CONTRACT)
+    const constraints = requireRecord(response.constraints, 'constraints', MEDIA_UPLOAD_CONTRACT)
+    const allowedMimeTypes = requireArray(constraints.allowedMimeTypes, 'constraints.allowedMimeTypes', MEDIA_UPLOAD_CONTRACT)
+
+    return {
+        assetId: requireString(response.assetId, 'assetId', MEDIA_UPLOAD_CONTRACT),
+        uploadUrl: requireString(response.uploadUrl, 'uploadUrl', MEDIA_UPLOAD_CONTRACT),
+        blobKey: requireString(response.blobKey, 'blobKey', MEDIA_UPLOAD_CONTRACT),
+        expiresAt: requireDateString(response.expiresAt, 'expiresAt', MEDIA_UPLOAD_CONTRACT),
+        constraints: {
+            maxBytes: requireNumber(constraints.maxBytes, 'constraints.maxBytes', MEDIA_UPLOAD_CONTRACT),
+            allowedMimeTypes: allowedMimeTypes.map((mimeType, index) =>
+                requireString(mimeType, `constraints.allowedMimeTypes[${index}]`, MEDIA_UPLOAD_CONTRACT),
+            ),
+        },
+    }
+}
+
+function parseCompleteUploadResponse(payload: unknown): CompleteUploadResponse {
+    const response = requireRecord(payload, 'complete upload response', MEDIA_UPLOAD_CONTRACT)
+
+    return {
+        status: requireString(response.status, 'status', MEDIA_UPLOAD_CONTRACT),
+        asset: parseMediaAsset(response.asset, 'asset'),
+    }
 }
