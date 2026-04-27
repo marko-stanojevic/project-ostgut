@@ -1,8 +1,8 @@
-# bouji.fm — GitHub Copilot Instructions
+# project-ostgut — GitHub Copilot Instructions
 
 ## Product overview
 
-**bouji.fm** is a premium, curated internet radio platform — "The Listening Room". It is an editorial listening experience, not a radio directory. Users discover and enjoy high-quality live stations from around the world.
+**project-ostgut** is the current pre-launch codename for a premium, curated internet radio platform — "The Listening Room". It is an editorial listening experience, not a radio directory. Users discover and enjoy high-quality live stations from around the world.
 
 Platforms: web app (primary), mobile web (responsive), iOS app (future), backend API.
 
@@ -45,13 +45,15 @@ Once the product is live and users exist, this section will be removed and compa
 
 **Documentation: stabilize first, document second.** Don't over-document internal APIs or architectural decisions that are still in flux. Keep a running changelog of major changes. Document the final decisions once the pattern is stable and proven.
 
+**Major changes must be logged.** For every major project change, append an entry to `docs/planning/major-changes.md` before finishing the task. Major changes include library introductions or removals, framework/runtime/version upgrades, platform features enabled, infrastructure/runtime changes, observability/security capabilities, and cross-cutting architecture changes. Entries must stay in order performed and start with the date, what changed, and why it changed.
+
 **Performance: optimize for clarity first.** Choose the cleanest implementation. Measure after. Premature optimization often locks in wrong abstractions. Once the product stabilizes, add caching, indices, and query optimization based on real metrics, not guesses.
 
 **Error handling: fail loudly and early.** When something goes wrong, crash with a clear message rather than defaulting silently. Defensive programming (null checks, fallbacks) is overhead. If the backend returns unexpected data, let it error; fix the contract. In production, add recovery paths.
 
 **When reviewing, report suspicious code.** If you spot something fishy while reviewing the codebase, call it out explicitly and suggest a refinement or refactor instead of silently working around it.
 
-**Track workarounds and deferred issues.** When introducing or keeping a workaround, temporary exception, toolchain quirk, or follow-up issue, record it immediately in the appropriate backlog doc: use `docs/pending-issues.md` for general engineering/product follow-ups and `docs/pending-security-issues.md` for security or dependency vulnerability follow-ups. Keep notes concise and include the safe resolution path.
+**Track workarounds and deferred issues.** When introducing or keeping a workaround, temporary exception, toolchain quirk, or follow-up issue, record it immediately in the appropriate backlog doc: use `docs/planning/pending-issues.md` for general engineering/product follow-ups and `docs/planning/pending-security-issues.md` for security or dependency vulnerability follow-ups. Keep notes concise and include the safe resolution path.
 
 **Lockfiles are part of the contract.** If a dependency manifest changes, the corresponding lockfile must be updated in the same change. Treat `package.json` and `package-lock.json` as one unit during reviews and refactors.
 

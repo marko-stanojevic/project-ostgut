@@ -5,7 +5,7 @@
 > repository is private. This file reserves the path and structure so
 > it can be populated before public launch.
 >
-> Tracking item: [`docs/pending-security-issues.md`](docs/pending-security-issues.md)
+> Tracking item: [`docs/planning/pending-security-issues.md`](docs/planning/pending-security-issues.md)
 > §4.2 — replace placeholders before going public.
 
 ## Reporting a vulnerability

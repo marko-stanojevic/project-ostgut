@@ -1,4 +1,4 @@
-# OSTGUT Feature Backlog (Marketing)
+# Marketing Feature Backlog
 
 This file is the single source of truth for product features that should later be turned into marketing copy, landing page sections, launch notes, and social teasers.
 

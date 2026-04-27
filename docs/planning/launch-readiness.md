@@ -1,8 +1,8 @@
-# Before public launch
+# Launch Readiness
 
-The work that **must** be completed before bouji.fm accepts real users
-on a public domain. Items here are pulled from the broader backlog in
-[`pending-security-issues.md`](pending-security-issues.md) and
+The work that **must** be completed before project-ostgut enters public launch
+and accepts real users on a public domain. Items here are pulled from the broader backlog in
+[`pending-security-issues.md`](./pending-security-issues.md) and
 duplicated here so the launch checklist is self-contained.
 
 When an item ships, mark it `[x]` here and delete it from the source
@@ -73,7 +73,7 @@ unblock later ones.
 ### Public disclosure surface
 
 - [ ] **Finalize `SECURITY.md` + publish `security.txt`** (backlog 4.2)
-  - Replace placeholder body of [`SECURITY.md`](../SECURITY.md) with
+  - Replace placeholder body of [`SECURITY.md`](../../SECURITY.md) with
     real scope domains, working disclosure email (dedicated alias on
     the production domain), optional PGP key fingerprint.
   - Recreate `frontend/public/.well-known/security.txt` with valid
@@ -93,7 +93,7 @@ unblock later ones.
 ### Validation
 
 - [x] **Threat model document** (backlog 4.3)
-  [Threat model](threat-model.md) maps the OWASP Top 10 to endpoints
+  [Threat model](../security/threat-model.md) maps the OWASP Top 10 to endpoints
   with status (Mitigated / Accepted / TODO). It forces explicit
   decisions on accepted risks.
 

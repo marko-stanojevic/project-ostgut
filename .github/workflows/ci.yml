@@ -6,7 +6,7 @@ on:
     paths:
       - ".github/workflows/**"
       - "backend/**"
-      - "docs/sync-editorial.md"
+      - "docs/operations/editorial-sync.md"
       - "frontend/**"
       - "infra/**"
       - "GitVersion.yml"
@@ -16,7 +16,7 @@ on:
     paths:
       - ".github/workflows/**"
       - "backend/**"
-      - "docs/sync-editorial.md"
+      - "docs/operations/editorial-sync.md"
       - "frontend/**"
       - "infra/**"
       - "GitVersion.yml"

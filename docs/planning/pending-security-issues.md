@@ -1,4 +1,4 @@
-# Pending security issues
+# Pending Security Issues
 
 This is the live backlog of security work that has been identified but not
 yet implemented. Items are roughly ordered by impact-per-effort. The list
@@ -57,7 +57,7 @@ on signup. Verified email is the only sound defense against the credentials
 **What to do:**
 - Wire Resend (preferred — EU region, simple API) or SES via `internal/email/`.
 - Replace the `h.log.Info("password reset token generated", …)` line in
-  [backend/internal/handler/auth.go](../backend/internal/handler/auth.go) with
+  [backend/internal/handler/auth.go](../../backend/internal/handler/auth.go) with
   a real email send.
 - Add `email_verified_at TIMESTAMPTZ` to `users`; set on OAuth signup only
   if the provider asserted it (already passed via `email_verified` in the
@@ -106,7 +106,7 @@ re-entry for high-impact actions.
 
 ### 2.6 Track Next/PostCSS upstream advisory
 **Why:** `npm audit --omit=dev` currently reports a moderate production-path
-advisory because [frontend/package.json](../frontend/package.json) pins
+advisory because [frontend/package.json](../../frontend/package.json) pins
 `next@^16.2.4`, and that release line still bundles `postcss@8.4.31` under
 `next/node_modules/postcss`. Our direct `postcss` dependency is already on a
 patched version, but the framework-owned nested copy is not.
@@ -146,7 +146,7 @@ a PR updating the integrity attribute.
 ## Tier 3 — infrastructure (depends on Azure access)
 
 ### 3.1 Postgres firewall: drop the `azure_services` rule
-**Why:** [infra/main.tf](../infra/main.tf) currently allows the entire
+**Why:** [infra/main.tf](../../infra/main.tf) currently allows the entire
 `AzureServices` range, which is **all Azure tenants worldwide**, not just
 ours. A hostile workload in any subscription can hit our DB.
 
@@ -218,7 +218,7 @@ none, so the file has been removed for now and only `SECURITY.md` carries
 a "placeholder" notice.
 
 **What to do (at public launch):**
-- Replace the placeholder body of [SECURITY.md](../SECURITY.md) with
+- Replace the placeholder body of [SECURITY.md](../../SECURITY.md) with
   real scope domains, a working disclosure email (e.g. dedicated
   alias on the production domain), and an optional PGP key fingerprint.
 - Recreate `frontend/public/.well-known/security.txt` with valid

@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile
-    hostname: bougie-dev
-    image: bougie-dev:latest
+    hostname: project-ostgut-dev
+    image: project-ostgut-dev:latest
     volumes:
       - ..:/workspace:cached
       - /var/run/docker.sock:/var/run/docker.sock

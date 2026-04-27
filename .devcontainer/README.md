@@ -1,6 +1,6 @@
 # Development Container Setup
 
-This directory contains the VS Code Dev Containers configuration for Bouji.fm.
+This directory contains the VS Code Dev Containers configuration for project-ostgut.
 
 The setup uses a single PostgreSQL container for both host-side development and devcontainer development.
 
