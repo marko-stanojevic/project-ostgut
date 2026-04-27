@@ -66,6 +66,8 @@ interface StationForm {
 }
 
 const STATUS_BADGE_BASE_CLASS = 'rounded-md border-transparent px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em]'
+const TECHNICAL_INPUT_CLASS = 'border-border/60 bg-muted/30 font-mono text-xs text-foreground/80 placeholder:text-muted-foreground/45 focus-visible:bg-background'
+const TECHNICAL_VALUE_CLASS = 'break-all font-mono text-xs text-foreground/80'
 const METADATA_WAIT_SECONDS_NORMAL = 6
 const METADATA_WAIT_SECONDS_DELAYED = 20
 const METADATA_PROVIDER_OPTIONS: Array<{ value: 'none' | SupplementalMetadataProvider; label: string }> = [
@@ -884,7 +886,7 @@ export default function StationEditorPage() {
                                                 <Input
                                                     value={stream.url}
                                                     placeholder="https://…"
-                                                    className="flex-1"
+                                                    className={`flex-1 ${TECHNICAL_INPUT_CLASS}`}
                                                     onChange={(e) => setForm((prev) => ({
                                                         ...prev,
                                                         streams: prev.streams.map((s, idx) =>
@@ -969,6 +971,7 @@ export default function StationEditorPage() {
                                                     <Input
                                                         value={stream.metadata_provider_value}
                                                         placeholder="wxxx or https://api.composer.nprstations.org/..."
+                                                        className={TECHNICAL_INPUT_CLASS}
                                                         onChange={(e) => setForm((prev) => ({
                                                             ...prev,
                                                             streams: prev.streams.map((s, idx) =>
@@ -1012,14 +1015,14 @@ export default function StationEditorPage() {
                                                 <div className="space-y-2">
                                                     <div className="space-y-1">
                                                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Stream URL</p>
-                                                        <p className="break-all font-mono text-xs text-foreground/80">
+                                                        <p className={TECHNICAL_VALUE_CLASS}>
                                                             {stream.url.trim() || 'Not set'}
                                                         </p>
                                                     </div>
                                                     {persistedStream.metadata_url && (
                                                         <div className="space-y-1">
                                                             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Metadata URL</p>
-                                                            <p className="break-all font-mono text-xs text-foreground/80">
+                                                            <p className={TECHNICAL_VALUE_CLASS}>
                                                                 {persistedStream.metadata_url}
                                                             </p>
                                                         </div>
@@ -1347,12 +1350,12 @@ export default function StationEditorPage() {
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="logo">Logo URL</Label>
-                                    <Input id="logo" value={form.logo} onChange={(e) => setForm((prev) => ({ ...prev, logo: e.target.value }))} />
+                                    <Input id="logo" value={form.logo} className={TECHNICAL_INPUT_CLASS} onChange={(e) => setForm((prev) => ({ ...prev, logo: e.target.value }))} />
                                     {!hasValidLogoURL && <p className="text-xs text-destructive">Logo URL must be a valid absolute URL</p>}
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="website">Website URL</Label>
-                                    <Input id="website" value={form.website} onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))} />
+                                    <Input id="website" value={form.website} className={TECHNICAL_INPUT_CLASS} onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))} />
                                     {!hasValidWebsiteURL && <p className="text-xs text-destructive">Website URL must be a valid absolute URL</p>}
                                 </div>
                             </div>
