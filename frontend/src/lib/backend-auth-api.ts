@@ -1,6 +1,8 @@
 import type { Role } from '@/types/next-auth'
+import { optionalString, requireNonEmptyString, requireRecord } from '@/lib/api-contract'
 
 const API_URL = process.env.API_URL || 'http://localhost:8080'
+const AUTH_CONTRACT = 'backend auth payload'
 
 type BackendAuthUser = {
   id: string
@@ -63,51 +65,27 @@ function postBackendAuthRequest(path: string, body: unknown, options: { cache?: 
 }
 
 function parseBackendAuthResponse(payload: unknown): BackendAuthResponse {
-  const response = requireRecord(payload, 'auth response')
-  const user = requireRecord(response.user, 'auth response.user')
+  const response = requireRecord(payload, 'auth response', AUTH_CONTRACT)
+  const user = requireRecord(response.user, 'auth response.user', AUTH_CONTRACT)
 
   return {
-    accessToken: requireString(response.accessToken, 'accessToken'),
+    accessToken: requireNonEmptyString(response.accessToken, 'accessToken', AUTH_CONTRACT),
     accessTokenExpiresAt: requireDateString(response.accessTokenExpiresAt, 'accessTokenExpiresAt'),
-    refreshToken: requireString(response.refreshToken, 'refreshToken'),
+    refreshToken: requireNonEmptyString(response.refreshToken, 'refreshToken', AUTH_CONTRACT),
     refreshTokenExpiresAt: requireDateString(response.refreshTokenExpiresAt, 'refreshTokenExpiresAt'),
     user: {
-      id: requireString(user.id, 'user.id'),
-      email: requireString(user.email, 'user.email'),
-      name: optionalString(user.name, 'user.name'),
+      id: requireNonEmptyString(user.id, 'user.id', AUTH_CONTRACT),
+      email: requireNonEmptyString(user.email, 'user.email', AUTH_CONTRACT),
+      name: optionalString(user.name, 'user.name', AUTH_CONTRACT),
       role: requireRole(user.role, 'user.role'),
     },
   }
 }
 
-function requireRecord(value: unknown, field: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`Invalid backend auth payload: ${field} must be an object`)
-  }
-
-  return value as Record<string, unknown>
-}
-
-function requireString(value: unknown, field: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Invalid backend auth payload: ${field} must be a non-empty string`)
-  }
-
-  return value
-}
-
-function optionalString(value: unknown, field: string): string | null | undefined {
-  if (value === undefined || value === null) {
-    return value
-  }
-
-  return requireString(value, field)
-}
-
 function requireDateString(value: unknown, field: string): string {
-  const date = requireString(value, field)
+  const date = requireNonEmptyString(value, field, AUTH_CONTRACT)
   if (!Number.isFinite(Date.parse(date))) {
-    throw new Error(`Invalid backend auth payload: ${field} must be an ISO date string`)
+    throw new Error(`Invalid ${AUTH_CONTRACT}: ${field} must be an ISO date string`)
   }
 
   return date
@@ -118,5 +96,5 @@ function requireRole(value: unknown, field: string): Role {
     return value
   }
 
-  throw new Error(`Invalid backend auth payload: ${field} must be user, editor, or admin`)
+  throw new Error(`Invalid ${AUTH_CONTRACT}: ${field} must be user, editor, or admin`)
 }
