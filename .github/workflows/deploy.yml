@@ -385,4 +385,4 @@ jobs:
             -var="backend_custom_domain=${{ vars.BACKEND_CUSTOM_DOMAIN }}" \
             -var="frontend_custom_domain=${{ vars.FRONTEND_CUSTOM_DOMAIN }}" \
             -var="new_relic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
-            -var="new_relic_app_name=${{ vars.NEW_RELIC_APP_NAME || 'bouji-backend' }}"
+            -var="new_relic_app_name=${{ vars.NEW_RELIC_APP_NAME || 'project-ostgut-backend' }}"

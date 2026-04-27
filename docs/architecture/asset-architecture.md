@@ -1,4 +1,4 @@
-# Asset Management Architecture
+# Asset Architecture
 
 ## Scope
 

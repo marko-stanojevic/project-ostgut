@@ -1,6 +1,6 @@
-# Threat model
+# Threat Model
 
-This document maps bouji.fm's current API and frontend trust boundaries to the OWASP Top 10. It is a launch-readiness artifact, not a replacement for the detailed backlog in [pending-security-issues.md](pending-security-issues.md).
+This document maps project-ostgut's current API and frontend trust boundaries to the OWASP Top 10. It is a launch-readiness artifact, not a replacement for the detailed backlog in [pending-security-issues.md](../planning/pending-security-issues.md).
 
 Status values are intentionally blunt:
 
