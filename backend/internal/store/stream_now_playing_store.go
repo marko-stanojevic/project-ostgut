@@ -27,6 +27,15 @@ type StreamNowPlaying struct {
 	UpdatedAt   time.Time
 }
 
+// StreamNowPlayingAdminSummary contains metadata snapshot freshness metrics.
+type StreamNowPlayingAdminSummary struct {
+	Snapshots        int
+	FreshSnapshots   int
+	ErroredSnapshots int
+	LatestFetchedAt  *time.Time
+	OldestFetchedAt  *time.Time
+}
+
 // StreamNowPlayingStore reads and writes the live now-playing snapshot.
 type StreamNowPlayingStore struct {
 	pool *pgxpool.Pool
@@ -34,6 +43,25 @@ type StreamNowPlayingStore struct {
 
 func NewStreamNowPlayingStore(pool *pgxpool.Pool) *StreamNowPlayingStore {
 	return &StreamNowPlayingStore{pool: pool}
+}
+
+// AdminSummary returns metadata snapshot freshness metrics for admin diagnostics.
+func (s *StreamNowPlayingStore) AdminSummary(ctx context.Context, freshAfter time.Duration) (*StreamNowPlayingAdminSummary, error) {
+	var summary StreamNowPlayingAdminSummary
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COUNT(*) FILTER (WHERE fetched_at >= NOW() - $1::interval)::int,
+			COUNT(*) FILTER (WHERE trim(COALESCE(error, '')) <> '' OR trim(COALESCE(error_code, '')) <> '')::int,
+			MAX(fetched_at),
+			MIN(fetched_at)
+		FROM stream_now_playing`,
+		postgresInterval(freshAfter),
+	).Scan(&summary.Snapshots, &summary.FreshSnapshots, &summary.ErroredSnapshots, &summary.LatestFetchedAt, &summary.OldestFetchedAt)
+	if err != nil {
+		return nil, fmt.Errorf("admin now playing summary: %w", err)
+	}
+	return &summary, nil
 }
 
 // Get returns the snapshot for streamID, or ErrNotFound if there is none yet.

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
@@ -57,6 +58,7 @@ type Syncer struct {
 	log         *slog.Logger
 	client      *http.Client // Radio Browser API requests
 	probeClient *http.Client // stream probing — shorter timeout
+	mu          sync.Mutex
 }
 
 // NewSyncer creates a Syncer.
@@ -72,17 +74,39 @@ func NewSyncer(s *store.StationStore, streamStore *store.StationStreamStore, log
 
 // Run blocks, syncing immediately then on SyncInterval.
 func (s *Syncer) Run(ctx context.Context) {
-	s.sync(ctx)
+	s.runOnce(ctx)
 	ticker := time.NewTicker(SyncInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			s.sync(ctx)
+			s.runOnce(ctx)
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+// Trigger starts a manual station sync if one is not already running.
+func (s *Syncer) Trigger(ctx context.Context) bool {
+	if !s.mu.TryLock() {
+		s.log.Info("radio: station sync trigger skipped; sync already running")
+		return false
+	}
+	go func() {
+		defer s.mu.Unlock()
+		s.sync(ctx)
+	}()
+	return true
+}
+
+func (s *Syncer) runOnce(ctx context.Context) {
+	if !s.mu.TryLock() {
+		s.log.Info("radio: station sync skipped; sync already running")
+		return
+	}
+	defer s.mu.Unlock()
+	s.sync(ctx)
 }
 
 func (s *Syncer) sync(ctx context.Context) {

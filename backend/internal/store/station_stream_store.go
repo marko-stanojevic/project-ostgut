@@ -41,8 +41,10 @@ type StationStream struct {
 	MetadataResolverCheckedAt *time.Time
 	MetadataDelayed           bool
 	HealthScore               float64
+	NextProbeAt               time.Time
 	LastCheckedAt             *time.Time
 	LastError                 *string
+	LastErrorCode             string
 }
 
 // StationStreamInput is the write payload for station stream variants.
@@ -74,8 +76,10 @@ type StationStreamInput struct {
 	MetadataResolverCheckedAt *time.Time
 	MetadataDelayed           bool
 	HealthScore               float64
+	NextProbeAt               *time.Time
 	LastCheckedAt             *time.Time
 	LastError                 *string
+	LastErrorCode             string
 }
 
 type MetadataResolverSnapshot struct {
@@ -85,6 +89,19 @@ type MetadataResolverSnapshot struct {
 	Delayed     *bool
 }
 
+// StationStreamJobSummary contains approved stream worker freshness metrics for admin diagnostics.
+type StationStreamJobSummary struct {
+	ActiveStreams               int
+	ProbeCheckedStreams         int
+	ProbeDueStreams             int
+	MetadataEnabledStreams      int
+	MetadataResolverChecked     int
+	MetadataResolverStale       int
+	LastProbeCheckedAt          *time.Time
+	OldestProbeCheckedAt        *time.Time
+	LastMetadataResolverCheckAt *time.Time
+}
+
 // StationStreamStore executes queries against station_streams.
 type StationStreamStore struct {
 	pool *pgxpool.Pool
@@ -92,6 +109,50 @@ type StationStreamStore struct {
 
 func NewStationStreamStore(pool *pgxpool.Pool) *StationStreamStore {
 	return &StationStreamStore{pool: pool}
+}
+
+// AdminJobSummary returns approved stream probe and metadata resolver freshness metrics.
+func (s *StationStreamStore) AdminJobSummary(ctx context.Context, metadataStaleAfter time.Duration) (*StationStreamJobSummary, error) {
+	var summary StationStreamJobSummary
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COUNT(*) FILTER (WHERE ss.last_checked_at IS NOT NULL)::int,
+			COUNT(*) FILTER (WHERE ss.next_probe_at <= NOW())::int,
+			COUNT(*) FILTER (WHERE ss.metadata_enabled = true)::int,
+			COUNT(*) FILTER (WHERE ss.metadata_enabled = true AND ss.metadata_resolver_checked_at IS NOT NULL)::int,
+			COUNT(*) FILTER (WHERE ss.metadata_enabled = true AND (ss.metadata_resolver_checked_at IS NULL OR ss.metadata_resolver_checked_at < NOW() - $1::interval))::int,
+			MAX(ss.last_checked_at),
+			MIN(ss.last_checked_at) FILTER (WHERE ss.last_checked_at IS NOT NULL),
+			MAX(ss.metadata_resolver_checked_at) FILTER (WHERE ss.metadata_enabled = true)
+		FROM station_streams ss
+		JOIN stations st ON st.id = ss.station_id
+		WHERE ss.is_active = true
+		  AND st.is_active = true
+		  AND st.status = 'approved'`,
+		postgresInterval(metadataStaleAfter),
+	).Scan(
+		&summary.ActiveStreams,
+		&summary.ProbeCheckedStreams,
+		&summary.ProbeDueStreams,
+		&summary.MetadataEnabledStreams,
+		&summary.MetadataResolverChecked,
+		&summary.MetadataResolverStale,
+		&summary.LastProbeCheckedAt,
+		&summary.OldestProbeCheckedAt,
+		&summary.LastMetadataResolverCheckAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("admin approved stream job summary: %w", err)
+	}
+	return &summary, nil
+}
+
+func postgresInterval(duration time.Duration) string {
+	if duration <= 0 {
+		return "0 seconds"
+	}
+	return fmt.Sprintf("%d seconds", int64(duration.Seconds()))
 }
 
 func scanStationStreamRow(row Scanner) (*StationStream, error) {
@@ -126,8 +187,10 @@ func scanStationStreamRow(row Scanner) (*StationStream, error) {
 		&s.MetadataResolverCheckedAt,
 		&s.MetadataDelayed,
 		&s.HealthScore,
+		&s.NextProbeAt,
 		&s.LastCheckedAt,
 		&s.LastError,
+		&s.LastErrorCode,
 	); err != nil {
 		return nil, err
 	}
@@ -323,6 +386,15 @@ func normalizeLoudnessStatus(v string) string {
 	}
 }
 
+func normalizeProbeErrorCode(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "invalid_url", "unsupported_scheme", "disallowed_host", "too_many_redirects", "redirect_unsupported_scheme", "too_many_host_changes", "timeout", "request_failed", "http_status", "playlist_depth_exceeded", "playlist_empty", "playlist_read_failed":
+		return strings.ToLower(strings.TrimSpace(v))
+	default:
+		return ""
+	}
+}
+
 func maxFloat64(value, fallback float64) float64 {
 	if value < fallback {
 		return fallback
@@ -337,7 +409,7 @@ func (s *StationStreamStore) ListByStationID(ctx context.Context, stationID stri
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
-			last_checked_at, last_error
+			next_probe_at, last_checked_at, last_error, last_probe_error_code
 		FROM station_streams
 		WHERE station_id = $1
 		ORDER BY priority ASC, created_at ASC`, stationID)
@@ -369,7 +441,7 @@ func (s *StationStreamStore) ListByStationIDs(ctx context.Context, stationIDs []
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
-			last_checked_at, last_error
+			next_probe_at, last_checked_at, last_error, last_probe_error_code
 		FROM station_streams
 		WHERE station_id = ANY($1::uuid[])
 		ORDER BY station_id ASC, priority ASC, created_at ASC`, stationIDs)
@@ -426,13 +498,13 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 				priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
 				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
-				last_checked_at, last_error, updated_at
+				next_probe_at, last_checked_at, last_error, last_probe_error_code, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
 				$7, $8, $9, $10, $11, $12, $13,
 				$14, $15, $16, $17, $18, $19, $20,
 				$21, $22, $23, $24, $25, $26, $27, $28,
-				$29, $30, NOW()
+				COALESCE($29, NOW()), $30, $31, $32, NOW()
 			)`,
 			stationID,
 			in.URL,
@@ -462,8 +534,10 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			in.MetadataResolverCheckedAt,
 			in.MetadataDelayed,
 			in.HealthScore,
+			in.NextProbeAt,
 			in.LastCheckedAt,
 			in.LastError,
+			normalizeProbeErrorCode(in.LastErrorCode),
 		); err != nil {
 			return nil, fmt.Errorf("insert station stream: %w", err)
 		}
@@ -493,13 +567,13 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
 			metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
-			last_checked_at, last_error, updated_at
+			next_probe_at, last_checked_at, last_error, last_probe_error_code, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12, $13,
 			1, true, $14, $15, $16, $17, $18,
 			$19, $20, $21, $22, $23, $24, $25, $26,
-			$27, $28, NOW()
+			COALESCE($27, NOW()), $28, $29, $30, NOW()
 		)
 		ON CONFLICT (station_id, priority) DO UPDATE SET
 			url = EXCLUDED.url,
@@ -528,8 +602,10 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			metadata_resolver_checked_at = EXCLUDED.metadata_resolver_checked_at,
 			metadata_delayed = EXCLUDED.metadata_delayed,
 			health_score = EXCLUDED.health_score,
+			next_probe_at = EXCLUDED.next_probe_at,
 			last_checked_at = EXCLUDED.last_checked_at,
 			last_error = EXCLUDED.last_error,
+			last_probe_error_code = EXCLUDED.last_probe_error_code,
 			updated_at = NOW()`,
 		stationID,
 		n.URL,
@@ -557,8 +633,10 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		n.MetadataResolverCheckedAt,
 		n.MetadataDelayed,
 		n.HealthScore,
+		n.NextProbeAt,
 		n.LastCheckedAt,
 		n.LastError,
+		normalizeProbeErrorCode(n.LastErrorCode),
 	)
 	if err != nil {
 		return fmt.Errorf("upsert primary station stream: %w", err)
@@ -594,24 +672,35 @@ type ProbeUpdate struct {
 	MetadataURL               *string
 	MetadataResolverCheckedAt *time.Time
 	MetadataDelayed           *bool
+	NextProbeAt               *time.Time
 	LastCheckedAt             time.Time
 	LastError                 *string
+	LastErrorCode             string
 }
 
-// ListAllActive returns every active stream ordered by last_checked_at ascending
-// so the stalest entries are processed first by the re-probe loop.
-func (s *StationStreamStore) ListAllActive(ctx context.Context) ([]*StationStream, error) {
+// ListDueActiveForApprovedStations returns active streams for approved stations
+// whose next_probe_at has arrived, ordered by next probe time and then stale
+// probe evidence so the recurring worker spends its budget on due listener-facing streams first.
+func (s *StationStreamStore) ListDueActiveForApprovedStations(ctx context.Context, now time.Time, limit int) ([]*StationStream, error) {
+	if limit <= 0 {
+		limit = 500
+	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT
-			id, station_id, url, resolved_url, kind, container, transport,
-			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, health_score,
-			last_checked_at, last_error
-		FROM station_streams
-		WHERE is_active = true
-		ORDER BY last_checked_at ASC NULLS FIRST`)
+			ss.id, ss.station_id, ss.url, ss.resolved_url, ss.kind, ss.container, ss.transport,
+			ss.mime_type, ss.codec, ss.bitrate, ss.bit_depth, ss.sample_rate_hz, ss.sample_rate_confidence, ss.channels,
+			ss.priority, ss.is_active, ss.loudness_integrated_lufs, ss.loudness_peak_dbfs, ss.loudness_sample_duration_seconds, ss.loudness_measured_at, ss.loudness_measurement_status, ss.metadata_enabled, ss.metadata_type, ss.metadata_source, ss.metadata_url, ss.metadata_resolver, ss.metadata_resolver_checked_at, ss.metadata_delayed, ss.health_score,
+			ss.next_probe_at, ss.last_checked_at, ss.last_error, ss.last_probe_error_code
+		FROM station_streams ss
+		JOIN stations st ON st.id = ss.station_id
+		WHERE ss.is_active = true
+		  AND st.is_active = true
+		  AND st.status = 'approved'
+		  AND ss.next_probe_at <= $1
+		ORDER BY ss.next_probe_at ASC, ss.last_checked_at ASC NULLS FIRST
+		LIMIT $2`, now.UTC(), limit)
 	if err != nil {
-		return nil, fmt.Errorf("list active station streams: %w", err)
+		return nil, fmt.Errorf("list due active approved station streams: %w", err)
 	}
 	defer rows.Close()
 
@@ -619,7 +708,7 @@ func (s *StationStreamStore) ListAllActive(ctx context.Context) ([]*StationStrea
 	for rows.Next() {
 		ss, err := scanStationStreamRow(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan active station stream: %w", err)
+			return nil, fmt.Errorf("scan due active approved station stream: %w", err)
 		}
 		out = append(out, ss)
 	}
@@ -684,14 +773,16 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 			END,
 			last_checked_at = $22,
 			last_error     = $23,
+			last_probe_error_code = $24,
+			next_probe_at = COALESCE($25, next_probe_at),
 			health_score   = CASE
-				WHEN $24::double precision IS NULL THEN health_score
-				WHEN $24::double precision < 0 THEN 0
-				WHEN $24::double precision > 1 THEN 1
-				ELSE $24::double precision
+				WHEN $26::double precision IS NULL THEN health_score
+				WHEN $26::double precision < 0 THEN 0
+				WHEN $26::double precision > 1 THEN 1
+				ELSE $26::double precision
 			END,
 			updated_at     = NOW()
-		WHERE id = $25`,
+		WHERE id = $27`,
 		u.ResolvedURL,
 		u.Kind,
 		u.Container,
@@ -715,6 +806,8 @@ func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u
 		u.MetadataDelayed,
 		u.LastCheckedAt,
 		u.LastError,
+		normalizeProbeErrorCode(u.LastErrorCode),
+		u.NextProbeAt,
 		u.HealthScore,
 		id,
 	)

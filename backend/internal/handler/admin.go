@@ -315,6 +315,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		if probe.LastError == nil {
 			nextHealth = 1
 		}
+		nextProbeAt := radio.NextProbeAt(probe.LastCheckedAt, probe.LastErrorCode)
 
 		update := store.ProbeUpdate{
 			ResolvedURL:          probe.ResolvedURL,
@@ -329,8 +330,10 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			SampleRateConfidence: probe.SampleRateConfidence,
 			Channels:             probe.Channels,
 			HealthScore:          &nextHealth,
+			NextProbeAt:          &nextProbeAt,
 			LastCheckedAt:        probe.LastCheckedAt,
 			LastError:            probe.LastError,
+			LastErrorCode:        probe.LastErrorCode,
 		}
 		if scope == "full" || scope == "loudness" {
 			update.IncludeLoudness = true
@@ -912,8 +915,10 @@ func mergeExistingProbeData(inputs []store.StationStreamInput, existing []*store
 		in.MetadataResolver = cur.MetadataResolver
 		in.MetadataResolverCheckedAt = cur.MetadataResolverCheckedAt
 		in.HealthScore = cur.HealthScore
+		in.NextProbeAt = &cur.NextProbeAt
 		in.LastCheckedAt = cur.LastCheckedAt
 		in.LastError = cur.LastError
+		in.LastErrorCode = cur.LastErrorCode
 		if cur.Bitrate > 0 && in.Bitrate == 0 {
 			in.Bitrate = cur.Bitrate
 		}

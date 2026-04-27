@@ -19,6 +19,9 @@ function AdminTopNav() {
 
   const navItems = [
     { title: t('nav_overview'), href: '/admin' },
+    { title: 'API', href: '/admin/api' },
+    { title: 'Database', href: '/admin/database' },
+    { title: 'Jobs', href: '/admin/jobs' },
     { title: t('nav_users'), href: '/admin/users' },
   ]
 
@@ -56,6 +59,9 @@ function AdminTopNavMobile() {
 
   const navItems = [
     { title: t('nav_overview'), href: '/admin', icon: SquaresFourIcon },
+    { title: 'API', href: '/admin/api', icon: SquaresFourIcon },
+    { title: 'Database', href: '/admin/database', icon: SquaresFourIcon },
+    { title: 'Jobs', href: '/admin/jobs', icon: RadioIcon },
     { title: t('nav_users'), href: '/admin/users', icon: UsersIcon },
   ]
 

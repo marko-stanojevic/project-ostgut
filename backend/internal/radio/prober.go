@@ -18,20 +18,22 @@ const (
 	ReprobeInterval = 12 * time.Hour
 
 	// reprobeWorkers limits concurrent HTTP probes so we don't hammer CDNs.
-	reprobeWorkers = 10
+	reprobeWorkers    = 10
+	reprobeBatchLimit = 500
 
 	// reprobeTimeout is the per-stream HTTP probe deadline.
 	reprobeTimeout       = 10 * time.Second
 	resolverProbeTimeout = 8 * time.Second
 )
 
-// Prober periodically re-probes every active stream variant to refresh
-// resolved_url, detected codec/bitrate, and last_error.
+// Prober periodically re-probes active stream variants for approved stations to
+// refresh resolved_url, detected codec/bitrate, metadata routing, and last_error.
 type Prober struct {
 	streamStore         *store.StationStreamStore
 	log                 *slog.Logger
 	client              *http.Client
 	browserProbeOrigins []string
+	mu                  sync.Mutex
 }
 
 // NewProber creates a Prober.
@@ -47,27 +49,50 @@ func NewProber(streamStore *store.StationStreamStore, log *slog.Logger, browserP
 // Run blocks, re-probing all active streams on ReprobeInterval.
 // It probes once on startup so newly-ingested streams are classified quickly.
 func (p *Prober) Run(ctx context.Context) {
-	p.reprobeAll(ctx)
+	p.runOnce(ctx)
 	ticker := time.NewTicker(ReprobeInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			p.reprobeAll(ctx)
+			p.runOnce(ctx)
 		case <-ctx.Done():
 			return
 		}
 	}
 }
 
+// Trigger starts a manual stream re-probe if one is not already running.
+func (p *Prober) Trigger(ctx context.Context) bool {
+	if !p.mu.TryLock() {
+		p.log.Info("prober: manual trigger skipped; re-probe already running")
+		return false
+	}
+	go func() {
+		defer p.mu.Unlock()
+		p.reprobeAll(ctx)
+	}()
+	return true
+}
+
+func (p *Prober) runOnce(ctx context.Context) {
+	if !p.mu.TryLock() {
+		p.log.Info("prober: scheduled re-probe skipped; re-probe already running")
+		return
+	}
+	defer p.mu.Unlock()
+	p.reprobeAll(ctx)
+}
+
 func (p *Prober) reprobeAll(ctx context.Context) {
-	streams, err := p.streamStore.ListAllActive(ctx)
+	now := time.Now().UTC()
+	streams, err := p.streamStore.ListDueActiveForApprovedStations(ctx, now, reprobeBatchLimit)
 	if err != nil {
-		p.log.Error("prober: list active streams", "error", err)
+		p.log.Error("prober: list due active approved streams", "error", err)
 		return
 	}
 
-	p.log.Info("prober: starting re-probe cycle", "streams", len(streams))
+	p.log.Info("prober: starting re-probe cycle", "due_approved_streams", len(streams))
 	start := time.Now()
 
 	sem := make(chan struct{}, reprobeWorkers)
@@ -143,6 +168,7 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 				nextMetadataURL = normalizeMetadataValue(resolverURL)
 			}
 			nextHealth := nextProbeHealthScore(stream.HealthScore, result.LastError == nil)
+			nextProbeAt := NextProbeAt(result.LastCheckedAt, result.LastErrorCode)
 
 			if err := p.streamStore.UpdateProbeResult(ctx, stream.ID, store.ProbeUpdate{
 				ResolvedURL:               result.ResolvedURL,
@@ -161,8 +187,10 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 				MetadataResolver:          nextResolver,
 				MetadataResolverCheckedAt: &resolverCheckedAt,
 				MetadataURL:               nextMetadataURL,
+				NextProbeAt:               &nextProbeAt,
 				LastCheckedAt:             result.LastCheckedAt,
 				LastError:                 result.LastError,
+				LastErrorCode:             result.LastErrorCode,
 			}); err != nil {
 				// Graceful shutdown can cancel ctx while workers are flushing results.
 				// Treat cancellation as expected and avoid noisy WARN logs.
@@ -176,9 +204,32 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 
 	wg.Wait()
 	p.log.Info("prober: re-probe cycle done",
-		"streams", len(streams),
+		"due_approved_streams", len(streams),
 		"duration", time.Since(start).Round(time.Second),
 	)
+}
+
+// NextProbeAt returns the next recurring maintenance time for a probe result.
+// Stable streams use the full cadence; transient failures retry sooner; static
+// policy or playlist-shape failures back off longer to avoid repeated waste.
+func NextProbeAt(checkedAt time.Time, errorCode string) time.Time {
+	if checkedAt.IsZero() {
+		checkedAt = time.Now().UTC()
+	}
+	checkedAt = checkedAt.UTC()
+
+	switch ProbeFailureCode(strings.TrimSpace(errorCode)) {
+	case "":
+		return checkedAt.Add(ReprobeInterval)
+	case ProbeFailureTimeout, ProbeFailureRequestFailed:
+		return checkedAt.Add(1 * time.Hour)
+	case ProbeFailureHTTPStatus:
+		return checkedAt.Add(6 * time.Hour)
+	case ProbeFailureInvalidURL, ProbeFailureUnsupportedScheme, ProbeFailureDisallowedHost, ProbeFailureTooManyRedirects, ProbeFailureRedirectUnsupportedScheme, ProbeFailureTooManyHostChanges, ProbeFailurePlaylistDepthExceeded, ProbeFailurePlaylistEmpty, ProbeFailurePlaylistReadFailed:
+		return checkedAt.Add(24 * time.Hour)
+	default:
+		return checkedAt.Add(3 * time.Hour)
+	}
 }
 
 func nextProbeHealthScore(current float64, success bool) float64 {

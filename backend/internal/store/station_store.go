@@ -579,7 +579,13 @@ func (s *StationStore) UpdateEnrichment(ctx context.Context, id string, u Enrich
 		styleTags, formatTags, textureTags,
 		u.Status, u.EditorialReview, u.InternalNotes, u.Overview, u.Featured, id,
 	)
-	return translateStationWriteErr(err)
+	if err != nil {
+		return translateStationWriteErr(err)
+	}
+	if u.Status == "approved" {
+		return s.markStreamsDueForStations(ctx, []string{id})
+	}
+	return nil
 }
 
 // UpdateLogo sets the logo field for a station.
@@ -634,7 +640,26 @@ func (s *StationStore) BulkUpdateStatus(ctx context.Context, ids []string, statu
 	if err != nil {
 		return 0, translateStationWriteErr(err)
 	}
+	if status == "approved" {
+		if err := s.markStreamsDueForStations(ctx, ids); err != nil {
+			return 0, err
+		}
+	}
 	return int(tag.RowsAffected()), nil
+}
+
+func (s *StationStore) markStreamsDueForStations(ctx context.Context, stationIDs []string) error {
+	if len(stationIDs) == 0 {
+		return nil
+	}
+	_, err := s.pool.Exec(ctx, `
+		UPDATE station_streams
+		SET next_probe_at = NOW(), updated_at = NOW()
+		WHERE station_id = ANY($1::uuid[])`, stationIDs)
+	if err != nil {
+		return fmt.Errorf("mark approved station streams due: %w", err)
+	}
+	return nil
 }
 
 // GenreTags returns the distinct non-empty genre tags present in approved stations.

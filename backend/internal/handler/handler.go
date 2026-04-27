@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -22,6 +23,9 @@ type Dependencies struct {
 	StationStreamStore    *store.StationStreamStore
 	StreamNowPlayingStore *store.StreamNowPlayingStore
 	MediaAssetStore       *store.MediaAssetStore
+	DiagnosticsStore      *store.DiagnosticsStore
+	StationSyncer         *radio.Syncer
+	StreamProber          *radio.Prober
 }
 
 // Options groups runtime settings used by handlers.
@@ -102,6 +106,9 @@ type adminHandlers struct {
 	streams             *store.StationStreamStore
 	nowPlaying          *store.StreamNowPlayingStore
 	media               *store.MediaAssetStore
+	diagnostics         *store.DiagnosticsStore
+	stationSyncer       *radio.Syncer
+	streamProber        *radio.Prober
 	metaFetcher         *metadata.Fetcher
 	streamProbeClient   *http.Client
 	browserProbeOrigins []string
@@ -119,6 +126,7 @@ type Handler struct {
 	enforcePublicQueryAllowlist bool
 	publicAPIBaseURL            string
 	log                         *slog.Logger
+	startedAt                   time.Time
 	mediaBlobClientMu           sync.Mutex
 	mediaBlobClient             *azblob.Client
 }
@@ -176,6 +184,9 @@ func New(deps Dependencies, opts Options) *Handler {
 			streams:             deps.StationStreamStore,
 			nowPlaying:          deps.StreamNowPlayingStore,
 			media:               deps.MediaAssetStore,
+			diagnostics:         deps.DiagnosticsStore,
+			stationSyncer:       deps.StationSyncer,
+			streamProber:        deps.StreamProber,
 			metaFetcher:         metaFetcher,
 			streamProbeClient:   streamProbeClient,
 			browserProbeOrigins: append([]string(nil), opts.BrowserMetadataProbeOrigins...),
@@ -183,6 +194,7 @@ func New(deps Dependencies, opts Options) *Handler {
 		enforcePublicQueryAllowlist: opts.EnforcePublicQueryAllowlist,
 		publicAPIBaseURL:            opts.PublicAPIBaseURL,
 		log:                         opts.Log,
+		startedAt:                   time.Now().UTC(),
 	}
 }
 

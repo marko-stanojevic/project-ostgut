@@ -133,6 +133,33 @@ func TestProbeStreamRejectsPrivateRedirectTarget(t *testing.T) {
 	}
 }
 
+func TestNextProbeAtSchedulesByFailureCode(t *testing.T) {
+	checkedAt := time.Date(2026, 4, 27, 10, 0, 0, 0, time.UTC)
+
+	cases := []struct {
+		name      string
+		code      string
+		wantDelay time.Duration
+	}{
+		{name: "success", code: "", wantDelay: ReprobeInterval},
+		{name: "timeout", code: string(ProbeFailureTimeout), wantDelay: time.Hour},
+		{name: "request failed", code: string(ProbeFailureRequestFailed), wantDelay: time.Hour},
+		{name: "http status", code: string(ProbeFailureHTTPStatus), wantDelay: 6 * time.Hour},
+		{name: "static failure", code: string(ProbeFailureInvalidURL), wantDelay: 24 * time.Hour},
+		{name: "unknown typed failure", code: "future_code", wantDelay: 3 * time.Hour},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NextProbeAt(checkedAt, tc.code)
+			want := checkedAt.Add(tc.wantDelay)
+			if !got.Equal(want) {
+				t.Fatalf("NextProbeAt() = %s, want %s", got, want)
+			}
+		})
+	}
+}
+
 func TestParseFLACStreamInfo(t *testing.T) {
 	streamInfo := make([]byte, 34)
 	packed := (uint64(48000) << 44) | (uint64(2-1) << 41) | (uint64(24-1) << 36)
