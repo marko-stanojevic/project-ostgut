@@ -34,6 +34,7 @@ again.
 - Dependabot config covering gomod, npm, GitHub Actions, both Dockerfiles
 - `govulncheck` + `npm audit --omit=dev` in CI
 - Trivy filesystem + image scans in CI
+- Syft SPDX SBOM generation in CI and attached on each release
 - All GitHub Actions pinned to commit SHAs with `# vX.Y` comments
 - `gosec` static analysis in CI (medium+ severity, SARIF artifact)
 - `POST /users/me/sessions/revoke-all` endpoint (sign out all devices)
