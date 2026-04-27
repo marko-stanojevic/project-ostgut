@@ -55,3 +55,9 @@ export interface ApiStation {
     reliability_score?: number
     featured?: boolean
 }
+
+export interface ApiStationDetail extends ApiStation {
+    website?: string
+    overview?: string
+    description?: string
+}

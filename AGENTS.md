@@ -49,6 +49,8 @@ Once the product is live and users exist, this section will be removed and compa
 
 **When reviewing, report suspicious code.** If you spot something fishy while reviewing the codebase, call it out explicitly and suggest a refinement or refactor instead of silently working around it.
 
+**Track workarounds and deferred issues.** When introducing or keeping a workaround, temporary exception, toolchain quirk, or follow-up issue, record it immediately in the appropriate backlog doc: use `docs/pending-issues.md` for general engineering/product follow-ups and `docs/pending-security-issues.md` for security or dependency vulnerability follow-ups. Keep notes concise and include the safe resolution path.
+
 **Lockfiles are part of the contract.** If a dependency manifest changes, the corresponding lockfile must be updated in the same change. Treat `package.json` and `package-lock.json` as one unit during reviews and refactors.
 
 ## Architectural Discipline (Required)
