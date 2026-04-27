@@ -104,6 +104,27 @@ re-entry for high-impact actions.
 
 ## Tier 2 — input/output hardening
 
+### 2.6 Track Next/PostCSS upstream advisory
+**Why:** `npm audit --omit=dev` currently reports a moderate production-path
+advisory because [frontend/package.json](../frontend/package.json) pins
+`next@^16.2.4`, and that release line still bundles `postcss@8.4.31` under
+`next/node_modules/postcss`. Our direct `postcss` dependency is already on a
+patched version, but the framework-owned nested copy is not.
+
+**Current assessment:** This is upstream-owned and not safely fixable with
+`npm audit fix`. The suggested downgrade path from npm audit would roll the
+app back to obsolete major versions of Next and related packages, which is not
+acceptable. Current stable `next@16.2.4` and current canary `16.3.0-canary.2`
+still depend on `postcss@8.4.31`.
+
+**What to do:**
+- Watch the next stable Next.js release for a bundled PostCSS upgrade.
+- Upgrade Next normally once a stable release removes the nested
+  `postcss@8.4.31` dependency.
+- Do not use `npm audit fix --force` or force a manual override of Next's
+  internal PostCSS dependency unless upstream documents that combination as
+  supported.
+
 ### 2.5 SRI hashes on third-party CDN scripts (deferred)
 **Why:** CSP nonces don't help when the script is loaded by URL — a
 compromised CDN serves attacker JS. SRI ensures the browser only runs
