@@ -117,7 +117,8 @@ func (h *Handler) AdminListUsers(c *gin.Context) {
 // adminStationResponse extends the public response with editorial + status fields.
 type adminStationResponse struct {
 	stationResponse
-	Status string `json:"status"`
+	Status        string  `json:"status"`
+	InternalNotes *string `json:"internal_notes,omitempty"`
 }
 
 // adminStationWithStreams fetches the stream variants for s and builds the
@@ -143,6 +144,7 @@ func toAdminStationResponse(s *store.Station, streams []streamResponse) adminSta
 	return adminStationResponse{
 		stationResponse: toStationResponse(s, streams),
 		Status:          s.Status,
+		InternalNotes:   s.InternalNotes,
 	}
 }
 
