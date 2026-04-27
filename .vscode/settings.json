@@ -1,4 +1,9 @@
 {
     "typescript.tsdk": "frontend/node_modules/typescript/lib",
-    "typescript.enablePromptUseWorkspaceTsdk": true
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "go.goroot": "${env:HOME}/.local/go",
+    "go.toolsEnvVars": {
+        "GOROOT": "${env:HOME}/.local/go",
+        "PATH": "${env:HOME}/.local/go/bin:${env:PATH}"
+    }
 }

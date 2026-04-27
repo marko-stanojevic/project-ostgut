@@ -5,7 +5,9 @@ import (
 	"context"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -117,6 +119,69 @@ func TestProcessUploadedAssetUploadsVariants(t *testing.T) {
 	}
 }
 
+func TestProcessUploadedAssetStripsEXIFFromAvatarVariants(t *testing.T) {
+	exifPayload := []byte("Exif\x00\x00OSTGUT-test-camera-metadata")
+	originalPayload := mustEncodeJPEGWithAPP1Segment(t, 320, 200, exifPayload)
+	if !bytes.Contains(originalPayload, exifPayload) {
+		t.Fatal("expected original payload to contain EXIF test marker")
+	}
+
+	putBodies := make(map[string][]byte)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write(originalPayload)
+		case http.MethodPut:
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read PUT body: %v", err)
+			}
+			putBodies[r.URL.Path] = body
+			w.WriteHeader(http.StatusCreated)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	h := &Handler{media: mediaHandlers{config: mediaConfig{uploadBaseURL: server.URL + "/container"}}}
+	asset := &store.MediaAsset{
+		ID:                 "asset-exif",
+		OwnerType:          store.MediaAssetOwnerUser,
+		OwnerID:            "user-1",
+		Kind:               store.MediaAssetKindAvatar,
+		StorageKeyOriginal: "avatars/user-1/asset-exif/original",
+		MIMEType:           "image/jpeg",
+	}
+
+	_, reason, err := h.processUploadedAsset(context.Background(), asset)
+	if err != nil {
+		t.Fatalf("processUploadedAsset returned error: %v", err)
+	}
+	if reason != "" {
+		t.Fatalf("unexpected rejection reason: %s", reason)
+	}
+
+	variant := putBodies["/container/avatars/user-1/asset-exif/64.png"]
+	if len(variant) == 0 {
+		t.Fatal("expected processed avatar variant upload")
+	}
+	if _, err := png.Decode(bytes.NewReader(variant)); err != nil {
+		t.Fatalf("variant is not a valid PNG: %v", err)
+	}
+	if bytes.Contains(variant, exifPayload) {
+		t.Fatal("processed avatar variant retained EXIF payload")
+	}
+	if bytes.Contains(variant, []byte("Exif\x00\x00")) {
+		t.Fatal("processed avatar variant retained EXIF header")
+	}
+	if !bytes.HasPrefix(variant, []byte("\x89PNG\r\n\x1a\n")) {
+		t.Fatal("processed avatar variant missing PNG signature")
+	}
+}
+
 func TestProcessUploadedAssetRejectsUnsupportedPayload(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -162,4 +227,36 @@ func mustEncodePNG(t *testing.T, width, height int) []byte {
 		t.Fatalf("encode png: %v", err)
 	}
 	return output.Bytes()
+}
+
+func mustEncodeJPEGWithAPP1Segment(t *testing.T, width, height int, app1Payload []byte) []byte {
+	t.Helper()
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{R: 90, G: uint8((x * 255) / width), B: uint8((y * 255) / height), A: 255})
+		}
+	}
+
+	var jpegBytes bytes.Buffer
+	if err := jpeg.Encode(&jpegBytes, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encode jpeg: %v", err)
+	}
+
+	encoded := jpegBytes.Bytes()
+	if len(encoded) < 2 || encoded[0] != 0xff || encoded[1] != 0xd8 {
+		t.Fatal("encoded JPEG missing SOI marker")
+	}
+	if len(app1Payload) > 0xffff-2 {
+		t.Fatal("APP1 payload too large")
+	}
+
+	segmentLen := len(app1Payload) + 2
+	withAPP1 := make([]byte, 0, len(encoded)+4+len(app1Payload))
+	withAPP1 = append(withAPP1, encoded[:2]...)
+	withAPP1 = append(withAPP1, 0xff, 0xe1, byte(segmentLen>>8), byte(segmentLen))
+	withAPP1 = append(withAPP1, app1Payload...)
+	withAPP1 = append(withAPP1, encoded[2:]...)
+	return withAPP1
 }

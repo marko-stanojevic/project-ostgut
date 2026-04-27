@@ -34,6 +34,7 @@ again.
 - Dependabot config covering gomod, npm, GitHub Actions, both Dockerfiles
 - `govulncheck` + `npm audit --omit=dev` in CI
 - Trivy filesystem + image scans in CI
+- Syft SPDX SBOM generation in CI and attached on each release
 - All GitHub Actions pinned to commit SHAs with `# vX.Y` comments
 - `gosec` static analysis in CI (medium+ severity, SARIF artifact)
 - `POST /users/me/sessions/revoke-all` endpoint (sign out all devices)
@@ -102,19 +103,6 @@ re-entry for high-impact actions.
 ---
 
 ## Tier 2 — input/output hardening
-
-### 2.1 Whitelisted query params on public list endpoints
-**Why:** `GET /stations`, `GET /search` accept arbitrary query keys today.
-A future refactor that introduces dynamic SQL composition could leak
-private columns through an unfiltered key.
-
-**What to do:** Reject unknown keys with 400 in non-development builds.
-
-### 2.4 Confirm EXIF strip on processed avatars
-**Why:** Documented in [docs/assets-management.md](assets-management.md)
-but never verified by code or test. Re-encoding through `image.Encode`
-strips EXIF as a side-effect, but assert it in a test so a future "preserve
-metadata" optimization doesn't reintroduce a privacy leak.
 
 ### 2.5 SRI hashes on third-party CDN scripts (deferred)
 **Why:** CSP nonces don't help when the script is loaded by URL — a
@@ -218,15 +206,6 @@ a "placeholder" notice.
 - Verify it serves at `https://<production-domain>/.well-known/security.txt`
   with `Content-Type: text/plain` over HTTPS.
 
-### 4.3 Threat model document
-**Why:** Forces explicit decisions on what we choose not to defend against
-("we accept that Paddle webhook signature is the only billing trust
-anchor") so reviewers can challenge the assumptions.
-
-**What to do:** One-page OWASP Top 10 table mapped to endpoints with
-status (Mitigated / Accepted / TODO). Update on every PR that changes the
-auth surface.
-
 ### 4.4 External pen test before public launch
 **Why:** A focused 5-day test on the full app finds issues this kind of
 audit cannot — business-logic bugs, race conditions in billing, real
@@ -275,13 +254,6 @@ verification only.
 ---
 
 ## Tier 6 — nice-to-have, not gated on launch
-
-### 6.2 SBOM generation
-**Why:** Some enterprise customers ask for it, and it's useful when
-responding to a CVE ("am I shipping vulnerable-package-X?").
-
-**What to do:** `syft` step in CI, attach SPDX JSON as a workflow artifact,
-publish on each release.
 
 ### 6.4 Style-src nonces (drop `'unsafe-inline'`)
 **Why:** Lower priority than script nonces because `<style>` can't execute

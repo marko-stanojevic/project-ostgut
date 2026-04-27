@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -120,6 +122,28 @@ func toStreamResponse(s *store.StationStream) streamResponse {
 	}
 }
 
+var publicStationListQueryParams = map[string]struct{}{
+	"country":     {},
+	"featured":    {},
+	"format":      {},
+	"genre":       {},
+	"language":    {},
+	"limit":       {},
+	"min_bitrate": {},
+	"offset":      {},
+	"q":           {},
+	"sort":        {},
+	"style":       {},
+	"subgenre":    {},
+	"texture":     {},
+}
+
+var publicStationSearchQueryParams = map[string]struct{}{
+	"limit":  {},
+	"offset": {},
+	"q":      {},
+}
+
 func metadataResolverForResponse(s *store.StationStream) string {
 	if s == nil || !s.MetadataEnabled {
 		return "none"
@@ -214,6 +238,10 @@ func (h *Handler) attachStreamsToStations(ctx context.Context, stations []*store
 // ListStations handles GET /stations
 // Query params: q, genre, country, language, min_bitrate, style, format, texture, featured, sort, limit, offset
 func (h *Handler) ListStations(c *gin.Context) {
+	if h.rejectUnknownPublicQueryParams(c, publicStationListQueryParams) {
+		return
+	}
+
 	f := store.StationFilter{
 		Search:       strings.TrimSpace(c.Query("q")),
 		Genres:       lowerAll(c.QueryArray("genre")),
@@ -287,6 +315,10 @@ func (h *Handler) GetStation(c *gin.Context) {
 
 // SearchStations handles GET /search?q=
 func (h *Handler) SearchStations(c *gin.Context) {
+	if h.rejectUnknownPublicQueryParams(c, publicStationSearchQueryParams) {
+		return
+	}
+
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "q is required"})
@@ -407,4 +439,35 @@ func queryInt(c *gin.Context, key string, def int) int {
 		}
 	}
 	return def
+}
+
+func (h *Handler) rejectUnknownPublicQueryParams(c *gin.Context, allowed map[string]struct{}) bool {
+	if !h.enforcePublicQueryAllowlist {
+		return false
+	}
+
+	unknown := unknownQueryParams(c.Request.URL.Query(), allowed)
+	if len(unknown) == 0 {
+		return false
+	}
+
+	if len(unknown) == 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown query parameter: " + unknown[0]})
+		return true
+	}
+
+	c.JSON(http.StatusBadRequest, gin.H{"error": "unknown query parameters: " + strings.Join(unknown, ", ")})
+	return true
+}
+
+func unknownQueryParams(values url.Values, allowed map[string]struct{}) []string {
+	unknown := make([]string, 0)
+	for key := range values {
+		if _, ok := allowed[key]; ok {
+			continue
+		}
+		unknown = append(unknown, key)
+	}
+	sort.Strings(unknown)
+	return unknown
 }

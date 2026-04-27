@@ -29,6 +29,7 @@ type Options struct {
 	Log                         *slog.Logger
 	JWTSecret                   string
 	OAuthSharedSecret           string
+	EnforcePublicQueryAllowlist bool
 	PublicAPIBaseURL            string
 	PaddleWebhookSecret         string
 	PaddleClientToken           string
@@ -106,17 +107,18 @@ type adminHandlers struct {
 
 // Handler holds grouped domain dependencies for HTTP handlers.
 type Handler struct {
-	auth              authHandlers
-	user              userHandlers
-	player            playerHandlers
-	billing           billingHandlers
-	station           stationHandlers
-	media             mediaHandlers
-	admin             adminHandlers
-	publicAPIBaseURL  string
-	log               *slog.Logger
-	mediaBlobClientMu sync.Mutex
-	mediaBlobClient   *azblob.Client
+	auth                        authHandlers
+	user                        userHandlers
+	player                      playerHandlers
+	billing                     billingHandlers
+	station                     stationHandlers
+	media                       mediaHandlers
+	admin                       adminHandlers
+	enforcePublicQueryAllowlist bool
+	publicAPIBaseURL            string
+	log                         *slog.Logger
+	mediaBlobClientMu           sync.Mutex
+	mediaBlobClient             *azblob.Client
 }
 
 // New creates a Handler with grouped dependencies and runtime options.
@@ -174,8 +176,9 @@ func New(deps Dependencies, opts Options) *Handler {
 			streamProbeClient:   streamProbeClient,
 			browserProbeOrigins: append([]string(nil), opts.BrowserMetadataProbeOrigins...),
 		},
-		publicAPIBaseURL: opts.PublicAPIBaseURL,
-		log:              opts.Log,
+		enforcePublicQueryAllowlist: opts.EnforcePublicQueryAllowlist,
+		publicAPIBaseURL:            opts.PublicAPIBaseURL,
+		log:                         opts.Log,
 	}
 }
 

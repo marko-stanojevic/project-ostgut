@@ -92,10 +92,10 @@ unblock later ones.
 
 ### Validation
 
-- [ ] **Threat model document** (backlog 4.3)
-  One-page OWASP Top 10 table mapped to endpoints with status
-  (Mitigated / Accepted / TODO). Forces explicit decisions on
-  accepted risks.
+- [x] **Threat model document** (backlog 4.3)
+  [Threat model](threat-model.md) maps the OWASP Top 10 to endpoints
+  with status (Mitigated / Accepted / TODO). It forces explicit
+  decisions on accepted risks.
 
 - [ ] **External pen test** (backlog 4.4)
   5-day focused test by a reputable EU shop (Cure53, NCC, Pentest
