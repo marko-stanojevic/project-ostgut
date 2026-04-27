@@ -88,6 +88,7 @@ func main() {
 			Log:                         logger,
 			JWTSecret:                   cfg.JWTSecret,
 			OAuthSharedSecret:           cfg.OAuthSharedSecret,
+			EnforcePublicQueryAllowlist: cfg.Env != "local",
 			PublicAPIBaseURL:            cfg.PublicAPIBaseURL,
 			PaddleWebhookSecret:         cfg.PaddleWebhookSecret,
 			PaddleClientToken:           cfg.PaddleClientToken,

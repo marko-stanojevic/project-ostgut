@@ -103,19 +103,6 @@ re-entry for high-impact actions.
 
 ## Tier 2 — input/output hardening
 
-### 2.1 Whitelisted query params on public list endpoints
-**Why:** `GET /stations`, `GET /search` accept arbitrary query keys today.
-A future refactor that introduces dynamic SQL composition could leak
-private columns through an unfiltered key.
-
-**What to do:** Reject unknown keys with 400 in non-development builds.
-
-### 2.4 Confirm EXIF strip on processed avatars
-**Why:** Documented in [docs/assets-management.md](assets-management.md)
-but never verified by code or test. Re-encoding through `image.Encode`
-strips EXIF as a side-effect, but assert it in a test so a future "preserve
-metadata" optimization doesn't reintroduce a privacy leak.
-
 ### 2.5 SRI hashes on third-party CDN scripts (deferred)
 **Why:** CSP nonces don't help when the script is loaded by URL — a
 compromised CDN serves attacker JS. SRI ensures the browser only runs
