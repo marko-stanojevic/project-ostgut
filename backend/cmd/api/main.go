@@ -230,7 +230,7 @@ func main() {
 	editor.Use(middleware.RequireRole(store.RoleEditor, store.RoleAdmin))
 	editor.Use(middleware.RequireJSON())
 	{
-		editor.GET("/overview", h.AdminOverview)
+		editor.GET("/overview", h.EditorOverview)
 		editor.GET("/stations", h.AdminListStations)
 		editor.POST("/stations", h.AdminCreateStation)
 		editor.POST("/stations/bulk", h.AdminBulkAction)

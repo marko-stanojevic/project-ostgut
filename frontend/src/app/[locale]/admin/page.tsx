@@ -1,5 +1,5 @@
-import { OperationsOverview } from '@/components/operations-overview'
+import { AdminSystemOverview } from '@/components/admin-system-overview'
 
 export default function AdminOverviewPage() {
-  return <OperationsOverview scope="admin" />
+  return <AdminSystemOverview />
 }

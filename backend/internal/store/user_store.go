@@ -82,6 +82,15 @@ type PlayerPreferencesWriteResult struct {
 	Preferences PlayerPreferences
 }
 
+// UserAdminSummary contains aggregate user/account metrics for the admin overview.
+type UserAdminSummary struct {
+	Total             int
+	NewLast7Days      int
+	Admins            int
+	Editors           int
+	WithPlayerStation int
+}
+
 // UserStore executes queries against the users and password_reset_tokens tables.
 type UserStore struct {
 	pool *pgxpool.Pool
@@ -90,6 +99,24 @@ type UserStore struct {
 // NewUserStore creates a UserStore backed by the given pool.
 func NewUserStore(pool *pgxpool.Pool) *UserStore {
 	return &UserStore{pool: pool}
+}
+
+// AdminSummary returns account-level aggregates for the admin overview.
+func (s *UserStore) AdminSummary(ctx context.Context) (*UserAdminSummary, error) {
+	var summary UserAdminSummary
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int,
+			COUNT(*) FILTER (WHERE role = 'admin')::int,
+			COUNT(*) FILTER (WHERE role = 'editor')::int,
+			COUNT(*) FILTER (WHERE player_last_station IS NOT NULL)::int
+		FROM users`,
+	).Scan(&summary.Total, &summary.NewLast7Days, &summary.Admins, &summary.Editors, &summary.WithPlayerStation)
+	if err != nil {
+		return nil, fmt.Errorf("admin user summary: %w", err)
+	}
+	return &summary, nil
 }
 
 // Create inserts a new user with a bcrypt-hashed password.

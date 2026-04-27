@@ -96,6 +96,8 @@ type mediaHandlers struct {
 
 type adminHandlers struct {
 	users               *store.UserStore
+	refresh             *store.RefreshTokenStore
+	subscriptions       *store.SubscriptionStore
 	stations            *store.StationStore
 	streams             *store.StationStreamStore
 	nowPlaying          *store.StreamNowPlayingStore
@@ -168,6 +170,8 @@ func New(deps Dependencies, opts Options) *Handler {
 		},
 		admin: adminHandlers{
 			users:               deps.UserStore,
+			refresh:             deps.RefreshTokenStore,
+			subscriptions:       deps.SubscriptionStore,
 			stations:            deps.StationStore,
 			streams:             deps.StationStreamStore,
 			nowPlaying:          deps.StreamNowPlayingStore,

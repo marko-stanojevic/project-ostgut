@@ -11,7 +11,7 @@ import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 
 const OVERVIEW_CONTRACT = 'overview payload'
 
-export type OverviewScope = 'admin' | 'editor'
+export type OverviewScope = 'editor'
 export type OverviewSeverity = 'critical' | 'warning' | 'notice'
 
 export type OverviewResponse = {
@@ -66,7 +66,6 @@ export type OverviewIssue = {
 }
 
 const overviewPaths: Record<OverviewScope, string> = {
-  admin: '/admin/overview',
   editor: '/editor/overview',
 }
 

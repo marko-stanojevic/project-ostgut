@@ -39,6 +39,15 @@ type MediaAsset struct {
 	RejectionReason    *string
 }
 
+// MediaAssetAdminSummary contains media pipeline metrics for the admin overview.
+type MediaAssetAdminSummary struct {
+	Total    int
+	Ready    int
+	Pending  int
+	Rejected int
+	Bytes    int64
+}
+
 // CreateMediaAssetParams contains fields for creating a pending media asset row.
 type CreateMediaAssetParams struct {
 	OwnerType          string
@@ -66,6 +75,24 @@ type MediaAssetStore struct {
 // NewMediaAssetStore creates a MediaAssetStore backed by the given pool.
 func NewMediaAssetStore(pool *pgxpool.Pool) *MediaAssetStore {
 	return &MediaAssetStore{pool: pool}
+}
+
+// AdminSummary returns media-asset pipeline aggregates for the admin overview.
+func (s *MediaAssetStore) AdminSummary(ctx context.Context) (*MediaAssetAdminSummary, error) {
+	var summary MediaAssetAdminSummary
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COUNT(*) FILTER (WHERE status = 'ready')::int,
+			COUNT(*) FILTER (WHERE status = 'pending')::int,
+			COUNT(*) FILTER (WHERE status = 'rejected')::int,
+			COALESCE(SUM(byte_size), 0)::bigint
+		FROM media_assets`,
+	).Scan(&summary.Total, &summary.Ready, &summary.Pending, &summary.Rejected, &summary.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("admin media asset summary: %w", err)
+	}
+	return &summary, nil
 }
 
 const mediaAssetColumns = `
