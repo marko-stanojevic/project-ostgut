@@ -22,11 +22,11 @@ export interface UpdateUserProfileResponse {
 }
 
 export function getUserProfile(accessToken: string, init?: RequestInit) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/users/me`, accessToken, init).then(parseUserProfile)
+    return fetchJSONWithAuth(`${API_URL}/users/me`, accessToken, init).then(parseUserProfile)
 }
 
 export function updateUserProfile(accessToken: string, payload: UpdateUserProfilePayload) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/users/me`, accessToken, {
+    return fetchJSONWithAuth(`${API_URL}/users/me`, accessToken, {
         method: 'PUT',
         body: JSON.stringify(payload),
     }).then(parseUpdateUserProfileResponse)

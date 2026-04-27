@@ -10,7 +10,7 @@ import {
     requireString,
     requireStringArray,
 } from '@/lib/api-contract'
-import { fetchJSONWithAuth } from '@/lib/auth-fetch'
+import { fetchJSONWithAuth, fetchNoContentWithAuth } from '@/lib/auth-fetch'
 import { parseMediaAsset } from '@/lib/media'
 
 const EDITOR_STATIONS_CONTRACT = 'editor stations payload'
@@ -135,47 +135,47 @@ export async function listEditorStations(accessToken: string, params: ListEditor
     })
     if (params.query) searchParams.set('q', params.query)
 
-    return fetchJSONWithAuth<unknown>(
+    return fetchJSONWithAuth(
         `${API_URL}/editor/stations?${searchParams}`,
         accessToken,
     ).then(parseListEditorStationsResponse)
 }
 
 export function bulkUpdateEditorStations(accessToken: string, ids: string[], status: StationModerationStatus) {
-    return fetchJSONWithAuth<void>(`${API_URL}/editor/stations/bulk`, accessToken, {
+    return fetchNoContentWithAuth(`${API_URL}/editor/stations/bulk`, accessToken, {
         method: 'POST',
         body: JSON.stringify({ ids, status }),
     })
 }
 
 export function createEditorStation(accessToken: string, payload: EditorStationPayload) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/editor/stations`, accessToken, {
+    return fetchJSONWithAuth(`${API_URL}/editor/stations`, accessToken, {
         method: 'POST',
         body: JSON.stringify(payload),
     }).then((response) => parseAdminStation(response, 'station'))
 }
 
 export function getEditorStation(accessToken: string, stationID: string) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/editor/stations/${stationID}`, accessToken).then((response) =>
+    return fetchJSONWithAuth(`${API_URL}/editor/stations/${stationID}`, accessToken).then((response) =>
         parseAdminStation(response, 'station'),
     )
 }
 
 export function getEditorStationIcon(accessToken: string, stationID: string) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/editor/stations/${stationID}/icon`, accessToken).then((payload) =>
+    return fetchJSONWithAuth(`${API_URL}/editor/stations/${stationID}/icon`, accessToken).then((payload) =>
         parseMediaAsset(payload, 'station icon'),
     )
 }
 
 export function updateEditorStation(accessToken: string, stationID: string, payload: EditorStationPayload) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/editor/stations/${stationID}`, accessToken, {
+    return fetchJSONWithAuth(`${API_URL}/editor/stations/${stationID}`, accessToken, {
         method: 'PUT',
         body: JSON.stringify(payload),
     }).then((response) => parseAdminStation(response, 'station'))
 }
 
 export function probeEditorStationStream(accessToken: string, stationID: string, streamID: string, scope: StreamProbeScope) {
-    return fetchJSONWithAuth<unknown>(
+    return fetchJSONWithAuth(
         `${API_URL}/editor/stations/${stationID}/streams/${streamID}/probe?scope=${scope}`,
         accessToken,
         { method: 'POST' },

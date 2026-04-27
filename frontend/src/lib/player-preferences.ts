@@ -20,11 +20,11 @@ export interface PlayerPreferencesResponse extends PlayerPreferencesPayload {
 }
 
 export function getPlayerPreferences(accessToken: string) {
-  return fetchJSONWithAuth<unknown>(`${API_URL}/users/me/player-preferences`, accessToken).then(parsePlayerPreferencesPayload)
+  return fetchJSONWithAuth(`${API_URL}/users/me/player-preferences`, accessToken).then(parsePlayerPreferencesPayload)
 }
 
 export function updatePlayerPreferences(accessToken: string, payload: PlayerPreferencesPayload, init?: RequestInit) {
-  return fetchJSONWithAuth<unknown>(`${API_URL}/users/me/player-preferences`, accessToken, {
+  return fetchJSONWithAuth(`${API_URL}/users/me/player-preferences`, accessToken, {
     ...init,
     method: 'PUT',
     body: JSON.stringify(payload),

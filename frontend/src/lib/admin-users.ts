@@ -39,11 +39,11 @@ export function listAdminUsers(accessToken: string, params: ListAdminUsersParams
     searchParams.set('q', params.query)
   }
 
-  return fetchJSONWithAuth<unknown>(`${API_URL}/admin/users?${searchParams}`, accessToken).then(parseListAdminUsersResponse)
+  return fetchJSONWithAuth(`${API_URL}/admin/users?${searchParams}`, accessToken).then(parseListAdminUsersResponse)
 }
 
 export function setAdminUserRole(accessToken: string, userID: string, role: AdminUserRole) {
-  return fetchJSONWithAuth<unknown>(`${API_URL}/admin/users/${userID}/role`, accessToken, {
+  return fetchJSONWithAuth(`${API_URL}/admin/users/${userID}/role`, accessToken, {
     method: 'PUT',
     body: JSON.stringify({ role }),
   }).then(parseSetAdminUserRoleResponse)

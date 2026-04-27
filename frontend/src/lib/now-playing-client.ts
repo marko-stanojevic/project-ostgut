@@ -1,6 +1,7 @@
 'use client'
 
 import type { NowPlaying } from '@/lib/now-playing'
+import { optionalString, requireArray, requireRecord } from '@/lib/api-contract'
 import {
   normalizeResolvedClientMetadata,
   resolveSupplementalMetadata,
@@ -13,6 +14,7 @@ const CLIENT_TIMEOUT_MS = 4000
 const CACHE_TTL_OK_MS = 30_000
 const CACHE_TTL_MISS_MS = 3 * 60_000
 const MAX_METAINT = 65536
+const ICECAST_STATUS_CONTRACT = 'Icecast status response'
 
 type CacheEntry = {
   value: NowPlaying | null
@@ -289,13 +291,9 @@ async function fetchIcecastJSON(streamURL: string, signal: AbortSignal, hintedUR
     return null
   }
 
-  let payload: {
-    icestats?: {
-      source?: { title?: string; listenurl?: string; mount?: string } | Array<{ title?: string; listenurl?: string; mount?: string }>
-    }
-  }
+  let sources: IcecastSource[]
   try {
-    payload = (await res.json()) as typeof payload
+    sources = parseIcecastSources(await res.json())
   } catch (error) {
     metadataDebugLog('client-icecast-parse-failed', {
       url: statusURL,
@@ -303,8 +301,6 @@ async function fetchIcecastJSON(streamURL: string, signal: AbortSignal, hintedUR
     })
     return null
   }
-  const rawSource = payload.icestats?.source
-  const sources = Array.isArray(rawSource) ? rawSource : rawSource ? [rawSource] : []
   if (sources.length === 0) return null
 
   const streamPath = url.pathname.toLowerCase()
@@ -320,6 +316,40 @@ async function fetchIcecastJSON(streamURL: string, signal: AbortSignal, hintedUR
   }
   metadataDebugLog('client-icecast-success', { url: statusURL, title: best.title })
   return buildNowPlaying(best.title, 'icecast', 'client', statusURL)
+}
+
+type IcecastSource = {
+  title?: string
+  listenurl?: string
+  mount?: string
+}
+
+function parseIcecastSources(payload: unknown): IcecastSource[] {
+  const response = requireRecord(payload, 'response', ICECAST_STATUS_CONTRACT)
+  if (response.icestats === undefined || response.icestats === null) {
+    return []
+  }
+
+  const icestats = requireRecord(response.icestats, 'icestats', ICECAST_STATUS_CONTRACT)
+  if (icestats.source === undefined || icestats.source === null) {
+    return []
+  }
+
+  const sources = Array.isArray(icestats.source)
+    ? requireArray(icestats.source, 'icestats.source', ICECAST_STATUS_CONTRACT)
+    : [icestats.source]
+
+  return sources.map(parseIcecastSource)
+}
+
+function parseIcecastSource(payload: unknown, index: number): IcecastSource {
+  const source = requireRecord(payload, `icestats.source[${index}]`, ICECAST_STATUS_CONTRACT)
+
+  return {
+    title: optionalString(source.title, `icestats.source[${index}].title`, ICECAST_STATUS_CONTRACT),
+    listenurl: optionalString(source.listenurl, `icestats.source[${index}].listenurl`, ICECAST_STATUS_CONTRACT),
+    mount: optionalString(source.mount, `icestats.source[${index}].mount`, ICECAST_STATUS_CONTRACT),
+  }
 }
 
 async function fetchShoutcast(streamURL: string, signal: AbortSignal): Promise<NowPlaying | null> {

@@ -18,11 +18,11 @@ export interface CheckoutConfig {
 }
 
 export function getSubscription(accessToken: string) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/billing/subscription`, accessToken).then(parseSubscription)
+    return fetchJSONWithAuth(`${API_URL}/billing/subscription`, accessToken).then(parseSubscription)
 }
 
 export function getCheckoutConfig(accessToken: string) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/billing/checkout-config`, accessToken).then(parseCheckoutConfig)
+    return fetchJSONWithAuth(`${API_URL}/billing/checkout-config`, accessToken).then(parseCheckoutConfig)
 }
 
 function parseSubscription(payload: unknown): Subscription {

@@ -1,4 +1,7 @@
 import { API_URL } from '@/lib/api'
+import { optionalString, requireRecord } from '@/lib/api-contract'
+
+const AUTH_ERROR_CONTRACT = 'auth error response'
 
 interface ErrorResponse {
   error?: string
@@ -32,8 +35,17 @@ async function postAuthJSON(path: string, body: unknown, fallbackMessage: string
 
 async function parseErrorResponse(response: Response): Promise<ErrorResponse | null> {
   try {
-    return (await response.json()) as ErrorResponse
+    return parseErrorResponsePayload(await response.json())
   } catch {
     return null
+  }
+}
+
+function parseErrorResponsePayload(payload: unknown): ErrorResponse {
+  const response = requireRecord(payload, 'response', AUTH_ERROR_CONTRACT)
+
+  return {
+    error: optionalString(response.error, 'error', AUTH_ERROR_CONTRACT),
+    message: optionalString(response.message, 'message', AUTH_ERROR_CONTRACT),
   }
 }

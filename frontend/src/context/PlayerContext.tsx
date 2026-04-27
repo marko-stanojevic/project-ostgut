@@ -176,7 +176,7 @@ function getPreferredVariantURL(stationID: string | undefined): string {
   const raw = window.localStorage.getItem(LAST_SUCCESSFUL_STREAM_KEY)
   if (!raw) return ''
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const parsed = parsePreferredVariantMap(JSON.parse(raw))
     const value = parsed?.[stationID]
     return typeof value === 'string' ? value : ''
   } catch {
@@ -190,12 +190,20 @@ function rememberPreferredVariant(stationID: string | undefined, streamURL: stri
   if (!trimmed) return
   try {
     const raw = window.localStorage.getItem(LAST_SUCCESSFUL_STREAM_KEY)
-    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+    const parsed = raw ? parsePreferredVariantMap(JSON.parse(raw)) : {}
     parsed[stationID] = trimmed
     window.localStorage.setItem(LAST_SUCCESSFUL_STREAM_KEY, JSON.stringify(parsed))
   } catch {
     // Ignore storage errors; playback should not fail because persistence did.
   }
+}
+
+function parsePreferredVariantMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
 }
 
 // Reconnect delays: 3 s → 6 s → 12 s → … capped at 30 s.

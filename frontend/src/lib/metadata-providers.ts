@@ -2,10 +2,12 @@
 
 import type { StationStream } from '@/types/player'
 import type { NowPlaying } from '@/lib/now-playing'
+import { optionalString, requireArray, requireRecord } from '@/lib/api-contract'
 import { metadataDebugLog } from '@/lib/metadata-observability'
 import { isPlaceholderMetadataTitle } from '@/lib/metadata-title'
 
 const NTS_LIVE_API_URL = 'https://www.nts.live/api/v2/live'
+const NTS_LIVE_CONTRACT = 'NTS live response'
 
 export type ClientMetadataStream = Pick<
   StationStream,
@@ -101,17 +103,9 @@ async function resolveNTSLiveMetadata(
     return null
   }
 
-  let payload: {
-    results?: Array<{
-      channel_name?: string
-      now?: {
-        broadcast_title?: string
-        embeds?: { details?: { name?: string } }
-      }
-    }>
-  }
+  let payload: NTSLiveResponse
   try {
-    payload = (await res.json()) as typeof payload
+    payload = parseNTSLiveResponse(await res.json())
   } catch (error) {
     metadataDebugLog('client-provider-parse-failed', {
       provider: 'nts-live',
@@ -139,6 +133,66 @@ async function resolveNTSLiveMetadata(
     supported: true,
     status: 'ok',
     resolver: 'client',
+  }
+}
+
+type NTSLiveResponse = {
+  results?: Array<{
+    channel_name?: string
+    now?: {
+      broadcast_title?: string
+      embeds?: { details?: { name?: string } }
+    }
+  }>
+}
+
+function parseNTSLiveResponse(payload: unknown): NTSLiveResponse {
+  const response = requireRecord(payload, 'response', NTS_LIVE_CONTRACT)
+  if (response.results === undefined || response.results === null) {
+    return {}
+  }
+
+  return {
+    results: requireArray(response.results, 'results', NTS_LIVE_CONTRACT).map(parseNTSLiveResult),
+  }
+}
+
+function parseNTSLiveResult(payload: unknown, index: number): NonNullable<NTSLiveResponse['results']>[number] {
+  const result = requireRecord(payload, `results[${index}]`, NTS_LIVE_CONTRACT)
+  const now = result.now === undefined || result.now === null
+    ? undefined
+    : parseNTSLiveNow(result.now, `results[${index}].now`)
+
+  return {
+    channel_name: optionalString(result.channel_name, `results[${index}].channel_name`, NTS_LIVE_CONTRACT),
+    now,
+  }
+}
+
+function parseNTSLiveNow(payload: unknown, field: string): NonNullable<NonNullable<NTSLiveResponse['results']>[number]['now']> {
+  const now = requireRecord(payload, field, NTS_LIVE_CONTRACT)
+
+  return {
+    broadcast_title: optionalString(now.broadcast_title, `${field}.broadcast_title`, NTS_LIVE_CONTRACT),
+    embeds: parseNTSLiveEmbeds(now.embeds, `${field}.embeds`),
+  }
+}
+
+function parseNTSLiveEmbeds(value: unknown, field: string): { details?: { name?: string } } | undefined {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+
+  const embeds = requireRecord(value, field, NTS_LIVE_CONTRACT)
+  if (embeds.details === undefined || embeds.details === null) {
+    return {}
+  }
+
+  const details = requireRecord(embeds.details, `${field}.details`, NTS_LIVE_CONTRACT)
+  return {
+    details: {
+      name: optionalString(details.name, `${field}.details.name`, NTS_LIVE_CONTRACT),
+    },
   }
 }
 

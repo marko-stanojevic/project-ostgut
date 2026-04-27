@@ -29,14 +29,14 @@ export interface CreateUploadIntentPayload {
 }
 
 export function createUploadIntent(accessToken: string, payload: CreateUploadIntentPayload) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/media/upload-intent`, accessToken, {
+    return fetchJSONWithAuth(`${API_URL}/media/upload-intent`, accessToken, {
         method: 'POST',
         body: JSON.stringify(payload),
     }).then(parseUploadIntentResponse)
 }
 
 export function completeUpload(accessToken: string, assetId: string, blobKey: string) {
-    return fetchJSONWithAuth<unknown>(`${API_URL}/media/complete`, accessToken, {
+    return fetchJSONWithAuth(`${API_URL}/media/complete`, accessToken, {
         method: 'POST',
         body: JSON.stringify({ assetId, blobKey }),
     }).then(parseCompleteUploadResponse)

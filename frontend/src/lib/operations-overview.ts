@@ -71,7 +71,7 @@ const overviewPaths: Record<OverviewScope, string> = {
 }
 
 export async function getOperationsOverview(accessToken: string, scope: OverviewScope): Promise<OverviewResponse> {
-  const payload = await fetchJSONWithAuth<unknown>(`${API_URL}${overviewPaths[scope]}`, accessToken)
+  const payload = await fetchJSONWithAuth(`${API_URL}${overviewPaths[scope]}`, accessToken)
   return parseOverviewResponse(payload)
 }
 
