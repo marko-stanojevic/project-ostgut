@@ -45,27 +45,31 @@ const (
 // cacheKey is the typed cache identity. Used directly as a map key so we are
 // not exposed to string-encoding collisions.
 type cacheKey struct {
-	URL         string
-	Type        string
-	Enabled     bool
-	SourceHint  string
-	MetadataURL string
-	DelayedICY  bool
+	URL            string
+	Type           string
+	Enabled        bool
+	SourceHint     string
+	MetadataURL    string
+	DelayedICY     bool
+	Provider       string
+	ProviderConfig string
 }
 
 func (k cacheKey) groupKey() string {
-	return fmt.Sprintf("%s|%s|%t|%s|%s|%t",
-		k.URL, k.Type, k.Enabled, k.SourceHint, k.MetadataURL, k.DelayedICY)
+	return fmt.Sprintf("%s|%s|%t|%s|%s|%t|%s|%s",
+		k.URL, k.Type, k.Enabled, k.SourceHint, k.MetadataURL, k.DelayedICY, k.Provider, k.ProviderConfig)
 }
 
 func (cfg Config) cacheKey(streamURL string) cacheKey {
 	return cacheKey{
-		URL:         streamURL,
-		Type:        normalizeType(cfg.Type),
-		Enabled:     cfg.Enabled,
-		SourceHint:  normalizeType(cfg.SourceHint),
-		MetadataURL: cfg.MetadataURL,
-		DelayedICY:  cfg.DelayedICY,
+		URL:            streamURL,
+		Type:           normalizeType(cfg.Type),
+		Enabled:        cfg.Enabled,
+		SourceHint:     normalizeType(cfg.SourceHint),
+		MetadataURL:    cfg.MetadataURL,
+		DelayedICY:     cfg.DelayedICY,
+		Provider:       normalizeProvider(cfg.Provider),
+		ProviderConfig: string(cfg.ProviderConfig),
 	}
 }
 
@@ -192,6 +196,7 @@ func (f *Fetcher) Probe(ctx context.Context, streamURL string, cfg Config) (*Now
 func (f *Fetcher) fetch(ctx context.Context, streamURL string, cfg Config, mode fetchMode) (*NowPlaying, FetchEvidence) {
 	cfg.Type = normalizeType(cfg.Type)
 	cfg.SourceHint = normalizeType(cfg.SourceHint)
+	cfg.Provider = normalizeProvider(cfg.Provider)
 	key := cfg.cacheKey(streamURL)
 
 	if mode == modeRuntime {

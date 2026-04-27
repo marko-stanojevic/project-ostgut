@@ -159,7 +159,7 @@ export function FullScreenPlayer({ nowPlaying, onClose }: FullScreenPlayerProps)
             className={`relative flex h-52 w-52 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-player-screen-panel-border bg-player-screen-artwork-bg shadow-2xl transition-all duration-500 sm:h-64 sm:w-64 ${isPlaying ? 'shadow-player-fullscreen' : ''}`}
           >
             {station?.logo ? (
-              <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
+              <Image src={station.logo} alt="" fill loading="eager" fetchPriority="high" className="object-cover" unoptimized />
             ) : (
               <RadioIcon className="h-16 w-16 text-player-screen-artwork-icon" />
             )}

@@ -37,6 +37,13 @@ const jobActions: Array<{
     description: 'Refresh active stream resolution, audio format evidence, metadata resolver routing, and health score.',
     buttonLabel: 'Run probe',
   },
+  {
+    id: 'metadata-fetch',
+    statusCheckID: 'metadata',
+    title: 'Metadata fetch',
+    description: 'Fetch now-playing metadata across approved metadata-enabled streams without opening each station.',
+    buttonLabel: 'Fetch metadata',
+  },
 ]
 
 function formatDateTime(value: string) {

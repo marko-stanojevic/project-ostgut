@@ -31,10 +31,13 @@ func ResolveMetadataResolverForStream(metadataEnabled bool, kind string, clientS
 	if !metadataEnabled {
 		return "none"
 	}
-	if strings.EqualFold(strings.TrimSpace(kind), "hls") {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "hls":
 		if hlsID3Supported {
 			return "client"
 		}
+		return "none"
+	case "dash":
 		return "none"
 	}
 	return ResolveMetadataResolver(metadataEnabled, clientSupported)
@@ -205,7 +208,6 @@ func probeClientIcecastSupport(ctx context.Context, client *http.Client, origins
 	return probeClientIcecastEndpoint(ctx, client, origins, endpoint)
 
 }
-
 
 func probeClientIcecastEndpoint(ctx context.Context, client *http.Client, origins []string, endpoint string) (bool, string) {
 	for _, origin := range origins {

@@ -15,6 +15,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -132,12 +133,14 @@ func (h *Handler) adminStationWithStreams(ctx context.Context, s *store.Station)
 }
 
 type adminStreamRequest struct {
-	URL             string  `json:"url"`
-	Priority        int     `json:"priority"`
-	IsActive        *bool   `json:"is_active"`
-	Bitrate         *int    `json:"bitrate"`
-	MetadataEnabled *bool   `json:"metadata_enabled"`
-	MetadataType    *string `json:"metadata_type"`
+	URL                    string          `json:"url"`
+	Priority               int             `json:"priority"`
+	IsActive               *bool           `json:"is_active"`
+	Bitrate                *int            `json:"bitrate"`
+	MetadataEnabled        *bool           `json:"metadata_enabled"`
+	MetadataType           *string         `json:"metadata_type"`
+	MetadataProvider       *string         `json:"metadata_provider"`
+	MetadataProviderConfig json.RawMessage `json:"metadata_provider_config"`
 }
 
 func toAdminStationResponse(s *store.Station, streams []streamResponse) adminStationResponse {
@@ -399,11 +402,13 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		nextMetadataDelayed := target.MetadataDelayed
 		if scope == "full" || scope == "metadata" {
 			np, ev := h.admin.metaFetcher.Probe(c.Request.Context(), metadataURL, metadata.Config{
-				Enabled:     target.MetadataEnabled,
-				Type:        target.MetadataType,
-				SourceHint:  stringValue(target.MetadataSource),
-				MetadataURL: stringValue(target.MetadataURL),
-				DelayedICY:  target.MetadataDelayed,
+				Enabled:        target.MetadataEnabled,
+				Type:           target.MetadataType,
+				SourceHint:     stringValue(target.MetadataSource),
+				MetadataURL:    stringValue(target.MetadataURL),
+				DelayedICY:     target.MetadataDelayed,
+				Provider:       stringValue(target.MetadataProvider),
+				ProviderConfig: target.MetadataProviderConfig,
 			})
 			snap := store.StreamNowPlaying{
 				StreamID:    target.ID,
@@ -420,6 +425,10 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 				h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 				return
+			}
+			if np.ErrorCode == metadata.ErrorCodeNoMeta {
+				nextResolver = metadata.ResolverNone
+				nextMetadataURL = nil
 			}
 			// Persist discovered source / URL hints back to the editorial row.
 			if np.Source != "" || np.MetadataURL != "" {
@@ -780,12 +789,14 @@ func normalizeAdminStreams(raw []adminStreamRequest) []adminStreamRequest {
 			continue
 		}
 		streams = append(streams, adminStreamRequest{
-			URL:             strings.TrimSpace(stream.URL),
-			Priority:        stream.Priority,
-			IsActive:        stream.IsActive,
-			Bitrate:         stream.Bitrate,
-			MetadataEnabled: stream.MetadataEnabled,
-			MetadataType:    stream.MetadataType,
+			URL:                    strings.TrimSpace(stream.URL),
+			Priority:               stream.Priority,
+			IsActive:               stream.IsActive,
+			Bitrate:                stream.Bitrate,
+			MetadataEnabled:        stream.MetadataEnabled,
+			MetadataType:           stream.MetadataType,
+			MetadataProvider:       stream.MetadataProvider,
+			MetadataProviderConfig: stream.MetadataProviderConfig,
 		})
 	}
 
@@ -850,6 +861,16 @@ func (h *Handler) buildStationStreams(
 			metadataEnabled = *stream.MetadataEnabled
 		}
 		metadataType := "auto"
+		if stream.MetadataType != nil {
+			metadataType = normalizeMetadataType(*stream.MetadataType)
+			if metadataType == "" {
+				return nil, fmt.Errorf("stream %d metadata type is invalid", i+1)
+			}
+		}
+		metadataProvider, metadataProviderConfig, err := normalizeAdminMetadataProviderConfig(stream.MetadataProvider, stream.MetadataProviderConfig)
+		if err != nil {
+			return nil, fmt.Errorf("stream %d %w", i+1, err)
+		}
 
 		inputs = append(inputs, store.StationStreamInput{
 			URL:                    strings.TrimSpace(stream.URL),
@@ -873,10 +894,85 @@ func (h *Handler) buildStationStreams(
 			LoudnessStatus:         probe.LoudnessStatus,
 			MetadataEnabled:        metadataEnabled,
 			MetadataType:           metadataType,
+			MetadataProvider:       metadataProvider,
+			MetadataProviderConfig: metadataProviderConfig,
 			HealthScore:            0,
 		})
 	}
 	return inputs, nil
+}
+
+func normalizeAdminMetadataProviderConfig(rawProvider *string, rawConfig json.RawMessage) (*string, []byte, error) {
+	if rawProvider == nil || strings.TrimSpace(*rawProvider) == "" {
+		return nil, nil, nil
+	}
+	provider := strings.ToLower(strings.TrimSpace(*rawProvider))
+	switch provider {
+	case metadata.ProviderNPRComposer:
+		ucs, err := parseNPRComposerUCS(rawConfig)
+		if err != nil {
+			return nil, nil, err
+		}
+		canonical, err := json.Marshal(map[string]string{"ucs": ucs})
+		if err != nil {
+			return nil, nil, err
+		}
+		return &provider, canonical, nil
+	case metadata.ProviderNTSLive:
+		channel, err := parseNTSLiveChannel(rawConfig)
+		if err != nil {
+			return nil, nil, err
+		}
+		canonical, err := json.Marshal(map[string]string{"channel": channel})
+		if err != nil {
+			return nil, nil, err
+		}
+		return &provider, canonical, nil
+	default:
+		return nil, nil, fmt.Errorf("metadata provider %q is invalid", provider)
+	}
+}
+
+func parseNPRComposerUCS(raw json.RawMessage) (string, error) {
+	var cfg struct {
+		UCS string `json:"ucs"`
+		URL string `json:"url"`
+	}
+	if len(raw) == 0 {
+		return "", errors.New("npr composer provider config is required")
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return "", fmt.Errorf("npr composer provider config must be JSON: %w", err)
+	}
+	if ucs := strings.TrimSpace(cfg.UCS); ucs != "" {
+		return ucs, nil
+	}
+	parsed, err := url.Parse(strings.TrimSpace(cfg.URL))
+	if err != nil || parsed.Host != "api.composer.nprstations.org" {
+		return "", errors.New("npr composer provider config requires ucs or an api.composer.nprstations.org playlist URL")
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) >= 4 && parts[0] == "v1" && parts[1] == "widget" && parts[3] == "playlist" && strings.TrimSpace(parts[2]) != "" {
+		return parts[2], nil
+	}
+	return "", errors.New("npr composer playlist URL must include /v1/widget/{ucs}/playlist")
+}
+
+func parseNTSLiveChannel(raw json.RawMessage) (string, error) {
+	var cfg struct {
+		Channel string `json:"channel"`
+	}
+	if len(raw) == 0 {
+		return "", errors.New("nts live provider config is required")
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return "", fmt.Errorf("nts live provider config must be JSON: %w", err)
+	}
+	channel := strings.TrimSpace(cfg.Channel)
+	if channel != "1" && channel != "2" {
+		return "", errors.New("nts live provider channel must be 1 or 2")
+	}
+	return channel, nil
 }
 
 // mergeExistingProbeData copies probe-measured fields from existing DB streams
@@ -914,6 +1010,12 @@ func mergeExistingProbeData(inputs []store.StationStreamInput, existing []*store
 		in.MetadataURL = cur.MetadataURL
 		in.MetadataResolver = cur.MetadataResolver
 		in.MetadataResolverCheckedAt = cur.MetadataResolverCheckedAt
+		if in.MetadataProvider == nil {
+			in.MetadataProvider = cur.MetadataProvider
+		}
+		if len(in.MetadataProviderConfig) == 0 {
+			in.MetadataProviderConfig = cur.MetadataProviderConfig
+		}
 		in.HealthScore = cur.HealthScore
 		in.NextProbeAt = &cur.NextProbeAt
 		in.LastCheckedAt = cur.LastCheckedAt

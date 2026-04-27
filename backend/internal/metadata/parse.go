@@ -16,29 +16,25 @@ import "strings"
 // to end-of-string and trim a single trailing quote.
 func extractICYField(meta, key string) string {
 	prefix := key + "='"
-	for i := 0; i < len(meta); {
-		idx := strings.Index(meta[i:], prefix)
-		if idx == -1 {
-			return ""
-		}
-		start := i + idx + len(prefix)
-
-		// Strict terminator: `';`
-		if end := strings.Index(meta[start:], "';"); end != -1 {
-			return meta[start : start+end]
-		}
-
-		// No `';` — accept this match if no other key follows; otherwise look
-		// for a token that looks like a new ICY key starting (`;Key=`).
-		rest := meta[start:]
-		if next := indexOfNextICYKey(rest); next != -1 {
-			val := strings.TrimRight(rest[:next], "'")
-			return val
-		}
-		// End-of-string: strip one trailing quote, if any.
-		return strings.TrimRight(rest, "'")
+	idx := strings.Index(meta, prefix)
+	if idx == -1 {
+		return ""
 	}
-	return ""
+	start := idx + len(prefix)
+
+	// Strict terminator: `';`
+	if end := strings.Index(meta[start:], "';"); end != -1 {
+		return meta[start : start+end]
+	}
+
+	// No `';` — accept this match if no other key follows; otherwise look
+	// for a token that looks like a new ICY key starting (`;Key=`).
+	rest := meta[start:]
+	if next := indexOfNextICYKey(rest); next != -1 {
+		return strings.TrimRight(rest[:next], "'")
+	}
+	// End-of-string: strip one trailing quote, if any.
+	return strings.TrimRight(rest, "'")
 }
 
 // indexOfNextICYKey finds the offset within s where a new ICY field begins,
@@ -83,6 +79,12 @@ func normalizeMetadataTitle(s string) string {
 	s = strings.TrimSpace(s)
 	for len(s) > 0 {
 		switch {
+		case strings.HasPrefix(s, "- "):
+			s = strings.TrimLeft(s[2:], " ")
+		case strings.HasPrefix(s, "– "):
+			s = strings.TrimLeft(s[len("– "):], " ")
+		case strings.HasPrefix(s, "— "):
+			s = strings.TrimLeft(s[len("— "):], " ")
 		case strings.HasSuffix(s, " -"):
 			s = strings.TrimRight(s[:len(s)-2], " ")
 		case strings.HasSuffix(s, " –"):

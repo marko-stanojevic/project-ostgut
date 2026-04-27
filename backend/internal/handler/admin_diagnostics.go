@@ -17,6 +17,7 @@ const (
 	adminMetadataSnapshotFreshAfter = 5 * time.Minute
 	adminJobStationSync             = "station-sync"
 	adminJobStreamReprobe           = "stream-reprobe"
+	adminJobMetadataFetch           = "metadata-fetch"
 )
 
 type adminDiagnosticResponse struct {
@@ -272,6 +273,14 @@ func (h *Handler) AdminTriggerJob(c *gin.Context) {
 		}
 		started = h.admin.streamProber.Trigger(ctx)
 		message = "Stream re-probe started. Resolver and health evidence will update as streams complete."
+	case adminJobMetadataFetch:
+		if h.station.metaPoller == nil {
+			h.log.Error("admin trigger job: metadata poller not configured")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		started = h.station.metaPoller.TriggerApprovedMetadataFetch(ctx)
+		message = "Metadata fetch started for approved metadata-enabled streams. Now-playing snapshots will update as streams complete."
 	default:
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown job"})
 		return

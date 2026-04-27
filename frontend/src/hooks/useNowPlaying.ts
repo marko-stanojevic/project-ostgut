@@ -1,6 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  claimClientMetadataLease,
+  getClientMetadataLeaseStorageKey,
+  getClientMetadataSnapshotStorageKey,
+  publishClientMetadataSnapshot,
+  readClientMetadataSnapshot,
+  releaseClientMetadataLease,
+} from '@/lib/client-metadata-coordination'
 import { emitMetadataTelemetry, metadataDebugLog } from '@/lib/metadata-observability'
 import { HLS_ID3_EVENT, type HlsNowPlayingDetail } from '@/lib/hls-id3'
 import { fetchClientNowPlaying } from '@/lib/now-playing-client'
@@ -8,6 +16,7 @@ import { fetchServerNowPlaying, getNowPlayingStreamURL, parseServerNowPlaying, t
 import type { StationStream } from '@/types/player'
 
 const CLIENT_POLL_MS = 30_000
+const CLIENT_FOLLOWER_RETRY_MS = 5_000
 
 export function useNowPlaying(
   stationId: string | null | undefined,
@@ -25,7 +34,12 @@ export function useNowPlaying(
   const streamMetadataType = stream?.metadataType || ''
   const streamKind = stream?.kind || ''
   const streamMetadataEnabled = Boolean(stream?.metadataEnabled)
-  const streamMetadataResolver = stream?.metadataResolver
+  const streamMetadataErrorCode = stream?.metadataErrorCode || ''
+  const streamMetadataDelivery = stream?.metadataPlan?.delivery || metadataDeliveryFromResolver(stream?.metadataResolver, streamKind)
+  const streamMetadataResolver = stream?.metadataPlan?.resolver || stream?.metadataResolver
+  const streamSupportsServerSnapshot = Boolean(stream?.metadataPlan?.supportsServerSnapshot && streamMetadataDelivery === 'sse')
+  const streamLeaseKey = streamId ? getClientMetadataLeaseStorageKey(streamId) : ''
+  const streamSharedSnapshotKey = streamId ? getClientMetadataSnapshotStorageKey(streamId) : ''
   const streamSnapshot = useMemo(
     () =>
       streamObjectID && streamId
@@ -37,10 +51,10 @@ export function useNowPlaying(
             metadataEnabled: streamMetadataEnabled,
             metadataType: streamMetadataType,
             metadataUrl: stream?.metadataUrl || '',
-            metadataResolver: streamMetadataResolver,
+            metadataResolver: streamMetadataDelivery === 'client-poll' || streamMetadataDelivery === 'hls-id3' ? 'client' : streamMetadataResolver,
           }
         : null,
-    [streamObjectID, streamRawURL, streamURL, streamKind, streamId, streamMetadataEnabled, streamMetadataType, stream?.metadataUrl, streamMetadataResolver],
+    [streamObjectID, streamRawURL, streamURL, streamKind, streamId, streamMetadataEnabled, streamMetadataType, stream?.metadataUrl, streamMetadataResolver, streamMetadataDelivery],
   )
   // Clear track immediately on station change so stale data never shows.
   useEffect(() => {
@@ -59,22 +73,219 @@ export function useNowPlaying(
 
     let cancelled = false
     let currentController: AbortController | null = null
+    let storageListener: ((event: StorageEvent) => void) | null = null
+    let clientLeader = false
 
     const clearTimer = () => {
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = null
     }
 
-    if (!streamMetadataEnabled || streamMetadataResolver === 'none') {
+    const clearStorageListener = () => {
+      if (storageListener) {
+        window.removeEventListener('storage', storageListener)
+        storageListener = null
+      }
+    }
+
+    const updateFromSharedSnapshot = () => {
+      if (!streamId) {
+        return
+      }
+
+      const shared = readClientMetadataSnapshot(streamId)
+      if (shared === undefined) {
+        return
+      }
+
+      setNowPlaying(shared)
+      setSettled(true)
+    }
+
+    const publishSharedSnapshot = (value: NowPlaying | null) => {
+      if (!streamId) {
+        return
+      }
+
+      publishClientMetadataSnapshot(streamId, value)
+    }
+
+    const hydrateFromServerSnapshot = async () => {
+      if (!streamSupportsServerSnapshot) {
+        return false
+      }
+
+      try {
+        const data = await fetchServerNowPlaying(stationId, streamId, currentController ? { signal: currentController.signal } : undefined)
+        if (!cancelled && data?.status === 'ok' && data.title) {
+          setNowPlaying(data)
+          publishSharedSnapshot(data)
+          emitMetadataTelemetry('metadata_server_result', {
+            stationId,
+            streamId,
+            resolver: 'server',
+            result: 'success',
+            source: data.source,
+            metadataType: streamMetadataType || 'auto',
+            streamUrl: streamURL,
+          })
+          return true
+        }
+      } catch {
+        // Best-effort fallback only.
+      }
+
+      return false
+    }
+
+    const startFollowerMode = () => {
+      clearTimer()
+      currentController?.abort()
+      currentController = null
+      clientLeader = false
+      updateFromSharedSnapshot()
+      setSettled(true)
+      clearStorageListener()
+
+      const retryLeadership = () => {
+        if (cancelled || !streamId || !streamSnapshot) {
+          return
+        }
+
+        if (claimClientMetadataLease(streamId)) {
+          clientLeader = true
+          clearStorageListener()
+          tickClient()
+          return
+        }
+
+        clearTimer()
+        timerRef.current = setTimeout(retryLeadership, CLIENT_FOLLOWER_RETRY_MS)
+      }
+
+      storageListener = (event: StorageEvent) => {
+        if (event.key === streamSharedSnapshotKey) {
+          updateFromSharedSnapshot()
+          return
+        }
+
+        if (event.key === streamLeaseKey) {
+          clearTimer()
+          timerRef.current = setTimeout(retryLeadership, 0)
+        }
+      }
+
+      window.addEventListener('storage', storageListener)
+      retryLeadership()
+    }
+
+    if (!streamMetadataEnabled || streamMetadataErrorCode === 'no_metadata' || streamMetadataResolver === 'none' || streamMetadataDelivery === 'none') {
       setNowPlaying(null)
       setSettled(true)
       return () => {
         cancelled = true
         clearTimer()
+        clearStorageListener()
       }
     }
 
-      if (streamMetadataResolver === 'client' && streamSnapshot) {
+    const tickClient = async () => {
+      if (cancelled || !streamSnapshot || !streamId) return
+      if (!claimClientMetadataLease(streamId)) {
+        startFollowerMode()
+        return
+      }
+
+      clientLeader = true
+      const controller = new AbortController()
+      currentController = controller
+      try {
+        metadataDebugLog('resolver-client-attempt', {
+          stationId,
+          streamId,
+          url: streamSnapshot.resolvedUrl || streamSnapshot.url,
+          metadataType: streamSnapshot.metadataType || 'auto',
+        })
+        emitMetadataTelemetry('metadata_client_attempt', {
+          stationId,
+          streamId,
+          resolver: 'client',
+          result: 'attempt',
+          metadataType: streamSnapshot.metadataType || 'auto',
+          streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
+        })
+
+        const clientData = await fetchClientNowPlaying(streamSnapshot, controller.signal)
+        if (cancelled) return
+
+        if (clientData?.status === 'ok' && clientData.title) {
+          setNowPlaying(clientData)
+          publishSharedSnapshot(clientData)
+          emitMetadataTelemetry('metadata_client_success', {
+            stationId,
+            streamId,
+            resolver: 'client',
+            result: 'success',
+            source: clientData.source,
+            metadataType: streamSnapshot.metadataType || 'auto',
+            streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
+          })
+        } else {
+          const hydrated = await hydrateFromServerSnapshot()
+          if (!hydrated) {
+            setNowPlaying(null)
+            publishSharedSnapshot(null)
+            emitMetadataTelemetry('metadata_client_miss', {
+              stationId,
+              streamId,
+              resolver: 'client',
+              result: 'miss',
+              metadataType: streamSnapshot.metadataType || 'auto',
+              streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
+            })
+          }
+        }
+        setSettled(true)
+      } catch (error) {
+        if ((error as { name?: string }).name !== 'AbortError' && !cancelled) {
+          const hydrated = await hydrateFromServerSnapshot()
+          if (!hydrated) {
+            setNowPlaying(null)
+            publishSharedSnapshot(null)
+          }
+          setSettled(true)
+          if (!hydrated) {
+            emitMetadataTelemetry('metadata_client_miss', {
+              stationId,
+              streamId,
+              resolver: 'client',
+              result: 'miss',
+              metadataType: streamSnapshot.metadataType || 'auto',
+              streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
+              error: formatError(error),
+            })
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          clearTimer()
+          timerRef.current = setTimeout(tickClient, CLIENT_POLL_MS)
+        }
+      }
+    }
+
+    if ((streamMetadataDelivery === 'client-poll' || streamMetadataDelivery === 'hls-id3') && streamSnapshot) {
+      const activeStreamId = streamId
+      if (!activeStreamId) {
+        setNowPlaying(null)
+        setSettled(true)
+        return () => {
+          cancelled = true
+          clearTimer()
+          clearStorageListener()
+        }
+      }
+
       if (streamKind === 'hls') {
         const onID3 = (event: Event) => {
           const detail = (event as CustomEvent<HlsNowPlayingDetail>).detail
@@ -108,84 +319,35 @@ export function useNowPlaying(
           cancelled = true
           window.removeEventListener(HLS_ID3_EVENT, onID3 as EventListener)
           clearTimer()
+          clearStorageListener()
         }
       }
 
-      const tickClient = async () => {
-        if (cancelled) return
-
-        const controller = new AbortController()
-        currentController = controller
-        try {
-          metadataDebugLog('resolver-client-attempt', {
-            stationId,
-            streamId,
-            url: streamSnapshot.resolvedUrl || streamSnapshot.url,
-            metadataType: streamSnapshot.metadataType || 'auto',
-          })
-          emitMetadataTelemetry('metadata_client_attempt', {
-            stationId,
-            streamId,
-            resolver: 'client',
-            result: 'attempt',
-            metadataType: streamSnapshot.metadataType || 'auto',
-            streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
-          })
-
-          const clientData = await fetchClientNowPlaying(streamSnapshot, controller.signal)
-          if (cancelled) return
-
-          if (clientData?.status === 'ok' && clientData.title) {
-            setNowPlaying(clientData)
-            emitMetadataTelemetry('metadata_client_success', {
-              stationId,
-              streamId,
-              resolver: 'client',
-              result: 'success',
-              source: clientData.source,
-              metadataType: streamSnapshot.metadataType || 'auto',
-              streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
-            })
-          } else {
-            setNowPlaying(null)
-            emitMetadataTelemetry('metadata_client_miss', {
-              stationId,
-              streamId,
-              resolver: 'client',
-              result: 'miss',
-              metadataType: streamSnapshot.metadataType || 'auto',
-              streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
-            })
-          }
-          setSettled(true)
-        } catch (error) {
-          if ((error as { name?: string }).name !== 'AbortError' && !cancelled) {
-            setNowPlaying(null)
-            setSettled(true)
-            emitMetadataTelemetry('metadata_client_miss', {
-              stationId,
-              streamId,
-              resolver: 'client',
-              result: 'miss',
-              metadataType: streamSnapshot.metadataType || 'auto',
-              streamUrl: streamSnapshot.resolvedUrl || streamSnapshot.url,
-              error: formatError(error),
-            })
-          }
-        } finally {
-          if (!cancelled) {
-            clearTimer()
-            timerRef.current = setTimeout(tickClient, CLIENT_POLL_MS)
-          }
-        }
+      if (claimClientMetadataLease(activeStreamId)) {
+        clientLeader = true
+        tickClient()
+      } else {
+        startFollowerMode()
       }
-
-      tickClient()
 
       return () => {
         cancelled = true
         clearTimer()
+        clearStorageListener()
+        if (clientLeader) {
+          releaseClientMetadataLease(activeStreamId)
+        }
         currentController?.abort()
+      }
+    }
+
+    if (streamMetadataDelivery !== 'sse') {
+      setNowPlaying(null)
+      setSettled(true)
+      return () => {
+        cancelled = true
+        clearTimer()
+        clearStorageListener()
       }
     }
 
@@ -232,6 +394,7 @@ export function useNowPlaying(
       return () => {
         cancelled = true
         clearTimer()
+        clearStorageListener()
         eventSourceRef.current?.close()
         eventSourceRef.current = null
       }
@@ -266,6 +429,7 @@ export function useNowPlaying(
     return () => {
       cancelled = true
       clearTimer()
+      clearStorageListener()
       eventSourceRef.current?.close()
       eventSourceRef.current = null
       currentController?.abort()
@@ -277,7 +441,12 @@ export function useNowPlaying(
     streamKind,
     streamMetadataType,
     streamMetadataEnabled,
+    streamMetadataErrorCode,
     streamMetadataResolver,
+    streamMetadataDelivery,
+    streamSupportsServerSnapshot,
+    streamLeaseKey,
+    streamSharedSnapshotKey,
     streamSnapshot,
     active,
   ])
@@ -290,4 +459,13 @@ function formatError(error: unknown): string {
     return `${error.name}: ${error.message}`
   }
   return String(error)
+}
+
+function metadataDeliveryFromResolver(
+  resolver: StationStream['metadataResolver'],
+  kind: string,
+): NonNullable<StationStream['metadataPlan']>['delivery'] {
+  if (resolver === 'none') return 'none'
+  if (resolver === 'client') return kind === 'hls' ? 'hls-id3' : 'client-poll'
+  return 'sse'
 }

@@ -37,8 +37,18 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 		c.JSON(http.StatusOK, &Snapshot{Status: "unsupported", ErrorCode: metadata.ErrorCodeNoMeta, FetchedAt: time.Now().UTC()})
 		return
 	}
+	plan := metadata.BuildStreamPlan(metadata.StreamPlanInput{
+		Enabled:     selectedStream.MetadataEnabled,
+		Type:        selectedStream.MetadataType,
+		SourceHint:  stringValue(selectedStream.MetadataSource),
+		MetadataURL: stringValue(selectedStream.MetadataURL),
+		Resolver:    metadataResolverForResponse(selectedStream),
+		Kind:        selectedStream.Kind,
+		Container:   selectedStream.Container,
+		StreamURL:   firstNonEmpty(selectedStream.ResolvedURL, selectedStream.URL),
+	})
 
-	if !selectedStream.MetadataEnabled || strings.EqualFold(strings.TrimSpace(selectedStream.MetadataResolver), "none") {
+	if !selectedStream.MetadataEnabled || plan.Resolver == metadata.ResolverNone {
 		status := "unsupported"
 		errorCode := metadata.ErrorCodeNoMeta
 		if !selectedStream.MetadataEnabled {
@@ -58,7 +68,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 	// For server-resolved streams with a stale snapshot, kick off a one-shot
 	// refresh outside the request path. If a poll loop is already active for
 	// this stream (SSE listeners), it will refresh on cadence instead.
-	if strings.EqualFold(strings.TrimSpace(selectedStream.MetadataResolver), "server") &&
+	if plan.Delivery == metadata.DeliverySSE &&
 		(np == nil || time.Since(np.FetchedAt) > 30*time.Second) {
 		h.station.metaPoller.RefreshOnce(c.Request.Context(), selectedStream)
 	}
@@ -89,8 +99,18 @@ func (h *Handler) StreamNowPlaying(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"error": "metadata not available for this stream"})
 		return
 	}
+	plan := metadata.BuildStreamPlan(metadata.StreamPlanInput{
+		Enabled:     selectedStream.MetadataEnabled,
+		Type:        selectedStream.MetadataType,
+		SourceHint:  stringValue(selectedStream.MetadataSource),
+		MetadataURL: stringValue(selectedStream.MetadataURL),
+		Resolver:    metadataResolverForResponse(selectedStream),
+		Kind:        selectedStream.Kind,
+		Container:   selectedStream.Container,
+		StreamURL:   firstNonEmpty(selectedStream.ResolvedURL, selectedStream.URL),
+	})
 
-	if !strings.EqualFold(strings.TrimSpace(selectedStream.MetadataResolver), "server") {
+	if plan.Delivery != metadata.DeliverySSE {
 		c.JSON(http.StatusOK, gin.H{"error": "stream uses client resolver; no SSE available"})
 		return
 	}

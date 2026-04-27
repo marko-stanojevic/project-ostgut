@@ -22,10 +22,11 @@ import (
 )
 
 const (
-	pollerCadenceFast = 30 * time.Second
-	pollerCadenceSlow = 3 * time.Minute
-	pollerMaxFastMiss = 3
-	pollerFetchBudget = 22 * time.Second
+	pollerCadenceFast          = 30 * time.Second
+	pollerCadenceSlow          = 3 * time.Minute
+	pollerMaxFastMiss          = 3
+	pollerFetchBudget          = 22 * time.Second
+	pollerMaxConcurrentFetches = 6
 )
 
 // Snapshot is the broadcast envelope sent to SSE subscribers. It mirrors the
@@ -45,10 +46,13 @@ type Snapshot struct {
 
 // MetadataPoller manages per-stream upstream polling and subscriber fan-out.
 type MetadataPoller struct {
-	streams *store.StationStreamStore
-	now     *store.StreamNowPlayingStore
-	fetcher *metadata.Fetcher
-	log     *slog.Logger
+	streams    *store.StationStreamStore
+	now        *store.StreamNowPlayingStore
+	fetcher    *metadata.Fetcher
+	log        *slog.Logger
+	fetchSlots chan struct{}
+	bulkMu     sync.Mutex
+	bulkActive bool
 
 	mu       sync.Mutex
 	channels map[string]*pollerChannel // keyed by streamID
@@ -64,11 +68,12 @@ type pollerChannel struct {
 // NewMetadataPoller wires the dependencies.
 func NewMetadataPoller(streams *store.StationStreamStore, now *store.StreamNowPlayingStore, fetcher *metadata.Fetcher, log *slog.Logger) *MetadataPoller {
 	return &MetadataPoller{
-		streams:  streams,
-		now:      now,
-		fetcher:  fetcher,
-		log:      log,
-		channels: make(map[string]*pollerChannel),
+		streams:    streams,
+		now:        now,
+		fetcher:    fetcher,
+		log:        log,
+		fetchSlots: make(chan struct{}, pollerMaxConcurrentFetches),
+		channels:   make(map[string]*pollerChannel),
 	}
 }
 
@@ -149,8 +154,76 @@ func (p *MetadataPoller) RefreshOnce(ctx context.Context, stream *store.StationS
 	go func() { // #nosec G118 -- see comment above
 		fetchCtx, cancel := context.WithTimeout(context.Background(), pollerFetchBudget)
 		defer cancel()
-		_, _ = p.fetchAndPersist(fetchCtx, stream)
+		_, _ = p.fetchAndPersist(fetchCtx, stream, false)
 	}()
+}
+
+// TriggerApprovedMetadataFetch starts an explicit admin-requested metadata
+// coverage pass over every active metadata-enabled stream on approved stations.
+// It reuses the poller's global upstream fetch slots so this diagnostic job
+// cannot starve listener-driven polling.
+func (p *MetadataPoller) TriggerApprovedMetadataFetch(ctx context.Context) bool {
+	p.bulkMu.Lock()
+	if p.bulkActive {
+		p.bulkMu.Unlock()
+		p.log.Info("metadata poller: approved metadata fetch skipped; job already running")
+		return false
+	}
+	p.bulkActive = true
+	p.bulkMu.Unlock()
+
+	go func() {
+		defer func() {
+			p.bulkMu.Lock()
+			p.bulkActive = false
+			p.bulkMu.Unlock()
+		}()
+		p.fetchApprovedMetadata(ctx)
+	}()
+	return true
+}
+
+func (p *MetadataPoller) fetchApprovedMetadata(ctx context.Context) {
+	streams, err := p.streams.ListActiveMetadataEnabledForApprovedStations(ctx)
+	if err != nil {
+		p.log.Error("metadata poller: list approved metadata streams", "error", err)
+		return
+	}
+
+	p.log.Info("metadata poller: starting approved metadata fetch", "streams", len(streams))
+	start := time.Now()
+	var wg sync.WaitGroup
+	jobs := make(chan *store.StationStream)
+	workers := pollerMaxConcurrentFetches
+	if len(streams) < workers {
+		workers = len(streams)
+	}
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for stream := range jobs {
+				fetchCtx, cancel := context.WithTimeout(ctx, pollerFetchBudget)
+				_, err := p.fetchAndPersist(fetchCtx, stream, true)
+				cancel()
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+					p.log.Debug("metadata poller: approved metadata fetch failed", "stream_id", stream.ID, "error", err)
+				}
+			}
+		}()
+	}
+	for _, stream := range streams {
+		select {
+		case jobs <- stream:
+		case <-ctx.Done():
+			close(jobs)
+			wg.Wait()
+			return
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	p.log.Info("metadata poller: approved metadata fetch done", "streams", len(streams), "duration", time.Since(start).Round(time.Second))
 }
 
 func (p *MetadataPoller) pollLoop(ctx context.Context, stream *store.StationStream, ch *pollerChannel) {
@@ -158,8 +231,11 @@ func (p *MetadataPoller) pollLoop(ctx context.Context, stream *store.StationStre
 	misses := 0
 
 	// Fire one immediately so first subscriber gets data fast.
-	if snap, err := p.fetchAndPersist(ctx, stream); err == nil && snap != nil {
+	if snap, err := p.fetchAndPersist(ctx, stream, false); err == nil && snap != nil {
 		p.broadcast(ch, *snap)
+		if isNoMetadataSnapshot(snap) {
+			return
+		}
 		if snap.Title == "" {
 			misses++
 		} else {
@@ -174,9 +250,12 @@ func (p *MetadataPoller) pollLoop(ctx context.Context, stream *store.StationStre
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			snap, err := p.fetchAndPersist(ctx, stream)
+			snap, err := p.fetchAndPersist(ctx, stream, false)
 			if err == nil && snap != nil {
 				p.broadcast(ch, *snap)
+				if isNoMetadataSnapshot(snap) {
+					return
+				}
 				if snap.Title == "" {
 					misses++
 				} else {
@@ -193,7 +272,15 @@ func (p *MetadataPoller) pollLoop(ctx context.Context, stream *store.StationStre
 	}
 }
 
-func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.StationStream) (*Snapshot, error) {
+func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.StationStream, forceUpstream bool) (*Snapshot, error) {
+	fetchCtx, cancel := context.WithTimeout(ctx, pollerFetchBudget)
+	defer cancel()
+	release, ok := p.acquireFetchSlot(fetchCtx)
+	if !ok {
+		return nil, fetchCtx.Err()
+	}
+	defer release()
+
 	streamURL := strings.TrimSpace(stream.ResolvedURL)
 	if streamURL == "" {
 		streamURL = strings.TrimSpace(stream.URL)
@@ -202,13 +289,24 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 		return nil, errors.New("no stream url")
 	}
 
-	np, ev := p.fetcher.Fetch(ctx, streamURL, metadata.Config{
-		Enabled:     true,
-		Type:        stream.MetadataType,
-		SourceHint:  stringValue(stream.MetadataSource),
-		MetadataURL: stringValue(stream.MetadataURL),
-		DelayedICY:  stream.MetadataDelayed,
-	})
+	cfg := metadata.Config{
+		Enabled:        true,
+		Type:           stream.MetadataType,
+		SourceHint:     stringValue(stream.MetadataSource),
+		MetadataURL:    stringValue(stream.MetadataURL),
+		DelayedICY:     stream.MetadataDelayed,
+		Provider:       stringValue(stream.MetadataProvider),
+		ProviderConfig: stream.MetadataProviderConfig,
+	}
+	var (
+		np *metadata.NowPlaying
+		ev metadata.FetchEvidence
+	)
+	if forceUpstream {
+		np, ev = p.fetcher.Probe(fetchCtx, streamURL, cfg)
+	} else {
+		np, ev = p.fetcher.Fetch(fetchCtx, streamURL, cfg)
+	}
 
 	persistCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -227,6 +325,19 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 	if err := p.now.Upsert(persistCtx, snap); err != nil {
 		p.log.Warn("metadata poller: persist snapshot failed", "stream_id", stream.ID, "error", err)
 	}
+	if np.ErrorCode == metadata.ErrorCodeNoMeta {
+		checkedAt := np.FetchedAt.UTC()
+		if checkedAt.IsZero() {
+			checkedAt = time.Now().UTC()
+		}
+		if err := p.streams.UpdateMetadataResolver(persistCtx, stream.ID, store.MetadataResolverSnapshot{
+			Resolver:  metadata.ResolverNone,
+			CheckedAt: &checkedAt,
+			Delayed:   &ev.DelayedICY,
+		}); err != nil {
+			p.log.Warn("metadata poller: disable metadata resolver failed", "stream_id", stream.ID, "error", err)
+		}
+	}
 	// Persist newly-discovered detection hint (source, metadata_url) back to
 	// the editorial row so future cold reads can pick the right strategy fast.
 	if np.Source != "" || np.MetadataURL != "" {
@@ -240,6 +351,19 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 
 	out := snapshotFromNowPlaying(np)
 	return &out, nil
+}
+
+func (p *MetadataPoller) acquireFetchSlot(ctx context.Context) (func(), bool) {
+	select {
+	case p.fetchSlots <- struct{}{}:
+		return func() { <-p.fetchSlots }, true
+	case <-ctx.Done():
+		return nil, false
+	}
+}
+
+func isNoMetadataSnapshot(snap *Snapshot) bool {
+	return snap != nil && snap.ErrorCode == metadata.ErrorCodeNoMeta
 }
 
 func (p *MetadataPoller) broadcast(ch *pollerChannel, snap Snapshot) {

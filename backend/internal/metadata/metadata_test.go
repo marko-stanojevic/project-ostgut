@@ -66,6 +66,7 @@ func TestSplitArtistTitle(t *testing.T) {
 		{"A - B - C", "A", "B - C"},
 		{"Variety Mix - Greta Rose -", "Variety Mix", "Greta Rose"},
 		{"Warn Yuh - Jah Lil -", "Warn Yuh", "Jah Lil"},
+		{"- Lexis (Music is My Sanctuary)", "", "Lexis (Music is My Sanctuary)"},
 		{"\"Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude\" by Johnny Gandelsman on Currents on WFMU", "Johnny Gandelsman", "Suite No.5 in C minor, BWV 1011 (transposed to G minor) - I. Prelude"},
 		// Apostrophe contraction must NOT match the quoted-byline branch.
 		{"'Cause I Said So - Foo", "'Cause I Said So", "Foo"},
@@ -87,8 +88,10 @@ func TestSplitArtistTitle(t *testing.T) {
 func TestNormalizeMetadataTitle(t *testing.T) {
 	cases := map[string]string{
 		"Track":         "Track",
+		"- Lexis":       "Lexis",
 		"Track -":       "Track",
 		"Track - - - -": "Track",
+		"— Lexis":       "Lexis",
 		"Track – – –":   "Track",
 		"Track —":       "Track",
 		"Mixed - – —":   "Mixed",

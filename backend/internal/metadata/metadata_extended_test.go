@@ -26,6 +26,11 @@ func TestNormalizeType(t *testing.T) {
 		"ICY":         TypeICY,
 		"icecast":     TypeIcecast,
 		"shoutcast":   TypeShoutcast,
+		"id3":         TypeID3,
+		"vorbis":      TypeVorbis,
+		"hls":         TypeHLS,
+		"dash":        TypeDASH,
+		"epg":         TypeEPG,
 		"nonsense":    TypeAuto,
 		"icyx":        TypeAuto,
 		"  shoutcast": TypeShoutcast,
@@ -76,6 +81,61 @@ func TestIsHLSURL(t *testing.T) {
 			t.Errorf("isHLSURL(%q) = %v; want %v", in, got, want)
 		}
 	}
+}
+
+func TestParseID3Metadata(t *testing.T) {
+	tag := buildID3v23Tag(map[string]string{
+		"TIT2": "Autechre - Rae",
+		"TPE1": "Autechre",
+	})
+	title, artist, song, ok := parseID3Metadata(tag)
+	if !ok {
+		t.Fatalf("expected ID3 parse success")
+	}
+	if title != "Autechre - Rae" || artist != "Autechre" || song != "" {
+		t.Fatalf("unexpected ID3 values: title=%q artist=%q song=%q", title, artist, song)
+	}
+}
+
+func TestParseVorbisMetadata(t *testing.T) {
+	data := buildVorbisCommentBlock([]string{"ARTIST=Julianna Barwick", "TITLE=The Harbinger"})
+	title, artist, ok := parseVorbisMetadata(data)
+	if !ok {
+		t.Fatalf("expected Vorbis comment parse success")
+	}
+	if title != "The Harbinger" || artist != "Julianna Barwick" {
+		t.Fatalf("unexpected Vorbis values: title=%q artist=%q", title, artist)
+	}
+}
+
+func buildID3v23Tag(frames map[string]string) []byte {
+	body := []byte{}
+	for id, value := range frames {
+		payload := append([]byte{3}, []byte(value)...)
+		frame := []byte(id)
+		frame = append(frame, byte(len(payload)>>24), byte(len(payload)>>16), byte(len(payload)>>8), byte(len(payload)))
+		frame = append(frame, 0, 0)
+		frame = append(frame, payload...)
+		body = append(body, frame...)
+	}
+	header := []byte{'I', 'D', '3', 3, 0, 0, byte(len(body) >> 21), byte(len(body) >> 14), byte(len(body) >> 7), byte(len(body))}
+	return append(header, body...)
+}
+
+func buildVorbisCommentBlock(entries []string) []byte {
+	body := []byte{0x03, 'v', 'o', 'r', 'b', 'i', 's'}
+	body = appendLittleEndianString(body, "OSTGUT")
+	body = append(body, byte(len(entries)), byte(len(entries)>>8), byte(len(entries)>>16), byte(len(entries)>>24))
+	for _, entry := range entries {
+		body = appendLittleEndianString(body, entry)
+	}
+	return body
+}
+
+func appendLittleEndianString(out []byte, value string) []byte {
+	out = append(out, byte(len(value)), byte(len(value)>>8), byte(len(value)>>16), byte(len(value)>>24))
+	out = append(out, []byte(value)...)
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +355,9 @@ func TestFetchAutoUnsupportedWhenAllFail(t *testing.T) {
 	}
 	if np.ErrorCode != ErrorCodeNoMeta {
 		t.Errorf("got error code %q; want %q", np.ErrorCode, ErrorCodeNoMeta)
+	}
+	if np.Error == "" {
+		t.Errorf("expected visible metadata error")
 	}
 	if ev.Strategy != "" {
 		t.Errorf("got strategy %q; want empty for unsupported", ev.Strategy)

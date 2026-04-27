@@ -6,7 +6,7 @@ import { useRouter } from '@/i18n/navigation'
 import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer, type Station as PlayerStation } from '@/context/PlayerContext'
-import { getEditorStation, getEditorStationIcon, probeEditorStationStream, updateEditorStation, type AdminStation, type AdminStream, type EditorStationPayload, type StreamProbeScope } from '@/lib/editor-stations'
+import { getEditorStation, getEditorStationIcon, probeEditorStationStream, updateEditorStation, type AdminStation, type AdminStream, type EditorStationPayload, type StreamProbeScope, type SupplementalMetadataProvider } from '@/lib/editor-stations'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
 import { uploadMediaAsset } from '@/lib/media-upload'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     RadioIcon,
     ArrowLeftIcon,
@@ -37,6 +38,8 @@ interface StreamFormEntry {
     priority: number
     bitrate: string
     metadata_enabled: boolean
+    metadata_provider: '' | SupplementalMetadataProvider
+    metadata_provider_value: string
 }
 
 interface StationForm {
@@ -62,6 +65,11 @@ interface StationForm {
 const ADMIN_TAG_BADGE_CLASS = 'ui-admin-tag-badge rounded-none border-transparent font-medium text-[10px] uppercase tracking-wide'
 const METADATA_WAIT_SECONDS_NORMAL = 6
 const METADATA_WAIT_SECONDS_DELAYED = 20
+const METADATA_PROVIDER_OPTIONS: Array<{ value: 'none' | SupplementalMetadataProvider; label: string }> = [
+    { value: 'none', label: 'None' },
+    { value: 'npr-composer', label: 'NPR Composer' },
+    { value: 'nts-live', label: 'NTS Live' },
+]
 
 function SourceField({ label, value }: { label: string; value?: string }) {
     if (!value) {
@@ -108,6 +116,38 @@ function getStreamURLValidationMessage(value: string) {
     return ''
 }
 
+function getMetadataProviderValidationMessage(stream: StreamFormEntry) {
+    if (!stream.metadata_provider) return ''
+    const value = stream.metadata_provider_value.trim()
+    if (stream.metadata_provider === 'npr-composer') {
+        if (!value) return 'Enter an NPR Composer UCS code or playlist URL'
+        if (!value.startsWith('http')) return ''
+        try {
+            const parsed = new URL(value)
+            if (parsed.protocol !== 'https:' || parsed.hostname !== 'api.composer.nprstations.org') {
+                return 'Use the api.composer.nprstations.org playlist URL'
+            }
+        } catch {
+            return 'Enter a valid Composer playlist URL or UCS code'
+        }
+    }
+    if (stream.metadata_provider === 'nts-live' && value !== '1' && value !== '2') {
+        return 'Choose NTS channel 1 or 2'
+    }
+    return ''
+}
+
+function metadataProviderPayload(stream: StreamFormEntry): Record<string, unknown> | undefined {
+    const value = stream.metadata_provider_value.trim()
+    if (stream.metadata_provider === 'npr-composer') {
+        return value.startsWith('http') ? { url: value } : { ucs: value }
+    }
+    if (stream.metadata_provider === 'nts-live') {
+        return { channel: value }
+    }
+    return undefined
+}
+
 function formatSampleRateConfidenceLabel(stream: AdminStream): string {
     switch ((stream.sample_rate_confidence || '').toLowerCase()) {
         case 'parsed_streaminfo':
@@ -140,7 +180,22 @@ function createEmptyStream(priority: number): StreamFormEntry {
         priority,
         bitrate: '',
         metadata_enabled: true,
+        metadata_provider: '',
+        metadata_provider_value: '',
     }
+}
+
+function metadataProviderValue(stream: AdminStream): string {
+    const config = stream.metadata_provider_config ?? {}
+    if (stream.metadata_provider === 'npr-composer') {
+        const ucs = config.ucs
+        return typeof ucs === 'string' ? ucs : ''
+    }
+    if (stream.metadata_provider === 'nts-live') {
+        const channel = config.channel
+        return typeof channel === 'string' ? channel : ''
+    }
+    return ''
 }
 
 function toStreamFormEntry(stream: AdminStream, fallbackPriority: number): StreamFormEntry {
@@ -149,6 +204,8 @@ function toStreamFormEntry(stream: AdminStream, fallbackPriority: number): Strea
         priority: stream.priority || fallbackPriority,
         bitrate: stream.bitrate > 0 ? String(stream.bitrate) : '',
         metadata_enabled: stream.metadata_enabled ?? true,
+        metadata_provider: stream.metadata_provider ?? '',
+        metadata_provider_value: metadataProviderValue(stream),
     }
 }
 
@@ -220,11 +277,13 @@ export default function StationEditorPage() {
     const logoURL = form.logo.trim()
     const websiteURL = form.website.trim()
     const streamValidationMessages = form.streams.map((s) => getStreamURLValidationMessage(s.url))
+    const metadataProviderValidationMessages = form.streams.map((s) => getMetadataProviderValidationMessage(s))
     const hasAtLeastOneStreamURL = form.streams.some((s) => s.url.trim() !== '')
 
     const hasValidName = trimmedName.length > 0
     const hasValidStreams = form.streams.length > 0 &&
         streamValidationMessages.every((msg) => msg === '') &&
+        metadataProviderValidationMessages.every((msg) => msg === '') &&
         hasAtLeastOneStreamURL
     const hasValidLogoURL = logoURL === '' || isValidAbsoluteURL(logoURL)
     const hasValidWebsiteURL = websiteURL === '' || isValidAbsoluteURL(websiteURL)
@@ -333,6 +392,8 @@ export default function StationEditorPage() {
                         priority: s.priority || i + 1,
                         bitrate: Number.isFinite(parsedBitrate) && parsedBitrate > 0 ? parsedBitrate : undefined,
                         metadata_enabled: s.metadata_enabled,
+                        metadata_provider: s.metadata_provider || undefined,
+                        metadata_provider_config: metadataProviderPayload(s),
                     }
                 }),
             logo: logoURL,
@@ -446,6 +507,17 @@ export default function StationEditorPage() {
                 metadataUrl: savedStream?.metadata_url,
                 metadataResolver: savedStream?.metadata_resolver,
                 metadataResolverCheckedAt: savedStream?.metadata_resolver_checked_at,
+                metadataPlan: savedStream?.metadata_plan ? {
+                    resolver: savedStream.metadata_plan.resolver,
+                    delivery: savedStream.metadata_plan.delivery,
+                    preferredStrategy: savedStream.metadata_plan.preferred_strategy,
+                    supportsClient: savedStream.metadata_plan.supports_client,
+                    supportsServer: savedStream.metadata_plan.supports_server,
+                    supportsServerSnapshot: savedStream.metadata_plan.supports_server_snapshot,
+                    requiresClientConnectSrc: savedStream.metadata_plan.requires_client_connect_src,
+                    pressureClass: savedStream.metadata_plan.pressure_class,
+                    reason: savedStream.metadata_plan.reason,
+                } : undefined,
                 metadataDelayed: savedStream?.metadata_delayed,
                 lastCheckedAt: savedStream?.last_checked_at,
                 lastError: savedStream?.last_error,
@@ -661,6 +733,86 @@ export default function StationEditorPage() {
                                             )}
                                         </div>
 
+                                        <div className="grid gap-3 md:grid-cols-2">
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs text-muted-foreground">Supplemental metadata</Label>
+                                                <Select
+                                                    value={stream.metadata_provider || 'none'}
+                                                    onValueChange={(value) => setForm((prev) => ({
+                                                        ...prev,
+                                                        streams: prev.streams.map((s, idx) => {
+                                                            if (idx !== i) return s
+                                                            const nextValue = value ?? 'none'
+                                                            const provider = nextValue === 'none' ? '' : nextValue as SupplementalMetadataProvider
+                                                            return {
+                                                                ...s,
+                                                                metadata_provider: provider,
+                                                                metadata_provider_value: provider === 'nts-live'
+                                                                    ? (s.metadata_provider_value === '2' ? '2' : '1')
+                                                                    : provider === 'npr-composer'
+                                                                        ? s.metadata_provider_value
+                                                                        : '',
+                                                            }
+                                                        }),
+                                                    }))}
+                                                >
+                                                    <SelectTrigger className="w-full" aria-label={`Supplemental metadata provider for stream ${i + 1}`}>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {METADATA_PROVIDER_OPTIONS.map((option) => (
+                                                            <SelectItem key={option.value} value={option.value}>
+                                                                {option.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {stream.metadata_provider === 'npr-composer' && (
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs text-muted-foreground">NPR Composer code or URL</Label>
+                                                    <Input
+                                                        value={stream.metadata_provider_value}
+                                                        placeholder="wxxx or https://api.composer.nprstations.org/..."
+                                                        onChange={(e) => setForm((prev) => ({
+                                                            ...prev,
+                                                            streams: prev.streams.map((s, idx) =>
+                                                                idx === i ? { ...s, metadata_provider_value: e.target.value } : s
+                                                            ),
+                                                        }))}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {stream.metadata_provider === 'nts-live' && (
+                                                <div className="space-y-1.5">
+                                                    <Label className="text-xs text-muted-foreground">NTS channel</Label>
+                                                    <Select
+                                                        value={stream.metadata_provider_value || '1'}
+                                                        onValueChange={(value) => setForm((prev) => ({
+                                                            ...prev,
+                                                            streams: prev.streams.map((s, idx) =>
+                                                                idx === i ? { ...s, metadata_provider_value: value ?? '1' } : s
+                                                            ),
+                                                        }))}
+                                                    >
+                                                        <SelectTrigger className="w-full" aria-label={`NTS channel for stream ${i + 1}`}>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="1">NTS 1</SelectItem>
+                                                            <SelectItem value="2">NTS 2</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {metadataProviderValidationMessages[i] && (
+                                            <p className="text-xs text-destructive">{metadataProviderValidationMessages[i]}</p>
+                                        )}
+
                                         {streamDetails[i] && (
                                             <div className="rounded-md border bg-muted/30 px-3 py-2">
                                                 <div className="space-y-2">
@@ -802,6 +954,11 @@ export default function StationEditorPage() {
                                                                 {streamDetails[i].metadata_resolver && (
                                                                     <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
                                                                         {streamDetails[i].metadata_resolver}
+                                                                    </Badge>
+                                                                )}
+                                                                {streamDetails[i].metadata_provider && (
+                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
+                                                                        {streamDetails[i].metadata_provider}
                                                                     </Badge>
                                                                 )}
                                                                 {streamDetails[i].metadata_delayed ? (
