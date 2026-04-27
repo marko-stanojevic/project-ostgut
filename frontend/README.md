@@ -5,7 +5,7 @@ Next.js frontend for Project Ostgut SaaS.
 ## Getting Started
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 24 LTS
 - npm or yarn
 - `ffmpeg` installed locally if you also run the backend and want loudness probing to work
 
@@ -13,8 +13,10 @@ Next.js frontend for Project Ostgut SaaS.
 
 Install dependencies:
 ```bash
-npm install
+npm ci
 ```
+
+When dependency versions change, update and commit `package-lock.json` together with `package.json`. Treat them as a single contract.
 
 Start the development server:
 ```bash
@@ -63,6 +65,8 @@ The frontend communicates with the Go backend via `src/lib/api-client.ts`. By de
 Update the `NEXT_PUBLIC_API_URL` environment variable to change the backend URL.
 
 ## Docker
+
+For staging and production, the frontend runtime image is required to remain distroless. Upgrade the Node major as needed, but do not replace the runtime stage with a general-purpose base image.
 
 Build the Docker image:
 ```bash

@@ -5,7 +5,7 @@
       "label": "Frontend: Build",
       "type": "shell",
       "command": "sh",
-      "args": ["-c", "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && npm run build"],
+      "args": ["-c", "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && nvm install >/dev/null && nvm use >/dev/null && npm run build"],
       "options": {
         "cwd": "${workspaceFolder}/frontend",
         "env": {
@@ -28,7 +28,7 @@
       "label": "Frontend: Build (WSL)",
       "type": "shell",
       "command": "bash",
-      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run build"],
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm install >/dev/null; nvm use >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run build"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -48,7 +48,7 @@
       "label": "Frontend: Dev Server",
       "type": "shell",
       "command": "sh",
-      "args": ["-c", "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && npm run dev"],
+      "args": ["-c", "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && nvm install >/dev/null && nvm use >/dev/null && npm run dev"],
       "options": {
         "cwd": "${workspaceFolder}/frontend",
         "env": {
@@ -80,7 +80,7 @@
       "label": "Frontend: Dev Server (WSL)",
       "type": "shell",
       "command": "bash",
-      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run dev -- --hostname 0.0.0.0"],
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm install >/dev/null; nvm use >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run dev -- --hostname 0.0.0.0"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -109,7 +109,7 @@
       "label": "Frontend: Lint",
       "type": "shell",
       "command": "sh",
-      "args": ["-c", "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && npm run lint"],
+      "args": ["-c", "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && nvm install >/dev/null && nvm use >/dev/null && npm run lint"],
       "options": {
         "cwd": "${workspaceFolder}/frontend",
         "env": {
@@ -132,7 +132,7 @@
       "label": "Frontend: Lint (WSL)",
       "type": "shell",
       "command": "bash",
-      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; npm run lint"],
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm install >/dev/null; nvm use >/dev/null; npm run lint"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -485,7 +485,7 @@
       "label": "Setup: Frontend Dependencies",
       "type": "shell",
       "command": "sh",
-      "args": ["-c", "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && npm install"],
+      "args": ["-c", "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && nvm install >/dev/null && nvm use >/dev/null && npm ci"],
       "options": {
         "cwd": "${workspaceFolder}/frontend",
         "env": {
@@ -504,7 +504,7 @@
       "label": "Setup: Frontend Dependencies (WSL)",
       "type": "shell",
       "command": "bash",
-      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm use 20 >/dev/null; npm install"],
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm install >/dev/null; nvm use >/dev/null; npm ci"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },

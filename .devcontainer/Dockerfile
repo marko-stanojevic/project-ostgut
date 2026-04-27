@@ -40,9 +40,10 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 RUN mkdir -p /root/.nvm && \
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 ENV NVM_DIR="/root/.nvm"
+ENV NODE_VERSION="24"
 RUN . "$NVM_DIR/nvm.sh" && \
-    nvm install 20 && \
-    nvm alias default 20 && \
+    nvm install "$NODE_VERSION" && \
+    nvm alias default "$NODE_VERSION" && \
     node_version="$(nvm version default)" && \
     ln -sf "$NVM_DIR/versions/node/$node_version/bin/node" /usr/local/bin/node && \
     ln -sf "$NVM_DIR/versions/node/$node_version/bin/npm" /usr/local/bin/npm && \

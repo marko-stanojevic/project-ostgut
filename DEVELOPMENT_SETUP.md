@@ -26,7 +26,7 @@ code project-ostgut
 
 **✅ What's automated:**
 
-- Go 1.25.9, Node.js 20, PostgreSQL 16
+- Go 1.25.9, Node.js 24 LTS, PostgreSQL 16
 - All npm and Go dependencies
 - Database migrations
 - Environment variables
@@ -142,18 +142,18 @@ nvm --version
 **Install Node.js:**
 
 ```bash
-# Install Node 20.x (currently stable for Next.js 15)
-nvm install 20
-nvm use 20
+# Install Node 24 LTS
+nvm install 24
+nvm use 24
 
 # Set as default
-nvm alias default 20
+nvm alias default 24
 ```
 
 **Verify installation:**
 
 ```bash
-node --version   # Should be v20.x.x
+node --version   # Should be v24.x.x
 npm --version    # Should be 10.x.x or higher
 ```
 
@@ -357,7 +357,7 @@ go mod verify
 cd frontend
 
 # Ensure nvm is using the correct Node version
-nvm use 20
+nvm use 24
 
 # Install npm dependencies
 npm install
@@ -406,7 +406,7 @@ go run ./cmd/api
 
 # Terminal 3: Start frontend
 cd frontend
-nvm use 20
+nvm use 24
 npm run dev
 ```
 
