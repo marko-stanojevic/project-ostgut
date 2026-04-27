@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext'
 import { usePlayer, type Station as PlayerStation } from '@/context/PlayerContext'
 import { getEditorStation, getEditorStationIcon, probeEditorStationStream, updateEditorStation, type AdminStation, type AdminStream, type EditorStationPayload, type StreamProbeScope } from '@/lib/editor-stations'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
-import { completeUpload, createUploadIntent } from '@/lib/media-upload'
+import { uploadMediaAsset } from '@/lib/media-upload'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -290,33 +290,15 @@ export default function StationEditorPage() {
         setUploadingIcon(true)
 
         try {
-            const intent = await createUploadIntent(accessToken, {
+            const asset = await uploadMediaAsset(accessToken, {
                 kind: 'station_icon',
                 ownerId: id,
                 contentType: file.type,
                 contentLength: file.size,
-            })
+            }, file)
 
-            const uploadResponse = await fetch(intent.uploadUrl, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': file.type,
-                },
-                body: file,
-            })
-
-            if (!uploadResponse.ok) {
-                throw new Error('Upload failed')
-            }
-
-            const completed = await completeUpload(accessToken, intent.assetId, intent.blobKey)
-
-            if (completed.status === 'rejected') {
-                throw new Error(completed.asset.rejection_reason || 'Image was rejected')
-            }
-
-            setStationIcon(completed.asset)
-            const uploadedUrl = getPreferredMediaUrl(completed.asset)
+            setStationIcon(asset)
+            const uploadedUrl = getPreferredMediaUrl(asset)
             if (uploadedUrl) {
                 setForm((prev) => ({ ...prev, logo: uploadedUrl }))
             }

@@ -92,8 +92,9 @@ func (h *Handler) AdminBulkAction(c *gin.Context) {
 func (h *Handler) AdminListUsers(c *gin.Context) {
 	limit := queryInt(c, "limit", 50)
 	offset := queryInt(c, "offset", 0)
+	query := strings.TrimSpace(c.Query("q"))
 
-	users, total, err := h.admin.users.ListUsers(c.Request.Context(), limit, offset)
+	users, total, err := h.admin.users.ListUsers(c.Request.Context(), limit, offset, query)
 	if err != nil {
 		h.log.Error("admin list users", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

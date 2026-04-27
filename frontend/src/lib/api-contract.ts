@@ -31,6 +31,23 @@ export function requireNonEmptyString(value: unknown, field: string, label = 'AP
   return text
 }
 
+export function requireDateString(value: unknown, field: string, label = 'API payload'): string {
+  const date = requireString(value, field, label)
+  if (!Number.isFinite(Date.parse(date))) {
+    throw new Error(`Invalid ${label}: ${field} must be an ISO date string`)
+  }
+
+  return date
+}
+
+export function optionalDateString(value: unknown, field: string, label = 'API payload'): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+
+  return requireDateString(value, field, label)
+}
+
 export function optionalString(value: unknown, field: string, label = 'API payload'): string | undefined {
   if (value === undefined || value === null) {
     return undefined

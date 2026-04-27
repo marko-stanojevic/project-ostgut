@@ -38,3 +38,28 @@ export function completeUpload(accessToken: string, assetId: string, blobKey: st
         body: JSON.stringify({ assetId, blobKey }),
     })
 }
+
+export async function uploadMediaAsset(
+    accessToken: string,
+    payload: CreateUploadIntentPayload,
+    file: File,
+): Promise<MediaAssetResponse> {
+    const intent = await createUploadIntent(accessToken, payload)
+
+    const uploadResponse = await fetch(intent.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+    })
+
+    if (!uploadResponse.ok) {
+        throw new Error('Upload failed')
+    }
+
+    const completed = await completeUpload(accessToken, intent.assetId, intent.blobKey)
+    if (completed.status === 'rejected') {
+        throw new Error(completed.asset.rejection_reason || 'Image was rejected')
+    }
+
+    return completed.asset
+}

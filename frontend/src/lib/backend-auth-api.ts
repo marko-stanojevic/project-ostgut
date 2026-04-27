@@ -1,5 +1,5 @@
 import type { Role } from '@/types/next-auth'
-import { optionalString, requireNonEmptyString, requireRecord } from '@/lib/api-contract'
+import { optionalString, requireDateString, requireNonEmptyString, requireRecord } from '@/lib/api-contract'
 
 const API_URL = process.env.API_URL || 'http://localhost:8080'
 const AUTH_CONTRACT = 'backend auth payload'
@@ -70,9 +70,9 @@ function parseBackendAuthResponse(payload: unknown): BackendAuthResponse {
 
   return {
     accessToken: requireNonEmptyString(response.accessToken, 'accessToken', AUTH_CONTRACT),
-    accessTokenExpiresAt: requireDateString(response.accessTokenExpiresAt, 'accessTokenExpiresAt'),
+    accessTokenExpiresAt: requireDateString(response.accessTokenExpiresAt, 'accessTokenExpiresAt', AUTH_CONTRACT),
     refreshToken: requireNonEmptyString(response.refreshToken, 'refreshToken', AUTH_CONTRACT),
-    refreshTokenExpiresAt: requireDateString(response.refreshTokenExpiresAt, 'refreshTokenExpiresAt'),
+    refreshTokenExpiresAt: requireDateString(response.refreshTokenExpiresAt, 'refreshTokenExpiresAt', AUTH_CONTRACT),
     user: {
       id: requireNonEmptyString(user.id, 'user.id', AUTH_CONTRACT),
       email: requireNonEmptyString(user.email, 'user.email', AUTH_CONTRACT),
@@ -80,15 +80,6 @@ function parseBackendAuthResponse(payload: unknown): BackendAuthResponse {
       role: requireRole(user.role, 'user.role'),
     },
   }
-}
-
-function requireDateString(value: unknown, field: string): string {
-  const date = requireNonEmptyString(value, field, AUTH_CONTRACT)
-  if (!Number.isFinite(Date.parse(date))) {
-    throw new Error(`Invalid ${AUTH_CONTRACT}: ${field} must be an ISO date string`)
-  }
-
-  return date
 }
 
 function requireRole(value: unknown, field: string): Role {

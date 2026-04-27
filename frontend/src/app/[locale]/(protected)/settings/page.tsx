@@ -21,7 +21,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { SubscriptionCard } from '@/components/subscription-card'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
-import { completeUpload, createUploadIntent } from '@/lib/media-upload'
+import { uploadMediaAsset } from '@/lib/media-upload'
 import { defaultTheme, themeOptions, type AppTheme } from '@/lib/theme'
 import { getUserProfile, updateUserProfile } from '@/lib/user-profile'
 import {
@@ -142,16 +142,12 @@ function ProfileSection() {
     setAvatarError('')
     setUploadingAvatar(true)
     try {
-      const intent = await createUploadIntent(session.accessToken, {
+      const asset = await uploadMediaAsset(session.accessToken, {
         kind: 'avatar',
         contentType: file.type,
         contentLength: file.size,
-      })
-      const uploadResponse = await fetch(intent.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
-      if (!uploadResponse.ok) throw new Error('Upload failed')
-      const completed = await completeUpload(session.accessToken, intent.assetId, intent.blobKey)
-      if (completed.status === 'rejected') throw new Error(completed.asset.rejection_reason || 'Image was rejected')
-      setAvatar(completed.asset)
+      }, file)
+      setAvatar(asset)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (error) {
