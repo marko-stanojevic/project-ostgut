@@ -9,11 +9,9 @@ export interface ExploreFiltersState {
     error: boolean
 }
 
-export async function fetchStationFilters(revalidate = 300): Promise<ExploreFiltersState> {
+export async function fetchStationFilters(): Promise<ExploreFiltersState> {
     try {
-        const data = await getPublicStationFilters({
-            next: { revalidate },
-        })
+        const data = await getPublicStationFilters()
 
         return {
             genres: data.genre_tags,

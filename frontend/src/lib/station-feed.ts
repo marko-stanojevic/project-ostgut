@@ -9,11 +9,9 @@ export interface StationFeedState {
     error: boolean
 }
 
-export async function fetchStationFeed(path: string, revalidate = 60): Promise<StationFeedState> {
+export async function fetchStationFeed(path: string): Promise<StationFeedState> {
     try {
-        const data = await getPublicStations(path, {
-            next: { revalidate },
-        })
+        const data = await getPublicStations(path)
 
         return {
             ...data,

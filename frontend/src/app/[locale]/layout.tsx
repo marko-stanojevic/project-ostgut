@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { AuthProvider } from '@/context/AuthContext'
 import { PlayerProvider } from '@/context/PlayerContext'
@@ -20,7 +21,21 @@ export const metadata: Metadata = {
 
 type Params = Promise<{ locale: string }>
 
-export default async function LocaleLayout({
+export default function LocaleLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode
+  params: Params
+}) {
+  return (
+    <Suspense fallback={null}>
+      <LocaleContent params={params}>{children}</LocaleContent>
+    </Suspense>
+  )
+}
+
+async function LocaleContent({
   children,
   params,
 }: {

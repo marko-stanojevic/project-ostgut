@@ -6,11 +6,9 @@ export interface StationDetailState {
     error: string | null
 }
 
-export async function fetchStationDetail(id: string, revalidate = 60): Promise<StationDetailState> {
+export async function fetchStationDetail(id: string): Promise<StationDetailState> {
     try {
-        const station = await getPublicStation(id, {
-            next: { revalidate },
-        })
+        const station = await getPublicStation(id)
 
         return {
             station,

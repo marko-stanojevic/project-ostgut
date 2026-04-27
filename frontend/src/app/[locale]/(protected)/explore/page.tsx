@@ -1,6 +1,6 @@
 import { ExploreClient } from './explore-client'
-import { fetchStationFilters } from '@/lib/station-filters'
-import { fetchStationFeed } from '@/lib/station-feed'
+import { fetchCachedStationFilters } from '@/lib/station-filters-cache'
+import { fetchCachedStationFeed } from '@/lib/station-feed-cache'
 import { buildStationFeedPathFromSearchParams, type PageSearchParams } from '@/lib/station-query'
 
 export default async function ExplorePage({
@@ -11,8 +11,8 @@ export default async function ExplorePage({
     const resolvedSearchParams = await searchParams
     const initialStationsPath = buildStationFeedPathFromSearchParams(resolvedSearchParams)
     const [initialStations, initialFilters] = await Promise.all([
-        fetchStationFeed(initialStationsPath),
-        fetchStationFilters(),
+        fetchCachedStationFeed(initialStationsPath),
+        fetchCachedStationFilters(),
     ])
 
     return (
