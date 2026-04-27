@@ -7,7 +7,7 @@ const ADMIN_DIAGNOSTICS_CONTRACT = 'admin diagnostics payload'
 export type AdminDiagnosticKind = 'api' | 'database' | 'jobs'
 export type AdminDiagnosticStatus = 'operational' | 'attention'
 export type AdminDiagnosticTone = 'neutral' | 'attention'
-export type AdminJobTriggerID = 'station-sync' | 'stream-reprobe'
+export type AdminJobTriggerID = 'station-sync' | 'stream-reprobe' | 'metadata-fetch'
 export type AdminJobTriggerStatus = 'started' | 'already_running'
 
 export type AdminDiagnosticResponse = {
@@ -153,11 +153,11 @@ function requireTone(value: unknown, field: string): AdminDiagnosticTone {
 }
 
 function requireJobTriggerID(value: unknown, field: string): AdminJobTriggerID {
-  if (value === 'station-sync' || value === 'stream-reprobe') {
+  if (value === 'station-sync' || value === 'stream-reprobe' || value === 'metadata-fetch') {
     return value
   }
 
-  throw new Error(`Invalid ${ADMIN_DIAGNOSTICS_CONTRACT}: ${field} must be station-sync or stream-reprobe`)
+  throw new Error(`Invalid ${ADMIN_DIAGNOSTICS_CONTRACT}: ${field} must be station-sync, stream-reprobe, or metadata-fetch`)
 }
 
 function requireJobTriggerStatus(value: unknown, field: string): AdminJobTriggerStatus {

@@ -73,6 +73,8 @@ function buildCSP(nonce: string): string {
     "'self'",
     apiOrigin,
     'https://*.blob.core.windows.net',
+    // Client-resolved metadata fetches read CORS-capable radio stream hosts.
+    'https:',
     // New Relic browser agent (loader + beacon).
     'https://*.nr-data.net',
     'https://*.newrelic.com',

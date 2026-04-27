@@ -53,6 +53,30 @@ func TestProbeStreamDetectsHLSFromContentTypeOnOpaquePath(t *testing.T) {
 	}
 }
 
+func TestLightClassifyStreamURLDetectsDASHManifest(t *testing.T) {
+	got := LightClassifyStreamURL("https://radio.example/live/manifest.mpd")
+	if got.Kind != "dash" || got.Container != "mpd" {
+		t.Fatalf("expected dash/mpd, got %s/%s", got.Kind, got.Container)
+	}
+}
+
+func TestProbeStreamDetectsOggCodecFromContentType(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return response(req, http.StatusOK, "application/ogg", "OggS", nil), nil
+		}),
+		Timeout: 2 * time.Second,
+	}
+
+	got := ProbeStream(context.Background(), client, "https://radio.example/live")
+	if got.LastError != nil {
+		t.Fatalf("expected no probe error, got %q", *got.LastError)
+	}
+	if got.Codec != "OGG" {
+		t.Fatalf("expected OGG codec, got %q", got.Codec)
+	}
+}
+
 func TestProbeStreamResolvesNestedRelativePlaylist(t *testing.T) {
 	client := &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {

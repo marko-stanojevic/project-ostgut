@@ -359,6 +359,8 @@ func classifyPath(p string) (kind string, container string) {
 	switch ext {
 	case ".m3u8":
 		return "hls", "m3u8"
+	case ".mpd":
+		return "dash", "mpd"
 	case ".m3u":
 		return "playlist", "m3u"
 	case ".pls":
@@ -372,6 +374,8 @@ func classifyContentType(ct string) (kind string, container string) {
 	switch {
 	case strings.Contains(ct, "application/vnd.apple.mpegurl"), strings.Contains(ct, "application/x-mpegurl"):
 		return "hls", "m3u8"
+	case strings.Contains(ct, "application/dash+xml"):
+		return "dash", "mpd"
 	case strings.Contains(ct, "audio/x-scpls"), strings.Contains(ct, "application/pls+xml"):
 		return "playlist", "pls"
 	case strings.Contains(ct, "audio/x-mpegurl"):
@@ -389,6 +393,10 @@ func codecFromContentType(ct string) string {
 		return "AAC"
 	case strings.Contains(ct, "flac"):
 		return "FLAC"
+	case strings.Contains(ct, "opus"):
+		return "OPUS"
+	case strings.Contains(ct, "ogg") || strings.Contains(ct, "vorbis"):
+		return "OGG"
 	default:
 		return ""
 	}
@@ -403,6 +411,10 @@ func codecFromPath(p string) string {
 		return "AAC"
 	case ".flac":
 		return "FLAC"
+	case ".opus":
+		return "OPUS"
+	case ".ogg", ".oga":
+		return "OGG"
 	default:
 		return ""
 	}

@@ -82,7 +82,7 @@ The export/import payload now includes:
 - `genre_tags`, `subgenre_tags`, and derived `search_tags`
 - `style_tags`, `format_tags`, and `texture_tags`
 - `editorial_review` and `internal_notes`
-- stream metadata routing fields such as `metadata_source`, `metadata_url`, `metadata_resolver`, and `metadata_delayed`
+- stream metadata routing fields such as `metadata_source`, `metadata_url`, `metadata_resolver`, `metadata_delayed`, `metadata_provider`, and `metadata_provider_config`
 
 ---
 

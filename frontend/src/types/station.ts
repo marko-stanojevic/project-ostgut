@@ -30,6 +30,17 @@ export interface ApiStream {
     metadata_last_fetched_at?: string
     metadata_resolver?: 'none' | 'server' | 'client'
     metadata_resolver_checked_at?: string
+    metadata_plan?: {
+        resolver: 'none' | 'server' | 'client'
+        delivery: 'none' | 'sse' | 'client-poll' | 'hls-id3'
+        preferred_strategy: string
+        supports_client: boolean
+        supports_server: boolean
+        supports_server_snapshot: boolean
+        requires_client_connect_src: boolean
+        pressure_class: 'none' | 'client' | 'server-live'
+        reason: string
+    }
     health_score: number
     last_checked_at?: string
     last_error?: string

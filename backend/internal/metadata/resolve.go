@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+type strategyFetcher func(ctx context.Context, streamURL string, cfg Config, mode fetchMode) (*NowPlaying, FetchEvidence, error)
+
+type autoStrategyCandidate struct {
+	strategy string
+	applies  func(streamURL string) bool
+}
+
 // resolve dispatches to the right strategy ladder based on Config.Type and
 // any persisted hints. Always returns a non-nil NowPlaying.
 func (f *Fetcher) resolve(ctx context.Context, streamURL string, cfg Config, mode fetchMode) (*NowPlaying, FetchEvidence) {
@@ -65,17 +72,25 @@ func (f *Fetcher) resolveHinted(ctx context.Context, streamURL, metadataURL stri
 func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string, cfg Config, mode fetchMode) (*NowPlaying, FetchEvidence) {
 	var lastErr error
 
-	if !isHLSURL(streamURL) {
-		// Strategy 1: ICY in-stream.
-		np, ev, err := f.fetchICYAdaptive(ctx, streamURL, cfg, mode)
+	strategies := f.strategyRegistry()
+	for _, candidate := range autoStrategyCandidates() {
+		if !candidate.applies(streamURL) {
+			continue
+		}
+
+		fetchStrategy, ok := strategies[candidate.strategy]
+		if !ok {
+			continue
+		}
+
+		np, ev, err := fetchStrategy(ctx, streamURL, cfg, mode)
 		if err == nil && np != nil && np.Title != "" {
 			np.Supported = true
 			np.Status = "ok"
-			ev.Strategy = TypeICY
 			return np, ev
 		}
 		lastErr = err
-		f.log.Debug("metadata: icy http failed", "url", streamURL, "error", err)
+		f.log.Debug("metadata: strategy failed", "url", streamURL, "strategy", candidate.strategy, "error", err)
 	}
 
 	// Race Icecast JSON and Shoutcast text endpoints concurrently. Both hit
@@ -89,10 +104,20 @@ func (f *Fetcher) resolveAuto(ctx context.Context, streamURL string, cfg Config,
 	}
 
 	f.log.Debug("metadata: no metadata found", "url", streamURL, "last_error", lastErr)
+	if np, ev, err := f.resolveSupplementalProvider(ctx, cfg); err == nil && np != nil && np.Title != "" {
+		np.Supported = true
+		np.Status = "ok"
+		return np, ev
+	} else if err != nil {
+		lastErr = err
+		f.log.Debug("metadata: supplemental provider failed", "url", streamURL, "provider", cfg.Provider, "error", err)
+	}
+
 	return &NowPlaying{
 		Source:    "",
 		Supported: false,
 		Status:    "unsupported",
+		Error:     "metadata unavailable",
 		ErrorCode: ErrorCodeNoMeta,
 		FetchedAt: time.Now(),
 	}, FetchEvidence{}
@@ -139,36 +164,22 @@ func (f *Fetcher) raceIcecastShoutcast(ctx context.Context, streamURL string) (*
 }
 
 func (f *Fetcher) resolveConfigured(ctx context.Context, streamURL string, cfg Config, mode fetchMode) (*NowPlaying, FetchEvidence) {
-	var (
-		np       *NowPlaying
-		ev       FetchEvidence
-		err      error
-		strategy string
-	)
-
-	switch cfg.Type {
-	case TypeICY:
-		np, ev, err = f.fetchICYAdaptive(ctx, streamURL, cfg, mode)
-		strategy = TypeICY
-	case TypeIcecast:
-		c, cancel := context.WithTimeout(ctx, fallbackTimeout)
-		np, err = f.fetchIcecastJSON(c, streamURL)
-		cancel()
-		strategy = TypeIcecast
-	case TypeShoutcast:
-		c, cancel := context.WithTimeout(ctx, fallbackTimeout)
-		np, err = f.fetchShoutcast(c, streamURL)
-		cancel()
-		strategy = TypeShoutcast
-	default:
+	fetchStrategy, ok := f.strategyRegistry()[cfg.Type]
+	if !ok {
 		return f.resolveAuto(ctx, streamURL, cfg, mode)
 	}
+
+	np, ev, err := fetchStrategy(ctx, streamURL, cfg, mode)
 
 	if err == nil && np != nil && np.Title != "" {
 		np.Supported = true
 		np.Status = "ok"
-		ev.Strategy = strategy
 		return np, ev
+	}
+	if providerNP, providerEV, providerErr := f.resolveSupplementalProvider(ctx, cfg); providerErr == nil && providerNP != nil && providerNP.Title != "" {
+		providerNP.Supported = true
+		providerNP.Status = "ok"
+		return providerNP, providerEV
 	}
 
 	errMsg := "metadata unavailable"
@@ -185,11 +196,68 @@ func (f *Fetcher) resolveConfigured(ctx context.Context, streamURL string, cfg C
 	}, ev
 }
 
+func (f *Fetcher) strategyRegistry() map[string]strategyFetcher {
+	return map[string]strategyFetcher{
+		TypeICY: func(ctx context.Context, streamURL string, cfg Config, mode fetchMode) (*NowPlaying, FetchEvidence, error) {
+			np, ev, err := f.fetchICYAdaptive(ctx, streamURL, cfg, mode)
+			ev.Strategy = TypeICY
+			return np, ev, err
+		},
+		TypeIcecast: func(ctx context.Context, streamURL string, _ Config, _ fetchMode) (*NowPlaying, FetchEvidence, error) {
+			c, cancel := context.WithTimeout(ctx, fallbackTimeout)
+			defer cancel()
+			np, err := f.fetchIcecastJSON(c, streamURL)
+			return np, FetchEvidence{Strategy: TypeIcecast}, err
+		},
+		TypeShoutcast: func(ctx context.Context, streamURL string, _ Config, _ fetchMode) (*NowPlaying, FetchEvidence, error) {
+			c, cancel := context.WithTimeout(ctx, fallbackTimeout)
+			defer cancel()
+			np, err := f.fetchShoutcast(c, streamURL)
+			return np, FetchEvidence{Strategy: TypeShoutcast}, err
+		},
+		TypeID3: func(ctx context.Context, streamURL string, _ Config, _ fetchMode) (*NowPlaying, FetchEvidence, error) {
+			c, cancel := context.WithTimeout(ctx, fallbackTimeout)
+			defer cancel()
+			np, err := f.fetchID3(c, streamURL)
+			return np, FetchEvidence{Strategy: TypeID3}, err
+		},
+		TypeVorbis: func(ctx context.Context, streamURL string, _ Config, _ fetchMode) (*NowPlaying, FetchEvidence, error) {
+			c, cancel := context.WithTimeout(ctx, fallbackTimeout)
+			defer cancel()
+			np, err := f.fetchVorbis(c, streamURL)
+			return np, FetchEvidence{Strategy: TypeVorbis}, err
+		},
+		TypeHLS:  unsupportedStrategy(TypeHLS),
+		TypeDASH: unsupportedStrategy(TypeDASH),
+		TypeEPG:  unsupportedStrategy(TypeEPG),
+	}
+}
+
+func autoStrategyCandidates() []autoStrategyCandidate {
+	return []autoStrategyCandidate{
+		{strategy: TypeICY, applies: func(streamURL string) bool { return !isHLSURL(streamURL) }},
+		{strategy: TypeID3, applies: isID3Candidate},
+		{strategy: TypeVorbis, applies: isVorbisCandidate},
+	}
+}
+
+func unsupportedStrategy(strategy string) strategyFetcher {
+	return func(_ context.Context, _ string, _ Config, _ fetchMode) (*NowPlaying, FetchEvidence, error) {
+		return &NowPlaying{
+			Source:    strategy,
+			Supported: false,
+			Status:    "unsupported",
+			ErrorCode: ErrorCodeNoMeta,
+			FetchedAt: time.Now(),
+		}, FetchEvidence{Strategy: strategy}, nil
+	}
+}
+
 // hintedMetadataKind picks an ICY/Icecast/Shoutcast strategy from a hint or
 // the URL suffix.
 func hintedMetadataKind(metadataURL, sourceHint string) string {
 	switch normalizeType(sourceHint) {
-	case TypeICY, TypeIcecast, TypeShoutcast:
+	case TypeICY, TypeIcecast, TypeShoutcast, TypeID3, TypeVorbis, TypeHLS, TypeDASH, TypeEPG:
 		return normalizeType(sourceHint)
 	}
 	lower := strings.ToLower(strings.TrimSpace(metadataURL))

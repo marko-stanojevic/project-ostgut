@@ -20,8 +20,12 @@ export interface StationStream {
     metadataSource?: string
     metadataUrl?: string
     metadataDelayed?: boolean
+    metadataError?: string
+    metadataErrorCode?: string
+    metadataLastFetchedAt?: string
     metadataResolver?: 'none' | 'server' | 'client'
     metadataResolverCheckedAt?: string
+    metadataPlan?: MetadataPlan
     healthScore: number
     loudnessIntegratedLufs?: number
     loudnessPeakDbfs?: number
@@ -30,6 +34,18 @@ export interface StationStream {
     loudnessMeasurementStatus?: string
     lastCheckedAt?: string
     lastError?: string
+}
+
+export interface MetadataPlan {
+    resolver: 'none' | 'server' | 'client'
+    delivery: 'none' | 'sse' | 'client-poll' | 'hls-id3'
+    preferredStrategy: string
+    supportsClient: boolean
+    supportsServer: boolean
+    supportsServerSnapshot: boolean
+    requiresClientConnectSrc: boolean
+    pressureClass: 'none' | 'client' | 'server-live'
+    reason: string
 }
 
 export interface Station {
@@ -203,8 +219,12 @@ function parsePersistedStream(value: unknown): StationStream | null {
         metadataSource: readString(value.metadataSource) || undefined,
         metadataUrl: readString(value.metadataUrl) || undefined,
         metadataDelayed: readBoolean(value.metadataDelayed),
+        metadataError: readString(value.metadataError) || undefined,
+        metadataErrorCode: readString(value.metadataErrorCode) || undefined,
+        metadataLastFetchedAt: readString(value.metadataLastFetchedAt) || undefined,
         metadataResolver: readMetadataResolver(value.metadataResolver),
         metadataResolverCheckedAt: readString(value.metadataResolverCheckedAt) || undefined,
+        metadataPlan: parseMetadataPlan(value.metadataPlan),
         healthScore,
         loudnessIntegratedLufs: readNumber(value.loudnessIntegratedLufs),
         loudnessPeakDbfs: readNumber(value.loudnessPeakDbfs),
@@ -238,5 +258,44 @@ function parseStringArray(value: unknown): string[] {
 
 function readMetadataResolver(value: unknown): StationStream['metadataResolver'] {
     if (value === 'none' || value === 'server' || value === 'client') return value
+    return undefined
+}
+
+function parseMetadataPlan(value: unknown): MetadataPlan | undefined {
+    if (!isRecord(value)) return undefined
+
+    const resolver = readMetadataResolver(value.resolver)
+    const delivery = readMetadataDelivery(value.delivery)
+    const preferredStrategy = readString(value.preferredStrategy)
+    const supportsClient = readBoolean(value.supportsClient)
+    const supportsServer = readBoolean(value.supportsServer)
+    const supportsServerSnapshot = readBoolean(value.supportsServerSnapshot)
+    const requiresClientConnectSrc = readBoolean(value.requiresClientConnectSrc)
+    const pressureClass = readPressureClass(value.pressureClass)
+    const reason = readString(value.reason)
+    if (!resolver || !delivery || !preferredStrategy || supportsClient === undefined || supportsServer === undefined || supportsServerSnapshot === undefined || requiresClientConnectSrc === undefined || !pressureClass || !reason) {
+        return undefined
+    }
+
+    return {
+        resolver,
+        delivery,
+        preferredStrategy,
+        supportsClient,
+        supportsServer,
+        supportsServerSnapshot,
+        requiresClientConnectSrc,
+        pressureClass,
+        reason,
+    }
+}
+
+function readMetadataDelivery(value: unknown): MetadataPlan['delivery'] | undefined {
+    if (value === 'none' || value === 'sse' || value === 'client-poll' || value === 'hls-id3') return value
+    return undefined
+}
+
+function readPressureClass(value: unknown): MetadataPlan['pressureClass'] | undefined {
+    if (value === 'none' || value === 'client' || value === 'server-live') return value
     return undefined
 }

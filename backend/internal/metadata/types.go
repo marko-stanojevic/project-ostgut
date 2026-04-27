@@ -53,6 +53,11 @@ const (
 	TypeICY       = "icy"
 	TypeIcecast   = "icecast"
 	TypeShoutcast = "shoutcast"
+	TypeID3       = "id3"
+	TypeVorbis    = "vorbis"
+	TypeHLS       = "hls"
+	TypeDASH      = "dash"
+	TypeEPG       = "epg"
 )
 
 // Public error codes returned in NowPlaying.ErrorCode.

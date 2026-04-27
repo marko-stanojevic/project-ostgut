@@ -93,7 +93,7 @@ export function MobileMiniPlayer() {
           )}
         >
           {station?.logo ? (
-            <Image src={station.logo} alt="" fill className="object-cover" unoptimized />
+            <Image src={station.logo} alt="" fill loading="eager" fetchPriority="high" className="object-cover" unoptimized />
           ) : (
             <RadioIcon className="h-5 w-5 text-player-bar-artwork-icon" />
           )}

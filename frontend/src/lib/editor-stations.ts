@@ -17,6 +17,7 @@ const EDITOR_STATIONS_CONTRACT = 'editor stations payload'
 
 export type StationModerationStatus = 'pending' | 'approved'
 export type StreamProbeScope = 'quality' | 'metadata' | 'resolver' | 'loudness' | 'full'
+export type SupplementalMetadataProvider = 'npr-composer' | 'nts-live'
 
 export interface AdminStream {
     id: string
@@ -50,6 +51,20 @@ export interface AdminStream {
     metadata_last_fetched_at?: string
     metadata_resolver?: 'none' | 'server' | 'client'
     metadata_resolver_checked_at?: string
+    metadata_provider?: SupplementalMetadataProvider
+    metadata_provider_config?: Record<string, unknown>
+    metadata_plan?: {
+        resolver: 'none' | 'server' | 'client'
+        delivery: 'none' | 'sse' | 'client-poll' | 'hls-id3'
+        preferred_strategy: string
+        supports_client: boolean
+        supports_server: boolean
+        supports_server_snapshot: boolean
+        requires_client_connect_src: boolean
+        pressure_class: 'none' | 'client' | 'server-live'
+        reason: string
+        supplemental_provider?: SupplementalMetadataProvider
+    }
     health_score: number
     last_checked_at?: string
     last_error?: string
@@ -95,6 +110,8 @@ export interface StationStreamPayload {
     priority: number
     bitrate?: number
     metadata_enabled: boolean
+    metadata_provider?: SupplementalMetadataProvider
+    metadata_provider_config?: Record<string, unknown>
 }
 
 export interface EditorStationPayload {
@@ -255,16 +272,74 @@ function parseAdminStream(payload: unknown, field: string): AdminStream {
         metadata_last_fetched_at: optionalDateString(stream.metadata_last_fetched_at, `${field}.metadata_last_fetched_at`, EDITOR_STATIONS_CONTRACT),
         metadata_resolver: requireMetadataResolver(stream.metadata_resolver, `${field}.metadata_resolver`),
         metadata_resolver_checked_at: optionalDateString(stream.metadata_resolver_checked_at, `${field}.metadata_resolver_checked_at`, EDITOR_STATIONS_CONTRACT),
+        metadata_provider: optionalMetadataProvider(stream.metadata_provider, `${field}.metadata_provider`),
+        metadata_provider_config: optionalRecord(stream.metadata_provider_config, `${field}.metadata_provider_config`),
+        metadata_plan: parseMetadataPlan(stream.metadata_plan, `${field}.metadata_plan`),
         health_score: requireNumber(stream.health_score, `${field}.health_score`, EDITOR_STATIONS_CONTRACT),
         last_checked_at: optionalDateString(stream.last_checked_at, `${field}.last_checked_at`, EDITOR_STATIONS_CONTRACT),
         last_error: optionalString(stream.last_error, `${field}.last_error`, EDITOR_STATIONS_CONTRACT),
     }
 }
 
-function requireMetadataResolver(value: unknown, field: string): AdminStream['metadata_resolver'] {
+function requireMetadataResolver(value: unknown, field: string): NonNullable<AdminStream['metadata_resolver']> {
     if (value === 'none' || value === 'server' || value === 'client') {
         return value
     }
 
     throw new Error(`Invalid ${EDITOR_STATIONS_CONTRACT}: ${field} must be none, server, or client`)
+}
+
+function parseMetadataPlan(value: unknown, field: string): AdminStream['metadata_plan'] {
+    if (value === undefined || value === null) {
+        return undefined
+    }
+
+    const plan = requireRecord(value, field, EDITOR_STATIONS_CONTRACT)
+    return {
+        resolver: requireMetadataResolver(plan.resolver, `${field}.resolver`),
+        delivery: requireMetadataDelivery(plan.delivery, `${field}.delivery`),
+        preferred_strategy: requireString(plan.preferred_strategy, `${field}.preferred_strategy`, EDITOR_STATIONS_CONTRACT),
+        supports_client: requireBoolean(plan.supports_client, `${field}.supports_client`, EDITOR_STATIONS_CONTRACT),
+        supports_server: requireBoolean(plan.supports_server, `${field}.supports_server`, EDITOR_STATIONS_CONTRACT),
+        supports_server_snapshot: requireBoolean(plan.supports_server_snapshot, `${field}.supports_server_snapshot`, EDITOR_STATIONS_CONTRACT),
+        requires_client_connect_src: requireBoolean(plan.requires_client_connect_src, `${field}.requires_client_connect_src`, EDITOR_STATIONS_CONTRACT),
+        pressure_class: requirePressureClass(plan.pressure_class, `${field}.pressure_class`),
+        reason: requireString(plan.reason, `${field}.reason`, EDITOR_STATIONS_CONTRACT),
+        supplemental_provider: optionalMetadataProvider(plan.supplemental_provider, `${field}.supplemental_provider`),
+    }
+}
+
+function optionalMetadataProvider(value: unknown, field: string): SupplementalMetadataProvider | undefined {
+    if (value === undefined || value === null || value === '') {
+        return undefined
+    }
+    if (value === 'npr-composer' || value === 'nts-live') {
+        return value
+    }
+
+    throw new Error(`Invalid ${EDITOR_STATIONS_CONTRACT}: ${field} must be npr-composer or nts-live`)
+}
+
+function optionalRecord(value: unknown, field: string): Record<string, unknown> | undefined {
+    if (value === undefined || value === null) {
+        return undefined
+    }
+
+    return requireRecord(value, field, EDITOR_STATIONS_CONTRACT)
+}
+
+function requireMetadataDelivery(value: unknown, field: string): NonNullable<AdminStream['metadata_plan']>['delivery'] {
+    if (value === 'none' || value === 'sse' || value === 'client-poll' || value === 'hls-id3') {
+        return value
+    }
+
+    throw new Error(`Invalid ${EDITOR_STATIONS_CONTRACT}: ${field} must be none, sse, client-poll, or hls-id3`)
+}
+
+function requirePressureClass(value: unknown, field: string): NonNullable<AdminStream['metadata_plan']>['pressure_class'] {
+    if (value === 'none' || value === 'client' || value === 'server-live') {
+        return value
+    }
+
+    throw new Error(`Invalid ${EDITOR_STATIONS_CONTRACT}: ${field} must be none, client, or server-live`)
 }

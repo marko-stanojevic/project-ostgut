@@ -92,6 +92,8 @@ Per stream variant, we store:
 - `metadata_resolver`
 - `metadata_resolver_checked_at`
 - `metadata_delayed`
+- `metadata_provider`
+- `metadata_provider_config`
 
 Separately, the live snapshot is stored in `stream_now_playing`:
 
@@ -108,12 +110,14 @@ Separately, the live snapshot is stored in `stream_now_playing`:
 Meaning:
 
 - `metadata_enabled`: editorial on/off switch
-- `metadata_type`: configured strategy, currently always `auto`
-- `metadata_source`: durable detection hint for the last backend fetch strategy that succeeded, such as `icy`, `icecast`, or `shoutcast`
+- `metadata_type`: configured native strategy, usually `auto`, or an explicit strategy such as `icy`, `icecast`, `shoutcast`, `id3`, `vorbis`, `hls`, `dash`, or `epg`
+- `metadata_source`: durable detection hint for the last backend fetch strategy that succeeded, such as `icy`, `icecast`, `shoutcast`, `id3`, `vorbis`, `npr-composer`, or `nts-live`
 - `metadata_url`: durable hint for the exact endpoint that most recently succeeded, such as the stream URL itself, `/status-json.xsl`, `/currentsong`, or `/7.html`
 - `metadata_resolver`: persisted routing decision, `client`, `server`, or `none`
 - `metadata_resolver_checked_at`: when the resolver was last verified
 - `metadata_delayed`: durable flag set when a stream is known to need the extended ICY timeout budget (20 s vs 6 s). Future fetches skip the fast-path attempt and go straight to the slow budget, reducing redundant failures on streams with long metadata preambles or ad breaks
+- `metadata_provider`: optional supplemental provider implementation, currently `npr-composer` or `nts-live`
+- `metadata_provider_config`: provider-specific JSON configured by editorial UI, such as an NPR Composer UCS value or NTS channel identifier
 - `stream_now_playing.*`: the high-churn live snapshot served by `GET /stations/:id/now-playing` and by SSE fan-out
 
 The important split after the refactor is:
@@ -123,7 +127,7 @@ The important split after the refactor is:
 
 ### Detection strategies
 
-The backend metadata fetcher tries several approaches in order. See `backend/internal/metadata/metadata.go`.
+The backend metadata fetcher tries several approaches in order. See `backend/internal/metadata/fetcher.go` and `backend/internal/metadata/resolve.go`.
 
 In `auto` mode, it can detect metadata via:
 
@@ -131,12 +135,17 @@ In `auto` mode, it can detect metadata via:
 - raw TCP ICY fallback for legacy Shoutcast servers that answer with `ICY 200 OK`
 - Icecast status endpoint
 - Shoutcast text/status endpoints
+- MP3 ID3 tags
+- OGG Vorbis comments
+- supplemental provider APIs, when `metadata_provider` is configured
 
 When `metadata_url` and `metadata_source` are already known, the fetcher tries that exact hint first before falling back to broader discovery.
 
+When native metadata is absent, the fetcher returns an explicit `no_metadata` error code instead of treating server reachability as metadata support. That error is stored in `stream_now_playing`, and the server resolver is set to `none` so future server polling stops until an explicit probe or configuration change discovers a supported metadata path.
+
 The system stores the **detected** source in `metadata_source`, which is what the admin UI shows as a badge.
 
-The frontend metadata resolver is separate. For streams whose stored resolver is `client`, the player first tries browser-readable metadata using:
+The frontend metadata resolver is separate. For streams whose delivery plan resolves to client work, the player tries browser-readable metadata using:
 
 - direct ICY reads with `Icy-Metadata: 1`
 - Icecast `status-json.xsl`
@@ -144,7 +153,7 @@ The frontend metadata resolver is separate. For streams whose stored resolver is
 - Shoutcast `/7.html`
 - HLS in-segment ID3 via `hls.js` metadata events
 
-If browser resolution succeeds, the player shows `Metadata: Client`. The persisted resolver remains owned by backend probes.
+If browser resolution succeeds, the player may show `Metadata: Client`. If no live metadata is available, or the latest snapshot carries `no_metadata`, the player shows no metadata badge.
 
 ### Resolver model
 
@@ -154,6 +163,17 @@ OSTGUT stores one authoritative metadata routing decision per stream:
 - `server`: the browser should subscribe to backend SSE fan-out only when no browser-readable client path is available
 - `none`: the stream has no supported metadata path and the client should not poll
 
+Stream API responses also include a backend-owned `metadata_plan` contract. The plan translates stored stream state into runtime behavior:
+
+| Delivery | Runtime behavior | Pressure class |
+|---|---|---|
+| `none` | Player does not open SSE, does not call now-playing endpoints, and does not run client metadata polling. | `none` |
+| `client-poll` | One browser tab polls the CORS-readable stream or metadata endpoint; other tabs follow the shared browser snapshot. | `client` |
+| `hls-id3` | Player listens for ID3 metadata emitted by `hls.js`; no backend metadata polling is involved. | `client` |
+| `sse` | Player subscribes to backend SSE fan-out; one backend poll loop fetches upstream metadata and fans out to listeners. | `server-live` |
+
+The frontend treats `metadata_plan.delivery` as the runtime source of truth. A stale `metadata_resolver = server` is not enough to start SSE or server polling if the plan says `none`, and `stream_now_playing.error_code = no_metadata` is a hard client stop.
+
 Resolver checks run in two places:
 
 - the 12-hour background prober
@@ -161,7 +181,7 @@ Resolver checks run in two places:
 
 The backend decides routing by testing realistic browser constraints such as CORS and readable metadata endpoints, using configured app origins. Client-readable metadata is always preferred when available; `server` exists as the fallback path for streams that only the backend can read. For HLS streams, the prober also checks whether early media segments expose ID3 tags; HLS streams with detectable ID3 resolve to `client`, while HLS streams without ID3 resolve to `none`.
 
-When a client-capability check succeeds, OSTGUT persists the resolver plus the winning client-readable `metadata_url`. When a backend metadata fetch succeeds, OSTGUT also persists the detected `metadata_source` and exact winning `metadata_url`. Both the backend poller and later manual probes reuse those hints before falling back to broader discovery.
+When a client-capability check succeeds, OSTGUT persists the resolver plus the winning client-readable `metadata_url`. When a backend metadata fetch succeeds, OSTGUT also persists the detected `metadata_source` and exact winning `metadata_url`. Both the backend poller and later manual probes reuse those hints before falling back to broader discovery. When a backend metadata fetch confirms `no_metadata`, the poller writes the error snapshot, sets the resolver to `none`, and exits any active poll loop for that stream.
 
 ### Manual probe behavior
 
@@ -179,22 +199,27 @@ This keeps admin saves fast and predictable while still giving editors precise o
 
 ### Runtime now-playing behavior
 
-`GET /stations/:id/now-playing` is now a cache-backed read endpoint, and `GET /stations/:id/now-playing/stream` provides SSE fan-out for server-resolved streams.
+`GET /stations/:id/now-playing` is a cache-backed read endpoint, and `GET /stations/:id/now-playing/stream` provides SSE fan-out for streams whose delivery plan is `sse`.
 
 It no longer performs live upstream metadata discovery inside the request path. Instead, it:
 
 - returns the latest stored now-playing snapshot immediately
-- serves `disabled` or `unsupported` immediately from the stream's resolver/config state when metadata is turned off or unsupported
+- serves `disabled` or `unsupported` immediately from the stream's resolver/config/plan state when metadata is turned off or unsupported
 - otherwise returns the last stored snapshot, including prior error state when one exists
-- triggers a one-shot async refresh only for stale `server` snapshots when no SSE poll loop is already active
-- uses a shared per-stream background poller for `server` streams, so one upstream fetch fan-outs to all listeners
+- triggers a one-shot async refresh only for stale `sse` snapshots when no SSE poll loop is already active
+- uses a shared per-stream background poller for `sse` streams, so one upstream fetch fan-outs to all listeners
 - writes newly discovered backend detection hints back to `station_streams` while writing live track payloads to `stream_now_playing`
+
+Client-resolved streams do not call backend now-playing endpoints on misses. They either resolve metadata directly from the browser, share a browser-local snapshot with follower tabs, or render without a metadata badge.
 
 This removes slow metadata discovery from the playback-critical request path.
 
 Primary implementation lives in:
 
-- `backend/internal/metadata/metadata.go`
+- `backend/internal/metadata/fetcher.go`
+- `backend/internal/metadata/resolve.go`
+- `backend/internal/metadata/plan.go`
+- `backend/internal/metadata/provider.go`
 - `backend/internal/handler/nowplaying.go`
 - `backend/internal/handler/metadata_poller.go`
 - `backend/internal/handler/admin.go`
@@ -203,6 +228,8 @@ Primary implementation lives in:
 - `backend/internal/radio/prober.go`
 - `backend/internal/store/station_stream_store.go`
 - `backend/internal/store/stream_now_playing_store.go`
+- `frontend/src/hooks/useNowPlaying.ts`
+- `frontend/src/lib/metadata-badges.ts`
 
 ### Important separation from reliability
 

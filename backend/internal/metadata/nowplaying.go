@@ -9,7 +9,7 @@ type NowPlaying struct {
 	Title       string    `json:"title"`
 	Artist      string    `json:"artist,omitempty"`
 	Song        string    `json:"song,omitempty"`
-	Source      string    `json:"source"` // "icy" | "icecast" | "shoutcast" | ""
+	Source      string    `json:"source"` // metadata source type, e.g. "icy", "icecast", "id3", "vorbis"
 	MetadataURL string    `json:"metadata_url,omitempty"`
 	Supported   bool      `json:"supported"` // false when no strategy found metadata
 	Status      string    `json:"status"`    // "ok" | "unsupported" | "disabled" | "error"

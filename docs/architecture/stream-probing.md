@@ -24,7 +24,7 @@ Every playable variant lives in `station_streams`.
 | `last_error` | Human-readable last probe error, kept for admin/debugging. |
 | `last_probe_error_code` | Typed last probe failure code used for scheduling and diagnostics. Empty string means the latest stream probe succeeded. |
 | `next_probe_at` | The next time the recurring worker may spend maintenance budget on this stream. |
-| `metadata_enabled`, `metadata_type`, `metadata_source`, `metadata_url`, `metadata_resolver`, `metadata_resolver_checked_at`, `metadata_delayed` | Metadata routing and detection evidence. |
+| `metadata_enabled`, `metadata_type`, `metadata_source`, `metadata_url`, `metadata_resolver`, `metadata_resolver_checked_at`, `metadata_delayed`, `metadata_provider`, `metadata_provider_config` | Metadata routing, detection evidence, and optional supplemental provider configuration. |
 | `loudness_*` | Loudness evidence produced only by explicit loudness-aware probes. |
 
 For direct audio URLs, `url` and `resolved_url` usually match except for HTTP redirects. For `.pls` and `.m3u`, `url` stays as the playlist address while `resolved_url` becomes the first resolved playable entry. For `.m3u8`, `kind = hls` and the manifest URL remains the playable URL.
@@ -154,6 +154,8 @@ The batch limit is `500`, and up to `10` workers probe in parallel. Rows are ord
 
 Recurring probes do not measure loudness and do not fetch now-playing snapshots. They update stream quality fields, health, typed failure code, `next_probe_at`, and metadata resolver routing.
 
+Recurring resolver checks are capability checks. Actual backend metadata discovery is owned by explicit metadata probes, the bulk metadata fetch job, and active SSE polling. If those discovery paths confirm `no_metadata`, they set `metadata_resolver = none` so future player sessions do not open server metadata polling for that stream.
+
 ---
 
 ## Probe Scheduling
@@ -219,10 +221,13 @@ The player reads station stream variants, filters active rows, sorts by priority
 - other kinds use normal audio element playback
 - playback errors try the next variant before falling back to retry/backoff
 
-Metadata routing is controlled by `metadata_resolver`:
+Metadata routing is exposed to the player through `metadata_plan`, which is built from stream metadata fields and probe evidence:
 
-- `client`: frontend attempts browser-readable metadata directly
-- `server`: frontend consumes backend snapshots/SSE
-- `none`: frontend does not attempt metadata polling for that stream
+- `delivery = client-poll`: frontend attempts browser-readable metadata directly, with one browser tab acting as poll leader
+- `delivery = hls-id3`: frontend listens for HLS ID3 metadata emitted during playback
+- `delivery = sse`: frontend consumes backend SSE fan-out and the backend owns upstream polling pressure
+- `delivery = none`: frontend does not attempt metadata polling for that stream
+
+The raw `metadata_resolver` value remains a durable routing hint, but `metadata_plan.delivery` is the runtime contract consumed by the player. Streams with `no_metadata` evidence should resolve to `delivery = none` and should not show metadata badges.
 
 Probe errors do not automatically remove a stream from playback. They inform admin diagnostics, station reliability, and the next maintenance schedule.

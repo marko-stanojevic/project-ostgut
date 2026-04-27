@@ -55,7 +55,7 @@ export function CarPlayClient({ initialStations }: CarPlayClientProps) {
       <div className="flex items-center gap-4 rounded-3xl border border-border/40 bg-secondary/40 p-4 carplay:gap-6 carplay:p-6">
         <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-player-bar-artwork-bg carplay:h-20 carplay:w-20">
           {activeStation?.logo ? (
-            <Image src={activeStation.logo} alt="" fill className="object-cover" unoptimized />
+            <Image src={activeStation.logo} alt="" fill loading="eager" fetchPriority="high" className="object-cover" unoptimized />
           ) : (
             <RadioIcon className="h-7 w-7 text-player-bar-artwork-icon carplay:h-9 carplay:w-9" />
           )}
