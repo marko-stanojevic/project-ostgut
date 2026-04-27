@@ -51,7 +51,7 @@ async function LocaleContent({
   const messages = await getMessages()
 
   return (
-    <div lang={locale} data-scroll-behavior="smooth">
+    <div lang={locale}>
       <NextIntlClientProvider messages={messages}>
         <ThemeProvider attribute="data-theme" defaultTheme={defaultTheme} enableSystem={false} themes={themeOptions.map(({ value }) => value)}>
           <SessionProvider>
