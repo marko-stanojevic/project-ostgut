@@ -13,6 +13,17 @@ import {
 import type { ApiStation, ApiStationDetail, ApiStream } from '@/types/station'
 
 const STATION_CONTRACT = 'station payload'
+const PUBLIC_STATION_REVALIDATE_SECONDS = 60
+
+function withPublicStationCache(init?: RequestInit): RequestInit {
+  return {
+    ...init,
+    next: {
+      ...init?.next,
+      revalidate: PUBLIC_STATION_REVALIDATE_SECONDS,
+    },
+  }
+}
 
 export interface PublicStationsResponse {
   stations: ApiStation[]
@@ -28,7 +39,7 @@ export interface PublicStationFiltersResponse {
 }
 
 export async function getPublicStations(path: string, init?: RequestInit): Promise<PublicStationsResponse> {
-  const response = await fetch(`${API_URL}${path}`, init)
+  const response = await fetch(`${API_URL}${path}`, withPublicStationCache(init))
   if (!response.ok) {
     throw new Error(`Station request failed with status ${response.status}`)
   }
@@ -37,7 +48,7 @@ export async function getPublicStations(path: string, init?: RequestInit): Promi
 }
 
 export async function getPublicStation(id: string, init?: RequestInit): Promise<ApiStationDetail> {
-  const response = await fetch(`${API_URL}/stations/${id}`, init)
+  const response = await fetch(`${API_URL}/stations/${id}`, withPublicStationCache(init))
   if (!response.ok) {
     throw new Error(`Station request failed with status ${response.status}`)
   }
@@ -46,7 +57,7 @@ export async function getPublicStation(id: string, init?: RequestInit): Promise<
 }
 
 export async function getPublicStationFilters(init?: RequestInit): Promise<PublicStationFiltersResponse> {
-  const response = await fetch(`${API_URL}/stations/filters`, init)
+  const response = await fetch(`${API_URL}/stations/filters`, withPublicStationCache(init))
   if (!response.ok) {
     throw new Error(`Station filters request failed with status ${response.status}`)
   }

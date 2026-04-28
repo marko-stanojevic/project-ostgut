@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { CuratedDetailsClient } from './curated-details-client.tsx'
-import { fetchCachedStationDetail } from '@/lib/station-detail-cache'
+import { fetchStationDetail } from '@/lib/station-detail'
 
 type Params = Promise<{ id: string }>
 
@@ -18,7 +18,7 @@ export default async function CuratedDetailsPage({
 
 async function CuratedDetailsContent({ params }: { params: Params }) {
     const { id } = await params
-    const { station, error } = await fetchCachedStationDetail(id)
+    const { station, error } = await fetchStationDetail(id)
 
     return (
         <CuratedDetailsClient
