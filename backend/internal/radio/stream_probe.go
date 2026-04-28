@@ -15,6 +15,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const streamProbeUserAgent = "OSTGUT/1.0 (radio@worksfine.app)"
@@ -220,7 +223,12 @@ func probeRecursive(ctx context.Context, client *http.Client, target string, dep
 	req.Header.Set("Icy-Metadata", "1")
 	req.Header.Set("Connection", "close")
 
-	resp, err := client.Do(req)
+	resp, err := telemetry.DoHTTPDependency(
+		client,
+		req,
+		"stream_probe",
+		attribute.Int("stream_probe.depth", depth),
+	)
 	if err != nil {
 		code := ProbeFailureRequestFailed
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {

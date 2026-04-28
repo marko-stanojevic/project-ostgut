@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 const hlsMetadataProbeBudget = 8 * time.Second
@@ -56,7 +58,7 @@ func ProbeHLSID3Support(ctx context.Context, client *http.Client, playlistURL st
 	segReq.Header.Set("Range", "bytes=0-8191")
 	segReq.Header.Set("Connection", "close")
 
-	segResp, err := client.Do(segReq)
+	segResp, err := telemetry.DoHTTPDependency(client, segReq, "hls_id3_segment_probe")
 	if err != nil {
 		return false
 	}
@@ -83,7 +85,7 @@ func fetchPlaylistBody(ctx context.Context, client *http.Client, playlistURL str
 	req.Header.Set("User-Agent", streamProbeUserAgent)
 	req.Header.Set("Connection", "close")
 
-	resp, err := client.Do(req)
+	resp, err := telemetry.DoHTTPDependency(client, req, "hls_playlist_probe")
 	if err != nil {
 		return "", "", nil, err
 	}

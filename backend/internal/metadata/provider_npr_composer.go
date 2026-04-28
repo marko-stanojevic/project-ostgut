@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 const nprComposerPlaylistBaseURL = "https://api.composer.nprstations.org/v1/widget/%s/playlist?limit=50&order=-1"
@@ -47,7 +49,7 @@ func (p nprComposerProvider) Fetch(ctx context.Context, raw json.RawMessage) (*N
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	res, err := p.client.Do(req)
+	res, err := telemetry.DoHTTPDependency(p.client, req, "metadata_provider_npr_composer")
 	if err != nil {
 		return nil, err
 	}

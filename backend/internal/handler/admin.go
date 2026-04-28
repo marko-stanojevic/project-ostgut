@@ -228,7 +228,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 		return
 	}
 
-	streams, err := h.buildStationStreams(c, req.Streams)
+	streams, err := h.buildStationStreams(req.Streams)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
@@ -756,7 +756,7 @@ func (h *Handler) AdminUpdateStation(c *gin.Context) {
 	var rebuiltStreams []store.StationStreamInput
 
 	if req.Streams != nil && len(*req.Streams) > 0 {
-		inputs, err := h.buildStationStreams(c, *req.Streams)
+		inputs, err := h.buildStationStreams(*req.Streams)
 		if err != nil {
 			h.log.Error("admin update station streams probe", "error", err)
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
@@ -862,10 +862,7 @@ func normalizeAdminStreams(raw []adminStreamRequest) []adminStreamRequest {
 	return streams
 }
 
-func (h *Handler) buildStationStreams(
-	ctx *gin.Context,
-	raw []adminStreamRequest,
-) ([]store.StationStreamInput, error) {
+func (h *Handler) buildStationStreams(raw []adminStreamRequest) ([]store.StationStreamInput, error) {
 	streams := normalizeAdminStreams(raw)
 	if len(streams) == 0 {
 		return nil, errors.New("at least one stream is required")

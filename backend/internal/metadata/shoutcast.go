@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 func (f *Fetcher) fetchShoutcast(ctx context.Context, streamURL string) (*NowPlaying, error) {
@@ -44,7 +46,7 @@ func (f *Fetcher) fetchShoutcastCurrentSong(ctx context.Context, endpoint string
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := f.jsonClient.Do(req)
+	resp, err := telemetry.DoHTTPDependency(f.jsonClient, req, "metadata_shoutcast_currentsong_fetch")
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +77,7 @@ func (f *Fetcher) fetchShoutcast7HTML(ctx context.Context, endpoint string) (*No
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := f.jsonClient.Do(req)
+	resp, err := telemetry.DoHTTPDependency(f.jsonClient, req, "metadata_shoutcast_7html_fetch")
 	if err != nil {
 		return nil, err
 	}

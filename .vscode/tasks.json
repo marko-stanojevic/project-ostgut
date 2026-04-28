@@ -9,7 +9,9 @@
       "options": {
         "cwd": "${workspaceFolder}/frontend",
         "env": {
-          "NVM_DIR": "${userHome}/.nvm"
+          "NVM_DIR": "${userHome}/.nvm",
+          "NEXT_PUBLIC_API_URL": "http://localhost:8080",
+          "AUTH_SECRET": "local-build-secret-not-for-production"
         }
       },
       "problemMatcher": [],
@@ -28,7 +30,7 @@
       "label": "Frontend: Build (WSL)",
       "type": "shell",
       "command": "bash",
-      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm install >/dev/null; nvm use >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; npm run build"],
+      "args": ["-lc", "source \"$HOME/.nvm/nvm.sh\"; nvm install >/dev/null; nvm use >/dev/null; rm -rf .wsl-cache /tmp/project-ostgut/cache/frontend-next; NEXT_PUBLIC_API_URL=http://localhost:8080 AUTH_SECRET=local-build-secret-not-for-production npm run build"],
       "options": {
         "cwd": "${workspaceFolder}/frontend"
       },
@@ -549,6 +551,66 @@
       }
     },
     {
+      "label": "Scripts: Editorial Syntax",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "bash -n ./scripts/sync-editorial.sh ./scripts/export-and-upload-editorial.sh"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Infra: Validate",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "tofu fmt -check -recursive && tofu init -backend=false && tofu validate"],
+      "options": {
+        "cwd": "${workspaceFolder}/infra"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Infra: Validate (WSL)",
+      "type": "shell",
+      "command": "bash",
+      "args": ["-lc", "tofu fmt -check -recursive && tofu init -backend=false && tofu validate"],
+      "options": {
+        "cwd": "${workspaceFolder}/infra"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
       "label": "All: Build All",
       "dependsOn": ["Frontend: Build", "Backend: Build"],
       "problemMatcher": [],
@@ -563,6 +625,42 @@
       "problemMatcher": [],
       "group": {
         "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "All: Validate Before Push",
+      "dependsOn": [
+        "Scripts: Editorial Syntax",
+        "Backend: Format Check",
+        "Backend: Test",
+        "Backend: Build",
+        "Frontend: Lint",
+        "Frontend: Build",
+        "Infra: Validate"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "All: Validate Before Push (WSL)",
+      "dependsOn": [
+        "Scripts: Editorial Syntax",
+        "Backend: Format Check (WSL)",
+        "Backend: Test (WSL)",
+        "Backend: Build (WSL)",
+        "Frontend: Lint (WSL)",
+        "Frontend: Build (WSL)",
+        "Infra: Validate (WSL)"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
         "isDefault": false
       }
     },

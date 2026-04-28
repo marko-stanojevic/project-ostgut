@@ -1,10 +1,6 @@
 name: Deploy
 
 on:
-  workflow_run:
-    workflows: [ "CI" ]
-    types: [ completed ]
-    branches: [ "main" ]
   workflow_dispatch:
     inputs:
       environment:
@@ -39,7 +35,7 @@ permissions:
 
 env:
   ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
-  COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  COMMIT_SHA: ${{ github.sha }}
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -50,12 +46,9 @@ jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
     outputs:
-      backend: ${{ steps.detect.outputs.backend || steps.initial.outputs.backend || steps.manual.outputs.backend }}
-      frontend: ${{ steps.detect.outputs.frontend || steps.initial.outputs.frontend || steps.manual.outputs.frontend }}
+      backend: ${{ steps.manual.outputs.backend }}
+      frontend: ${{ steps.manual.outputs.frontend }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.0
         with:
@@ -64,48 +57,10 @@ jobs:
           ref: ${{ env.COMMIT_SHA }}
 
       - name: Set manual defaults
-        if: github.event_name == 'workflow_dispatch'
         id: manual
         run: |
           echo "backend=false" >> "$GITHUB_OUTPUT"
           echo "frontend=false" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve workflow_run diff range
-        if: github.event_name == 'workflow_run'
-        id: range
-        run: |
-          if git rev-parse --verify "${COMMIT_SHA}^" >/dev/null 2>&1; then
-            echo "base=${COMMIT_SHA}^" >> "$GITHUB_OUTPUT"
-            echo "head=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "has_parent=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_parent=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Mark all services changed for initial commit
-        if: github.event_name == 'workflow_run' && steps.range.outputs.has_parent == 'false'
-        id: initial
-        run: |
-          echo "backend=true" >> "$GITHUB_OUTPUT"
-          echo "frontend=true" >> "$GITHUB_OUTPUT"
-
-      - name: Detect changed paths
-        if: github.event_name == 'workflow_run' && steps.range.outputs.has_parent == 'true'
-        id: detect
-        run: |
-          CHANGED_FILES="$(git diff --name-only "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}")"
-
-          if echo "$CHANGED_FILES" | grep -qE '^backend/'; then
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "backend=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if echo "$CHANGED_FILES" | grep -qE '^frontend/'; then
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "frontend=false" >> "$GITHUB_OUTPUT"
-          fi
 
   # ──────────────────────────────────────────────────────────────────────────
   # 1. Provision infrastructure
@@ -175,8 +130,6 @@ jobs:
             -var="paddle_price_id=${{ vars.PADDLE_PRICE_ID }}" \
             -var="backend_custom_domain=${{ vars.BACKEND_CUSTOM_DOMAIN }}" \
             -var="frontend_custom_domain=${{ vars.FRONTEND_CUSTOM_DOMAIN }}" \
-            -var="new_relic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
-            -var="new_relic_app_name=${{ vars.NEW_RELIC_APP_NAME || 'ostgut-backend-staging' }}" \
             -target=azurerm_resource_group.main \
             -target=azurerm_postgresql_flexible_server.main \
             -target=azurerm_postgresql_flexible_server_database.main \
@@ -385,6 +338,4 @@ jobs:
             -var="paddle_client_token=${{ vars.PADDLE_CLIENT_TOKEN }}" \
             -var="paddle_price_id=${{ vars.PADDLE_PRICE_ID }}" \
             -var="backend_custom_domain=${{ vars.BACKEND_CUSTOM_DOMAIN }}" \
-            -var="frontend_custom_domain=${{ vars.FRONTEND_CUSTOM_DOMAIN }}" \
-            -var="new_relic_license_key=${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
-            -var="new_relic_app_name=${{ vars.NEW_RELIC_APP_NAME || 'project-ostgut-backend' }}"
+            -var="frontend_custom_domain=${{ vars.FRONTEND_CUSTOM_DOMAIN }}"

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -178,7 +180,13 @@ func (s *Syncer) fetch(ctx context.Context) ([]radioBrowserStation, error) {
 		}
 		req.Header.Set("User-Agent", "OSTGUT/1.0 (radio@worksfine.app)")
 
-		resp, err := s.client.Do(req)
+		resp, err := telemetry.DoHTTPDependency(
+			s.client,
+			req,
+			"radio_browser_fetch",
+			attribute.Int("radio_browser.limit", batchSize),
+			attribute.Int("radio_browser.offset", offset),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("radio browser request: %w", err)
 		}
@@ -281,25 +289,6 @@ func parseTags(raw string) []string {
 		}
 	}
 	return tags
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		v = strings.TrimSpace(v)
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func firstPositive(values ...int) int {
-	for _, v := range values {
-		if v > 0 {
-			return v
-		}
-	}
-	return 0
 }
 
 // genreKeywords maps common radio tags to a canonical genre name.

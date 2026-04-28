@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 // icecastResponse is the shape of /status-json.xsl.
@@ -45,7 +47,7 @@ func (f *Fetcher) fetchIcecastJSONAt(ctx context.Context, streamURL, statusURL s
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := f.jsonClient.Do(req)
+	resp, err := telemetry.DoHTTPDependency(f.jsonClient, req, "metadata_icecast_fetch")
 	if err != nil {
 		return nil, err
 	}

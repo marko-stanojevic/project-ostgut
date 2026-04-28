@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 type icyBudget struct {
@@ -99,7 +101,7 @@ func (f *Fetcher) fetchICY(ctx context.Context, streamURL string, maxBlocks int)
 	req.Header.Set("Icy-Metadata", "1")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := f.icyClient.Do(req)
+	resp, err := telemetry.DoHTTPDependency(f.icyClient, req, "metadata_icy_fetch")
 	if err != nil {
 		// net/http surfaces "ICY 200 OK" as a malformed-protocol error.
 		// Translate to ErrICYProtocol so callers can fall back to fetchICYRaw.

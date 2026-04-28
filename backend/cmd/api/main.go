@@ -28,8 +28,6 @@ import (
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 	platformtelemetry "github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 	"github.com/marko-stanojevic/project-ostgut/backend/migrations"
-	nrgin "github.com/newrelic/go-agent/v3/integrations/nrgin"
-	"github.com/newrelic/go-agent/v3/newrelic"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
@@ -143,17 +141,7 @@ func main() {
 	// Start background media cleaner (evicts expired pending asset rows + blobs).
 	go h.MediaCleaner().Run(syncCtx)
 
-	nrApp, err := newrelic.NewApplication(
-		newrelic.ConfigAppName(cfg.NewRelicAppName),
-		newrelic.ConfigLicense(cfg.NewRelicLicenseKey),
-		newrelic.ConfigDistributedTracerEnabled(true),
-		newrelic.ConfigAppLogForwardingEnabled(true),
-	)
-	if err != nil {
-		logger.Warn("New Relic agent disabled", "reason", err)
-		nrApp = nil
-	}
-	db.StartPoolStatsReporter(syncCtx, pool, logger, time.Minute, nrApp)
+	db.StartPoolStatsReporter(syncCtx, pool, logger, time.Minute)
 
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -173,9 +161,6 @@ func main() {
 	router.Use(otelgin.Middleware(cfg.OTelServiceName))
 	router.Use(middleware.RequestLogger(logger))
 	router.Use(middleware.SecurityHeaders())
-	if nrApp != nil {
-		router.Use(nrgin.Middleware(nrApp))
-	}
 
 	// 1 MB JSON body cap applied to most routes. The media upload PUT
 	// streams binary payloads up to 10 MB and applies its own io.LimitReader,

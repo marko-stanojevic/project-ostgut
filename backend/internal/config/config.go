@@ -92,13 +92,6 @@ type Config struct {
 	// development. When set it takes priority over managed identity / CLI auth.
 	// Never set this in production — use managed identity instead.
 	MediaStorageAccountKey string
-
-	// NewRelicLicenseKey is the ingest license key for the New Relic agent.
-	// When empty, the agent is disabled (no-op).
-	NewRelicLicenseKey string
-
-	// NewRelicAppName is the application name shown in the New Relic UI.
-	NewRelicAppName string
 }
 
 // Load reads configuration from environment variables, returning an error when
@@ -169,8 +162,6 @@ func Load() (*Config, error) {
 		MediaStorageAccountName:        strings.TrimSpace(os.Getenv("MEDIA_STORAGE_ACCOUNT_NAME")),
 		MediaStorageContainerName:      strings.TrimSpace(os.Getenv("MEDIA_STORAGE_CONTAINER_NAME")),
 		MediaStorageAccountKey:         strings.TrimSpace(os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")),
-		NewRelicLicenseKey:             os.Getenv("NEW_RELIC_LICENSE_KEY"),
-		NewRelicAppName:                getEnv("NEW_RELIC_APP_NAME", "ostgut-backend"),
 	}
 
 	if err := validatePaddleConfig(cfg); err != nil {

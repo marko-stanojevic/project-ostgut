@@ -1,18 +1,11 @@
 name: Security
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - ".github/workflows/security.yml"
-  pull_request:
-    branches: ["main"]
   schedule:
     # Weekly Monday 04:00 UTC — picks up newly disclosed CVEs even with no
     # code changes.
     - cron: "0 4 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
