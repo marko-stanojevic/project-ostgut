@@ -106,7 +106,7 @@ variable "allowed_origins" {
 # ──────────────────────────────────────────────
 variable "api_url" {
   type        = string
-  description = "Server-side URL the frontend uses to call the backend (Auth.js credentials provider)."
+  description = "Public browser-facing backend URL exposed to the frontend bundle."
 }
 
 variable "auth_url" {

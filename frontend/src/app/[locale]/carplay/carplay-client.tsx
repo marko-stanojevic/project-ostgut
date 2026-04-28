@@ -32,7 +32,7 @@ export function CarPlayClient({ initialStations }: CarPlayClientProps) {
   useEffect(() => {
     if (authLoading) return
     if (!session) {
-      router.replace('/auth/login?redirect=/carplay')
+      router.replace('/auth/login?callbackUrl=/carplay')
     }
   }, [authLoading, session, router])
 

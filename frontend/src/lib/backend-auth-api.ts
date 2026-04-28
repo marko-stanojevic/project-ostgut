@@ -29,6 +29,8 @@ export type BackendOAuthPayload = {
   signature: string
 }
 
+const OAUTH_EXCHANGE_TIMEOUT_MS = 30_000
+
 export async function loginWithPassword(email: string, password: string) {
   return postBackendAuth('/auth/login', { email, password })
 }
@@ -38,7 +40,7 @@ export async function refreshBackendTokens(refreshToken: string) {
 }
 
 export async function exchangeOAuthIdentity(payload: BackendOAuthPayload) {
-  return postBackendAuth('/auth/oauth', payload)
+  return postBackendAuth('/auth/oauth', payload, { timeoutMs: OAUTH_EXCHANGE_TIMEOUT_MS })
 }
 
 export async function revokeBackendRefreshToken(refreshToken: string) {

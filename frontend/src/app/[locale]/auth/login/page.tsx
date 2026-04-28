@@ -16,6 +16,22 @@ import { Separator } from '@/components/ui/separator'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { OAuthButton } from '@/components/auth/oauth-button'
 
+function getOAuthErrorMessage(error: string | null, t: ReturnType<typeof useTranslations<'auth.login'>>) {
+  switch (error) {
+    case 'OAuthAccountNotLinked':
+      return t('oauth_account_not_linked')
+    case 'AccessDenied':
+      return t('oauth_access_denied')
+    case 'CallbackRouteError':
+    case 'Configuration':
+    case 'Default':
+    case 'Verification':
+      return t('oauth_failed')
+    default:
+      return ''
+  }
+}
+
 function normalizeCallbackForLocaleRouter(callbackUrl: string): string {
   if (!callbackUrl) return '/'
 
@@ -40,13 +56,13 @@ function normalizeCallbackForLocaleRouter(callbackUrl: string): string {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  const t = useTranslations('auth.login')
+  const callbackUrl = searchParams.get('callbackUrl') || searchParams.get('redirect') || '/'
   const normalizedCallbackUrl = normalizeCallbackForLocaleRouter(callbackUrl)
   const { signIn: credentialsSignIn } = useAuth()
-  const t = useTranslations('auth.login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => getOAuthErrorMessage(searchParams.get('error'), t))
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -90,7 +90,7 @@ function buildCSP(nonce: string): string {
     `'nonce-${nonce}'`,
     // Next.js emits a tiny inline runtime-timing bootstrap in prerendered HTML.
     // Allow only that exact script body instead of broad inline execution.
-    "'sha256-C9/xixy512Y4fp7xTu377DO0r1bL13cI45EIwSYf8Is='",
+    "'sha256-7mu4H06fwDCjmnxxr/xNHyuQC6pLTHr4M2E4jXw5WZs='",
     process.env.NODE_ENV === 'development' ? "'unsafe-eval'" : '',
     // Trusted third-party script origins used by the app.
     'https://js-agent.newrelic.com',

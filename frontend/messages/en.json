@@ -17,13 +17,16 @@
       "password": "Password",
       "forgot_password": "Forgot password?",
       "submit": "Continue",
-      "submitting": "Signing in…",
-      "or": "or",
-      "github": "Continue with GitHub",
-      "google": "Continue with Google",
-      "no_account": "Don't have an account?",
-      "sign_up": "Sign up"
-    },
+    "submitting": "Signing in…",
+    "or": "or",
+    "github": "Continue with GitHub",
+    "google": "Continue with Google",
+    "oauth_failed": "OAuth sign-in failed. Please try again.",
+    "oauth_access_denied": "GitHub denied access to your account. Please try again.",
+    "oauth_account_not_linked": "This email is already linked to a different sign-in method. Use that method first, then connect GitHub later.",
+    "no_account": "Don't have an account?",
+    "sign_up": "Sign up"
+  },
     "signup": {
       "title": "Join OSTGUT",
       "subtitle": "Create your account and step into the Listening Room.",

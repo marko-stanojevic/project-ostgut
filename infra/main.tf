@@ -444,7 +444,7 @@ resource "azurerm_container_app" "frontend" {
       }
       env {
         name  = "API_URL"
-        value = var.api_url
+        value = "https://${azurerm_container_app.backend.ingress[0].fqdn}"
       }
       env {
         name        = "AUTH_SECRET"
