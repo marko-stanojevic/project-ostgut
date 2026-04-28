@@ -24,6 +24,7 @@ export type AdminDiagnosticStatusCheck = {
   status: AdminDiagnosticStatus
   detail: string
   checked_at: string
+  running: boolean
 }
 
 export type AdminDiagnosticSection = {
@@ -108,6 +109,7 @@ function parseStatusCheck(payload: unknown, index: number): AdminDiagnosticStatu
     status: requireStatus(statusCheck.status, `status_checks[${index}].status`),
     detail: requireString(statusCheck.detail, `status_checks[${index}].detail`, ADMIN_DIAGNOSTICS_CONTRACT),
     checked_at: requireString(statusCheck.checked_at, `status_checks[${index}].checked_at`, ADMIN_DIAGNOSTICS_CONTRACT),
+    running: statusCheck.running === true,
   }
 }
 

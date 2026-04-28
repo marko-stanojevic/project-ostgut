@@ -62,6 +62,15 @@ func (p *Prober) Run(ctx context.Context) {
 	}
 }
 
+// IsRunning reports whether a stream re-probe is currently in progress.
+func (p *Prober) IsRunning() bool {
+	if p.mu.TryLock() {
+		p.mu.Unlock()
+		return false
+	}
+	return true
+}
+
 // Trigger starts a manual stream re-probe if one is not already running.
 func (p *Prober) Trigger(ctx context.Context) bool {
 	if !p.mu.TryLock() {

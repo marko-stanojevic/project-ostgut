@@ -158,6 +158,13 @@ func (p *MetadataPoller) RefreshOnce(ctx context.Context, stream *store.StationS
 	}()
 }
 
+// BulkFetchIsRunning reports whether an admin-triggered metadata coverage pass is in progress.
+func (p *MetadataPoller) BulkFetchIsRunning() bool {
+	p.bulkMu.Lock()
+	defer p.bulkMu.Unlock()
+	return p.bulkActive
+}
+
 // TriggerApprovedMetadataFetch starts an explicit admin-requested metadata
 // coverage pass over every active metadata-enabled stream on approved stations.
 // It reuses the poller's global upstream fetch slots so this diagnostic job

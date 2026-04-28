@@ -57,15 +57,20 @@ function StatusCheckCard({
   action,
   actionMessage,
   triggeringJob,
+  pendingJobs,
   onTrigger,
 }: {
   check: AdminDiagnosticStatusCheck
   action?: (typeof jobActions)[number]
   actionMessage?: string
   triggeringJob?: AdminJobTriggerID | null
+  pendingJobs?: Set<AdminJobTriggerID>
   onTrigger?: (jobID: AdminJobTriggerID) => void
 }) {
   const attention = check.status === 'attention'
+  const isTriggering = action ? triggeringJob === action.id : false
+  // Show running state if the server reports it OR if the user triggered this job and it hasn't settled yet.
+  const isRunning = check.running || (action ? (pendingJobs?.has(action.id) ?? false) : false)
 
   return (
     <section className="rounded-2xl border border-border/60 bg-background/60 px-5 py-4">
@@ -75,7 +80,7 @@ function StatusCheckCard({
           <p className="mt-2 text-sm leading-5 text-muted-foreground">{check.detail}</p>
         </div>
         <span
-          className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${attention ? 'bg-amber-500 dark:bg-amber-400' : 'bg-emerald-500 dark:bg-emerald-400'}`}
+          className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${isRunning ? 'animate-pulse bg-sky-500 dark:bg-sky-400' : attention ? 'bg-amber-500 dark:bg-amber-400' : 'bg-emerald-500 dark:bg-emerald-400'}`}
           aria-hidden
         />
       </div>
@@ -87,13 +92,18 @@ function StatusCheckCard({
               type="button"
               variant="outline"
               size="sm"
-              loading={triggeringJob === action.id}
+              loading={isTriggering}
+              disabled={isRunning && !isTriggering}
               leadingIcon={<ArrowsClockwiseIcon />}
               onClick={() => onTrigger(action.id)}
             >
               {action.buttonLabel}
             </Button>
-            {actionMessage ? <p className="text-xs leading-5 text-muted-foreground sm:text-right">{actionMessage}</p> : null}
+            {isRunning ? (
+              <p className="text-xs leading-5 text-sky-600 dark:text-sky-400 sm:text-right">Running…</p>
+            ) : actionMessage ? (
+              <p className="text-xs leading-5 text-muted-foreground sm:text-right">{actionMessage}</p>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -167,6 +177,8 @@ export function AdminDiagnosticsPage({ kind }: { kind: AdminDiagnosticKind }) {
   const [error, setError] = useState('')
   const [triggeringJob, setTriggeringJob] = useState<AdminJobTriggerID | null>(null)
   const [triggerMessage, setTriggerMessage] = useState<{ jobID: AdminJobTriggerID; message: string } | null>(null)
+  // Jobs the user explicitly triggered that haven't yet been confirmed idle by a post-trigger poll.
+  const [pendingJobs, setPendingJobs] = useState<Set<AdminJobTriggerID>>(new Set())
 
   useEffect(() => {
     let cancelled = false
@@ -198,6 +210,24 @@ export function AdminDiagnosticsPage({ kind }: { kind: AdminDiagnosticKind }) {
     }
   }, [kind, session?.accessToken])
 
+  // Poll every 2s while any job is running server-side or the user triggered one that hasn't settled yet.
+  useEffect(() => {
+    const token = session?.accessToken
+    if (!token || !diagnostics) return
+    const hasRunning = diagnostics.status_checks.some((c) => c.running)
+    if (!hasRunning && pendingJobs.size === 0) return
+
+    const timer = setInterval(() => {
+      getAdminDiagnostics(token, kind)
+        .then(applyDiagnostics)
+        .catch(() => {/* silent — polling failure should not flash an error */})
+    }, 2000)
+
+    return () => clearInterval(timer)
+  // applyDiagnostics is defined in the same render scope, no need to list it
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagnostics, pendingJobs, kind, session?.accessToken])
+
   const generatedAtLabel = useMemo(() => {
     if (!diagnostics?.generated_at) return ''
     return formatDateTime(diagnostics.generated_at)
@@ -208,6 +238,26 @@ export function AdminDiagnosticsPage({ kind }: { kind: AdminDiagnosticKind }) {
     [diagnostics?.status_checks],
   )
 
+  function applyDiagnostics(data: AdminDiagnosticResponse) {
+    setDiagnostics(data)
+    setPendingJobs((prev) => {
+      if (prev.size === 0) return prev
+      const next = new Set(prev)
+      for (const check of data.status_checks) {
+        const action = jobActions.find((a) => a.statusCheckID === check.id)
+        if (action && !check.running) next.delete(action.id)
+      }
+      return next.size === prev.size ? prev : next
+    })
+    setTriggerMessage((msg) => {
+      if (!msg) return null
+      const action = jobActions.find((a) => a.id === msg.jobID)
+      if (!action) return null
+      const check = data.status_checks.find((c) => c.id === action.statusCheckID)
+      return check?.running ? msg : null
+    })
+  }
+
   async function handleTriggerJob(jobID: AdminJobTriggerID) {
     if (!session?.accessToken || triggeringJob) return
 
@@ -216,7 +266,14 @@ export function AdminDiagnosticsPage({ kind }: { kind: AdminDiagnosticKind }) {
     try {
       const response = await triggerAdminJob(session.accessToken, jobID)
       setTriggerMessage({ jobID, message: response.message })
+      if (response.status === 'started') {
+        setPendingJobs((prev) => new Set(prev).add(jobID))
+      }
       const nextDiagnostics = await getAdminDiagnostics(session.accessToken, kind)
+      // Use setDiagnostics directly here — applyDiagnostics would drain pendingJobs
+      // in the same React batch as the setPendingJobs(add) above, cancelling it out
+      // if the job finished before the diagnostics fetch returned. The polling effect
+      // handles draining once the server confirms running=false.
       setDiagnostics(nextDiagnostics)
     } catch (err) {
       setTriggerMessage({ jobID, message: err instanceof Error ? err.message : 'Failed to trigger job' })
@@ -268,6 +325,7 @@ export function AdminDiagnosticsPage({ kind }: { kind: AdminDiagnosticKind }) {
                   action={action}
                   actionMessage={actionMessage}
                   triggeringJob={triggeringJob}
+                  pendingJobs={pendingJobs}
                   onTrigger={handleTriggerJob}
                 />
               )

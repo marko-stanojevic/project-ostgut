@@ -192,14 +192,17 @@ func (h *Handler) AdminJobsDiagnostics(c *gin.Context) {
 		return
 	}
 
+	syncCheck := stationSyncStatusCheck(stations.LastSyncedAt, now)
+	syncCheck.Running = h.admin.stationSyncer.IsRunning()
+	probeCheck := streamProbeStatusCheck(streams, now)
+	probeCheck.Running = h.admin.streamProber.IsRunning()
+	metaCheck := metadataStatusCheck(streams, now)
+	metaCheck.Running = h.station.metaPoller.BulkFetchIsRunning()
+
 	response := adminDiagnosticResponse{
 		Title:       "Jobs diagnostics",
 		Description: "Background worker cadence and freshness inferred from approved, listener-facing data they maintain.",
-		StatusChecks: []adminSystemStatusCheck{
-			stationSyncStatusCheck(stations.LastSyncedAt, now),
-			streamProbeStatusCheck(streams, now),
-			metadataStatusCheck(streams, now),
-		},
+		StatusChecks: []adminSystemStatusCheck{syncCheck, probeCheck, metaCheck},
 		Sections: []adminDiagnosticSection{
 			{
 				ID:          "station_sync",

@@ -23,6 +23,7 @@ type adminSystemStatusCheck struct {
 	Status    string `json:"status"`
 	Detail    string `json:"detail"`
 	CheckedAt string `json:"checked_at"`
+	Running   bool   `json:"running"`
 }
 
 type adminSystemMetricGroup struct {
