@@ -28,21 +28,21 @@ const (
 // Prober periodically re-probes active stream variants for approved stations to
 // refresh resolved_url, detected codec/bitrate, metadata routing, and last_error.
 type Prober struct {
-	streamStore         *store.StationStreamStore
-	log                 *slog.Logger
-	client              *http.Client
-	metadataRouter      *MetadataRouter
-	mu                  sync.Mutex
+	streamStore    *store.StationStreamStore
+	log            *slog.Logger
+	client         *http.Client
+	metadataRouter *MetadataRouter
+	mu             sync.Mutex
 }
 
 // NewProber creates a Prober.
 func NewProber(streamStore *store.StationStreamStore, log *slog.Logger, browserProbeOrigins []string) *Prober {
 	client := &http.Client{Timeout: reprobeTimeout}
 	return &Prober{
-		streamStore:         streamStore,
-		log:                 log,
-		client:              client,
-		metadataRouter:      NewMetadataRouter(client, browserProbeOrigins),
+		streamStore:    streamStore,
+		log:            log,
+		client:         client,
+		metadataRouter: NewMetadataRouter(client, browserProbeOrigins),
 	}
 }
 
@@ -74,7 +74,7 @@ func (p *Prober) IsRunning() bool {
 // Trigger starts a manual stream re-probe if one is not already running.
 func (p *Prober) Trigger(ctx context.Context) bool {
 	if !p.mu.TryLock() {
-		p.log.Info("prober: manual trigger skipped; re-probe already running")
+		p.log.Info("stream re-probe skipped", "event", "stream_reprobe_skipped", "trigger", "manual", "reason", "already_running")
 		return false
 	}
 	go func() {
@@ -86,7 +86,7 @@ func (p *Prober) Trigger(ctx context.Context) bool {
 
 func (p *Prober) runOnce(ctx context.Context) {
 	if !p.mu.TryLock() {
-		p.log.Info("prober: scheduled re-probe skipped; re-probe already running")
+		p.log.Info("stream re-probe skipped", "event", "stream_reprobe_skipped", "trigger", "scheduled", "reason", "already_running")
 		return
 	}
 	defer p.mu.Unlock()
@@ -101,7 +101,7 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 		return
 	}
 
-	p.log.Info("prober: starting re-probe cycle", "due_approved_streams", len(streams))
+	p.log.Info("stream re-probe cycle started", "event", "stream_reprobe_cycle_started", "due_approved_streams", len(streams))
 	start := time.Now()
 
 	sem := make(chan struct{}, reprobeWorkers)
@@ -182,15 +182,16 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return
 				}
-				p.log.Warn("prober: update failed", "stream_id", stream.ID, "error", err)
+				p.log.Warn("stream re-probe update failed", "event", "stream_reprobe_update_failed", "stream_id", stream.ID, "error", err)
 			}
 		}(s)
 	}
 
 	wg.Wait()
-	p.log.Info("prober: re-probe cycle done",
+	p.log.Info("stream re-probe cycle completed",
+		"event", "stream_reprobe_cycle_completed",
 		"due_approved_streams", len(streams),
-		"duration", time.Since(start).Round(time.Second),
+		"duration_ms", time.Since(start).Milliseconds(),
 	)
 }
 

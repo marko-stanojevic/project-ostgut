@@ -23,11 +23,14 @@ import (
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/db"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/handler"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/platformlog"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
+	platformtelemetry "github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 	"github.com/marko-stanojevic/project-ostgut/backend/migrations"
 	nrgin "github.com/newrelic/go-agent/v3/integrations/nrgin"
 	"github.com/newrelic/go-agent/v3/newrelic"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 func main() {
@@ -38,11 +41,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	logLevel := slog.LevelInfo
-	if cfg.LogLevel == "debug" {
-		logLevel = slog.LevelDebug
+	logger := platformlog.New(cfg.Env, cfg.LogLevel, os.Stdout)
+	shutdownTelemetry, err := platformtelemetry.Start(context.Background(), platformtelemetry.Config{
+		Env:                cfg.Env,
+		ServiceName:        cfg.OTelServiceName,
+		ServiceVersion:     cfg.ServiceVersion,
+		TracesExporter:     cfg.OTelTracesExporter,
+		OTLPEndpoint:       cfg.OTelExporterOTLPEndpoint,
+		OTLPTracesEndpoint: cfg.OTelExporterOTLPTracesEndpoint,
+		OTLPProtocol:       cfg.OTelExporterOTLPProtocol,
+	}, logger)
+	if err != nil {
+		logger.Error("failed to configure OpenTelemetry", "error", err)
+		os.Exit(1)
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(ctx); err != nil {
+			logger.Warn("OpenTelemetry shutdown failed", "error", err)
+		}
+	}()
 	logMediaStorageMode(
 		logger,
 		cfg.MediaUploadBaseURL,
@@ -151,6 +170,8 @@ func main() {
 	}
 
 	router.Use(gin.Recovery())
+	router.Use(otelgin.Middleware(cfg.OTelServiceName))
+	router.Use(middleware.RequestLogger(logger))
 	router.Use(middleware.SecurityHeaders())
 	if nrApp != nil {
 		router.Use(nrgin.Middleware(nrApp))

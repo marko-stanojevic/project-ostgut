@@ -35,6 +35,17 @@ output "container_app_environment_id" {
   value       = azurerm_container_app_environment.main.id
 }
 
+output "application_insights_name" {
+  description = "Name of the workspace-based Application Insights resource."
+  value       = azurerm_application_insights.main.name
+}
+
+output "application_insights_connection_string" {
+  description = "Application Insights connection string used by the Container Apps OpenTelemetry agent."
+  value       = azurerm_application_insights.main.connection_string
+  sensitive   = true
+}
+
 output "backend_identity_client_id" {
   description = "Client ID of the user-assigned managed identity used by the backend."
   value       = azurerm_user_assigned_identity.backend.client_id

@@ -301,6 +301,7 @@ func (h *Handler) AdminCreateStation(c *gin.Context) {
 // AdminProbeStationStream handles POST /editor/stations/:id/streams/:streamID/probe.
 // Query param `scope` can be `quality`, `metadata`, `resolver`, `loudness`, or `full`.
 func (h *Handler) AdminProbeStationStream(c *gin.Context) {
+	startedAt := time.Now()
 	stationID := strings.TrimSpace(c.Param("id"))
 	streamID := strings.TrimSpace(c.Param("streamID"))
 	if stationID == "" || streamID == "" {
@@ -508,6 +509,13 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		return
 	}
 
+	h.log.Info("admin stream probe completed", append(requestLogAttrs(c.Request.Context()),
+		"event", "stream_probe_completed",
+		"station_id", stationID,
+		"stream_id", streamID,
+		"probe_scope", scope,
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+	)...)
 	c.JSON(http.StatusOK, resp)
 }
 
