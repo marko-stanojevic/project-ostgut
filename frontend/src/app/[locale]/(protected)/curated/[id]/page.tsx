@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { connection } from 'next/server'
 import { CuratedDetailsClient } from './curated-details-client.tsx'
 import { fetchStationDetail } from '@/lib/station-detail'
 
@@ -17,6 +18,7 @@ export default async function CuratedDetailsPage({
 }
 
 async function CuratedDetailsContent({ params }: { params: Params }) {
+    await connection()
     const { id } = await params
     const { station, error } = await fetchStationDetail(id)
 

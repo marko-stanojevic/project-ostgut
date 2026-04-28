@@ -1,7 +1,9 @@
+import { connection } from 'next/server'
 import { CuratedClient } from './curated-client'
 import { fetchStationFeed, STATION_FEED_PAGE_SIZE } from '@/lib/station-feed'
 
 export default async function CuratedPage() {
+    await connection()
     const [initialRecommended, initialMostPlayed] = await Promise.all([
         fetchStationFeed(`/stations?featured=true&limit=${STATION_FEED_PAGE_SIZE}&offset=0`),
         fetchStationFeed(`/stations?sort=popular&limit=${STATION_FEED_PAGE_SIZE}&offset=0`),

@@ -14,10 +14,12 @@ import type { ApiStation, ApiStationDetail, ApiStream } from '@/types/station'
 
 const STATION_CONTRACT = 'station payload'
 const PUBLIC_STATION_REVALIDATE_SECONDS = 60
+const PUBLIC_STATION_FETCH_TIMEOUT_MS = 5_000
 
 function withPublicStationCache(init?: RequestInit): RequestInit {
   return {
     ...init,
+    signal: init?.signal ?? AbortSignal.timeout(PUBLIC_STATION_FETCH_TIMEOUT_MS),
     next: {
       ...init?.next,
       revalidate: PUBLIC_STATION_REVALIDATE_SECONDS,

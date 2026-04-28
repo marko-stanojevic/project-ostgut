@@ -1,3 +1,4 @@
+import { connection } from 'next/server'
 import { ExploreClient } from './explore-client'
 import { fetchStationFilters } from '@/lib/station-filters'
 import { fetchStationFeed } from '@/lib/station-feed'
@@ -8,6 +9,7 @@ export default async function ExplorePage({
 }: {
     searchParams: Promise<PageSearchParams>
 }) {
+    await connection()
     const resolvedSearchParams = await searchParams
     const initialStationsPath = buildStationFeedPathFromSearchParams(resolvedSearchParams)
     const [initialStations, initialFilters] = await Promise.all([
