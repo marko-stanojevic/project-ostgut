@@ -28,6 +28,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
@@ -764,7 +766,7 @@ func (h *Handler) putMediaObjectWithBaseURL(ctx context.Context, objectKey strin
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(request)
+	resp, err := telemetry.DoHTTPDependency(client, request, "media_blob_base_url_upload")
 	if err != nil {
 		return fmt.Errorf("upload media object: %w", err)
 	}
@@ -785,12 +787,19 @@ func (h *Handler) putMediaObjectWithManagedIdentity(ctx context.Context, objectK
 	}
 
 	cacheControl := "public, max-age=31536000, immutable"
-	_, err = client.UploadBuffer(ctx, h.media.config.storageContainer, objectKey, payload, &azblob.UploadBufferOptions{
+	spanCtx, span := telemetry.StartDependencySpan(ctx,
+		"media_blob_managed_identity_upload",
+		attribute.String("dependency.system", "azure_blob"),
+		attribute.String("azure.storage.operation", "UploadBuffer"),
+		attribute.String("azure.storage.container", h.media.config.storageContainer),
+	)
+	_, err = client.UploadBuffer(spanCtx, h.media.config.storageContainer, objectKey, payload, &azblob.UploadBufferOptions{
 		HTTPHeaders: &blob.HTTPHeaders{
 			BlobContentType:  to.Ptr(contentType),
 			BlobCacheControl: to.Ptr(cacheControl),
 		},
 	})
+	telemetry.EndDependencySpan(span, err)
 	if err != nil {
 		return fmt.Errorf("upload media object via managed identity: %w", err)
 	}
@@ -932,13 +941,22 @@ func (h *Handler) deleteMediaBlob(ctx context.Context, objectKey string) error {
 	if err != nil {
 		return err
 	}
-	_, err = client.DeleteBlob(ctx, h.media.config.storageContainer, objectKey, nil)
+	spanCtx, span := telemetry.StartDependencySpan(ctx,
+		"media_blob_managed_identity_delete",
+		attribute.String("dependency.system", "azure_blob"),
+		attribute.String("azure.storage.operation", "DeleteBlob"),
+		attribute.String("azure.storage.container", h.media.config.storageContainer),
+	)
+	_, err = client.DeleteBlob(spanCtx, h.media.config.storageContainer, objectKey, nil)
 	if err != nil {
 		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			telemetry.EndDependencySpan(span, nil)
 			return nil
 		}
+		telemetry.EndDependencySpan(span, err)
 		return fmt.Errorf("delete media blob %q: %w", objectKey, err)
 	}
+	telemetry.EndDependencySpan(span, nil)
 	return nil
 }
 
@@ -955,13 +973,22 @@ func (h *Handler) readMediaObjectWithManagedIdentity(ctx context.Context, object
 		return nil, false, err
 	}
 
-	resp, err := client.DownloadStream(ctx, h.media.config.storageContainer, objectKey, nil)
+	spanCtx, span := telemetry.StartDependencySpan(ctx,
+		"media_blob_managed_identity_download",
+		attribute.String("dependency.system", "azure_blob"),
+		attribute.String("azure.storage.operation", "DownloadStream"),
+		attribute.String("azure.storage.container", h.media.config.storageContainer),
+	)
+	resp, err := client.DownloadStream(spanCtx, h.media.config.storageContainer, objectKey, nil)
 	if err != nil {
 		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			telemetry.EndDependencySpan(span, nil)
 			return nil, false, nil
 		}
+		telemetry.EndDependencySpan(span, err)
 		return nil, false, fmt.Errorf("download media object via managed identity: %w", err)
 	}
+	telemetry.EndDependencySpan(span, nil)
 	defer resp.Body.Close()
 
 	payload, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
@@ -984,7 +1011,7 @@ func (h *Handler) readMediaObjectWithBaseURL(ctx context.Context, objectKey stri
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(request)
+	resp, err := telemetry.DoHTTPDependency(client, request, "media_blob_base_url_download")
 	if err != nil {
 		return nil, false, fmt.Errorf("download media object: %w", err)
 	}

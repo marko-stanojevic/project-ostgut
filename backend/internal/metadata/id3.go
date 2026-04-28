@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 const maxID3ReadBytes = 128 * 1024
@@ -45,7 +47,7 @@ func (f *Fetcher) fetchInitialBytes(ctx context.Context, streamURL string, limit
 	req.Header.Set("Range", fmt.Sprintf("bytes=0-%d", limit-1))
 	req.Header.Set("Connection", "close")
 
-	resp, err := f.jsonClient.Do(req)
+	resp, err := telemetry.DoHTTPDependency(f.jsonClient, req, "metadata_id3_initial_bytes_fetch")
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 type ClientMetadataSupportResult struct {
@@ -153,7 +155,7 @@ func allowICYPreflight(ctx context.Context, client *http.Client, target string, 
 	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
 	req.Header.Set("Access-Control-Request-Headers", "Icy-Metadata")
 
-	resp, err := client.Do(req)
+	resp, err := telemetry.DoHTTPDependency(client, req, "client_metadata_preflight")
 	if err != nil {
 		return false
 	}
@@ -177,7 +179,7 @@ func allowICYRead(ctx context.Context, client *http.Client, target string, origi
 	req.Header.Set("Icy-Metadata", "1")
 	req.Header.Set("Connection", "close")
 
-	resp, err := client.Do(req)
+	resp, err := telemetry.DoHTTPDependency(client, req, "client_metadata_icy_read")
 	if err != nil {
 		return false
 	}
@@ -299,7 +301,7 @@ func fetchCORSReadableBody(ctx context.Context, client *http.Client, endpoint st
 	req.Header.Set("Origin", origin)
 	req.Header.Set("User-Agent", streamProbeUserAgent)
 
-	resp, err := client.Do(req)
+	resp, err := telemetry.DoHTTPDependency(client, req, "client_metadata_endpoint_read")
 	if err != nil {
 		return nil, false
 	}

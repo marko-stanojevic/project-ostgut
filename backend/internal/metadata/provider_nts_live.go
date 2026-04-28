@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 const ntsLiveAPIURL = "https://www.nts.live/api/v2/live"
@@ -46,7 +48,7 @@ func (p ntsLiveProvider) Fetch(ctx context.Context, raw json.RawMessage) (*NowPl
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	res, err := p.client.Do(req)
+	res, err := telemetry.DoHTTPDependency(p.client, req, "metadata_provider_nts_live")
 	if err != nil {
 		return nil, err
 	}

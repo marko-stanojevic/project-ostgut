@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/telemetry"
 )
 
 // isHLSURL reports whether a URL points to an HLS stream (.m3u8).
@@ -39,7 +41,7 @@ func (f *Fetcher) resolvePlaylist(ctx context.Context, rawURL string) (string, b
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := f.jsonClient.Do(req)
+	resp, err := telemetry.DoHTTPDependency(f.jsonClient, req, "metadata_playlist_resolve")
 	if err != nil {
 		return "", false
 	}
