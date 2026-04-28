@@ -56,9 +56,14 @@ function hasSessionToken(req: NextRequest): boolean {
  *
  * The nonce is generated per-request and threaded into `script-src` so
  * Next.js's hydration-data inline scripts (and our own `<Script>` tags)
- * can execute, while any attacker-injected `<script>` cannot. `'strict-dynamic'`
- * lets the nonced root loader pull additional scripts (Next.js chunks,
- * Google Cast SDK, New Relic agent) without needing to nonce each one.
+ * can execute, while any attacker-injected `<script>` cannot.
+ *
+ * We intentionally avoid `'strict-dynamic'` here because prerendered pages emit
+ * static framework chunk tags at build time without per-request nonces. With
+ * `'strict-dynamic'`, modern browsers ignore host allowlists like `'self'`,
+ * which blocks those Next.js chunk scripts on otherwise-valid prerendered pages.
+ * Instead, keep an explicit allowlist for the small set of trusted script
+ * origins we actually use.
  *
  * Style-src still allows 'unsafe-inline' because Next.js streams a small
  * inline style for SSR; styles cannot execute code so the risk is
@@ -83,10 +88,11 @@ function buildCSP(nonce: string): string {
   const scriptSrc = [
     "'self'",
     `'nonce-${nonce}'`,
-    "'strict-dynamic'",
+    // Next.js emits a tiny inline runtime-timing bootstrap in prerendered HTML.
+    // Allow only that exact script body instead of broad inline execution.
+    "'sha256-C9/xixy512Y4fp7xTu377DO0r1bL13cI45EIwSYf8Is='",
     process.env.NODE_ENV === 'development' ? "'unsafe-eval'" : '',
-    // Safari-class browsers may fall back to host sources instead of fully
-    // honoring `strict-dynamic`, so keep the external allowlist explicit.
+    // Trusted third-party script origins used by the app.
     'https://js-agent.newrelic.com',
     'https://www.gstatic.com',
   ].filter(Boolean)
