@@ -241,8 +241,6 @@ export function AdminDiagnosticsPage({ kind }: { kind: AdminDiagnosticKind }) {
     }, 2000)
 
     return () => clearInterval(timer)
-  // applyDiagnostics is defined in the same render scope, no need to list it
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diagnostics, pendingJobs, kind, session?.accessToken])
 
   const generatedAtLabel = useMemo(() => {

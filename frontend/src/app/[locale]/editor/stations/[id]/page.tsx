@@ -787,11 +787,12 @@ export default function StationEditorPage() {
     const handleProbeStream = async (streamID: string, scope: StreamProbeScope) => {
         if (!accessToken) return
 
-        const startedAt = Date.now()
         setProbingAction(`${streamID}:${scope}`)
         setProbeError('')
 
+        let startedAt = 0
         try {
+            startedAt = Date.now()
             await probeEditorStationStream(accessToken, id, streamID, scope)
             const refreshed = await getEditorStation(accessToken, id)
             setStation(refreshed)
