@@ -60,3 +60,12 @@ traces
 Do not log authorization headers, cookies, tokens, secrets, or raw stream URLs with query strings. Prefer stable identifiers such as `station_id`, `stream_id`, `request_id`, and `trace_id`.
 
 Use event-shaped logs for platform workflows. The `event` field should be a stable machine-readable name such as `metadata_fetch_completed`, `stream_probe_completed`, or `http_request_completed`.
+
+Database pool pressure is emitted once per minute by the backend with `event=database_pool_stats_recorded`. Use it for pool saturation checks after backend deploys:
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where ContainerAppName_s has "backend"
+| where Log_s has "database_pool_stats_recorded"
+| order by TimeGenerated desc
+```
