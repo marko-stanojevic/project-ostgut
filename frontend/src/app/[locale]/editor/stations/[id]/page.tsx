@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
+import { TagInput } from '@/components/ui/tag-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     RadioIcon,
@@ -31,9 +32,11 @@ import {
     CircleNotchIcon,
     WaveformIcon,
     TrashIcon,
+    CaretDownIcon,
 } from '@phosphor-icons/react'
 
 interface StreamFormEntry {
+    id?: string
     url: string
     priority: number
     bitrate: string
@@ -47,14 +50,14 @@ interface StationForm {
     streams: StreamFormEntry[]
     logo: string
     website: string
-    genre_tags: string
-    subgenre_tags: string
+    genre_tags: string[]
+    subgenre_tags: string[]
     language: string
     country: string
     city: string
-    style_tags: string
-    format_tags: string
-    texture_tags: string
+    style_tags: string[]
+    format_tags: string[]
+    texture_tags: string[]
     overview: string
     status: 'pending' | 'approved'
     featured: boolean
@@ -62,7 +65,9 @@ interface StationForm {
     internal_notes: string
 }
 
-const ADMIN_TAG_BADGE_CLASS = 'ui-admin-tag-badge rounded-none border-transparent font-medium text-[10px] uppercase tracking-wide'
+const STATUS_BADGE_BASE_CLASS = 'rounded-md border-transparent px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em]'
+const TECHNICAL_INPUT_CLASS = 'border-border/60 bg-muted/30 font-mono text-xs text-foreground/80 placeholder:text-muted-foreground/45 focus-visible:bg-background'
+const TECHNICAL_VALUE_CLASS = 'break-all font-mono text-xs text-foreground/80'
 const METADATA_WAIT_SECONDS_NORMAL = 6
 const METADATA_WAIT_SECONDS_DELAYED = 20
 const METADATA_PROVIDER_OPTIONS: Array<{ value: 'none' | SupplementalMetadataProvider; label: string }> = [
@@ -70,6 +75,175 @@ const METADATA_PROVIDER_OPTIONS: Array<{ value: 'none' | SupplementalMetadataPro
     { value: 'npr-composer', label: 'NPR Composer' },
     { value: 'nts-live', label: 'NTS Live' },
 ]
+
+type StatusTone = 'neutral' | 'success' | 'warning' | 'danger'
+
+type StatusBadgeItem = {
+    label: string
+    tone?: StatusTone
+}
+
+type MetadataDiagnosis = {
+    primary: StatusBadgeItem
+    detail: string
+    evidence: StatusBadgeItem[]
+}
+
+function tagListLabel(tags: string[]) {
+    return tags.length > 0 ? tags.join(', ') : undefined
+}
+
+function cleanTags(tags: string[]) {
+    return tags.map((tag) => tag.trim()).filter(Boolean)
+}
+
+function statusBadgeClass(tone: StatusTone = 'neutral') {
+    switch (tone) {
+        case 'success':
+            return `${STATUS_BADGE_BASE_CLASS} bg-success-soft text-success`
+        case 'warning':
+            return `${STATUS_BADGE_BASE_CLASS} bg-amber-500/10 text-amber-700 dark:text-amber-300`
+        case 'danger':
+            return `${STATUS_BADGE_BASE_CLASS} bg-destructive-soft text-destructive`
+        default:
+            return `${STATUS_BADGE_BASE_CLASS} bg-secondary text-secondary-foreground`
+    }
+}
+
+function StatusBadge({ item }: { item: StatusBadgeItem }) {
+    return (
+        <Badge variant="secondary" className={statusBadgeClass(item.tone)}>
+            {item.label}
+        </Badge>
+    )
+}
+
+function buildMetadataDiagnosis(stream: AdminStream, formStream: StreamFormEntry): MetadataDiagnosis {
+    if (!formStream.metadata_enabled) {
+        return {
+            primary: { label: 'Disabled', tone: 'warning' },
+            detail: 'Metadata is turned off for this stream and the player will not request now-playing data.',
+            evidence: [],
+        }
+    }
+
+    if (stream.metadata_error_code === 'no_metadata' || stream.metadata_plan?.delivery === 'none') {
+        return {
+            primary: { label: 'No metadata', tone: 'warning' },
+            detail: stream.metadata_error || 'No usable metadata path has been discovered. The player should not poll backend metadata for this stream.',
+            evidence: [
+                stream.metadata_plan?.delivery ? { label: `Delivery ${stream.metadata_plan.delivery}` } : undefined,
+                stream.metadata_error_code ? { label: stream.metadata_error_code, tone: 'warning' } : undefined,
+            ].filter(Boolean) as StatusBadgeItem[],
+        }
+    }
+
+    if (stream.metadata_error || stream.metadata_error_code) {
+        return {
+            primary: { label: 'Metadata error', tone: 'danger' },
+            detail: stream.metadata_error || stream.metadata_error_code || 'Latest metadata check failed.',
+            evidence: [
+                stream.metadata_error_code ? { label: stream.metadata_error_code, tone: 'danger' } : undefined,
+                stream.metadata_plan?.delivery ? { label: `Delivery ${stream.metadata_plan.delivery}` } : undefined,
+            ].filter(Boolean) as StatusBadgeItem[],
+        }
+    }
+
+    switch (stream.metadata_plan?.delivery) {
+        case 'client-poll':
+            return {
+                primary: { label: 'Client metadata', tone: 'success' },
+                detail: 'Browser-readable metadata is preferred, so backend polling pressure is avoided.',
+                evidence: [
+                    { label: 'Delivery client-poll' },
+                    stream.metadata_source ? { label: `Source ${stream.metadata_source}` } : undefined,
+                    stream.metadata_url ? { label: 'Endpoint known' } : undefined,
+                ].filter(Boolean) as StatusBadgeItem[],
+            }
+        case 'hls-id3':
+            return {
+                primary: { label: 'HLS ID3', tone: 'success' },
+                detail: 'The player listens for in-stream ID3 metadata during HLS playback.',
+                evidence: [{ label: 'Delivery hls-id3' }],
+            }
+        case 'sse':
+            return {
+                primary: { label: 'Server SSE', tone: 'neutral' },
+                detail: 'The backend owns upstream metadata polling and fans out snapshots over SSE.',
+                evidence: [
+                    { label: 'Delivery sse' },
+                    stream.metadata_source ? { label: `Source ${stream.metadata_source}` } : undefined,
+                    stream.metadata_provider ? { label: `Provider ${stream.metadata_provider}` } : undefined,
+                ].filter(Boolean) as StatusBadgeItem[],
+            }
+        default:
+            return {
+                primary: { label: 'Not checked', tone: 'warning' },
+                detail: 'Metadata routing has not produced a runtime delivery plan yet. Refresh resolver or metadata after saving.',
+                evidence: stream.metadata_resolver ? [{ label: `Resolver ${stream.metadata_resolver}` }] : [],
+            }
+    }
+}
+
+function persistedStreamForForm(stream: StreamFormEntry, savedByID: Map<string, AdminStream>): AdminStream | undefined {
+    if (!stream.id) return undefined
+    const saved = savedByID.get(stream.id)
+    if (!saved) return undefined
+    return saved.url.trim() === stream.url.trim() ? saved : undefined
+}
+
+function streamRowKey(stream: StreamFormEntry, index: number) {
+    return stream.id ?? `new-${index}`
+}
+
+function buildStreamHealthBadge(stream: StreamFormEntry, persistedStream: AdminStream | undefined, validationMessage: string): StatusBadgeItem {
+    if (validationMessage) return { label: 'Invalid URL', tone: 'danger' }
+    if (!stream.url.trim()) return { label: 'Draft', tone: 'warning' }
+    if (!persistedStream) return { label: 'Unsaved', tone: 'warning' }
+    if (persistedStream.last_error) return { label: 'Probe error', tone: 'danger' }
+    if (typeof persistedStream.health_score === 'number') {
+        const score = Math.round(persistedStream.health_score * 100)
+        return {
+            label: `Health ${score}%`,
+            tone: score >= 75 ? 'success' : score >= 50 ? 'warning' : 'danger',
+        }
+    }
+    return { label: 'Health unknown' }
+}
+
+function buildMetadataHealthBadge(
+    stream: StreamFormEntry,
+    persistedStream: AdminStream | undefined,
+    metadataDiagnosis: MetadataDiagnosis | null,
+    validationMessage: string,
+): StatusBadgeItem {
+    if (!stream.metadata_enabled) return { label: 'Disabled', tone: 'warning' }
+    if (validationMessage) return { label: 'Blocked', tone: 'danger' }
+    if (!stream.url.trim()) return { label: 'Draft', tone: 'warning' }
+    if (!persistedStream || !metadataDiagnosis) return { label: 'Unprobed', tone: 'warning' }
+
+    return {
+        label: metadataDiagnosis.primary.label,
+        tone: metadataDiagnosis.primary.tone,
+    }
+}
+
+function buildStreamQualityBadges(stream: StreamFormEntry, persistedStream: AdminStream | undefined): StatusBadgeItem[] {
+    if (!persistedStream) {
+        const formBitrate = Number(stream.bitrate)
+        return Number.isFinite(formBitrate) && formBitrate > 0
+            ? [{ label: `${formBitrate} kbps` }, { label: 'Unprobed', tone: 'warning' }]
+            : [{ label: 'Unprobed', tone: 'warning' }]
+    }
+
+    const badges: StatusBadgeItem[] = [{ label: persistedStream.kind }]
+    if (persistedStream.codec) badges.push({ label: persistedStream.codec })
+    if (persistedStream.lossless) badges.push({ label: 'Lossless', tone: 'success' })
+    if (persistedStream.bit_depth > 0) badges.push({ label: `${persistedStream.bit_depth}-bit` })
+    if (persistedStream.bitrate > 0) badges.push({ label: `${persistedStream.bitrate} kbps` })
+
+    return badges
+}
 
 function SourceField({ label, value }: { label: string; value?: string }) {
     if (!value) {
@@ -200,6 +374,7 @@ function metadataProviderValue(stream: AdminStream): string {
 
 function toStreamFormEntry(stream: AdminStream, fallbackPriority: number): StreamFormEntry {
     return {
+        id: stream.id,
         url: stream.url,
         priority: stream.priority || fallbackPriority,
         bitrate: stream.bitrate > 0 ? String(stream.bitrate) : '',
@@ -217,14 +392,14 @@ function toStationForm(station: AdminStation): StationForm {
             : [createEmptyStream(1)],
         logo: station.logo ?? '',
         website: station.website ?? '',
-        genre_tags: (station.genre_tags ?? []).join(', '),
-        subgenre_tags: (station.subgenre_tags ?? []).join(', '),
+        genre_tags: station.genre_tags ?? [],
+        subgenre_tags: station.subgenre_tags ?? [],
         language: station.language ?? '',
         country: station.country,
         city: station.city ?? '',
-        style_tags: (station.style_tags ?? []).join(', '),
-        format_tags: (station.format_tags ?? []).join(', '),
-        texture_tags: (station.texture_tags ?? []).join(', '),
+        style_tags: station.style_tags ?? [],
+        format_tags: station.format_tags ?? [],
+        texture_tags: station.texture_tags ?? [],
         overview: station.overview ?? '',
         status: station.status === 'approved' ? 'approved' : 'pending',
         featured: !!station.featured,
@@ -250,20 +425,21 @@ export default function StationEditorPage() {
     const [uploadingIcon, setUploadingIcon] = useState(false)
     const [iconError, setIconError] = useState('')
     const [probingAction, setProbingAction] = useState('')
+    const [expandedStreamRows, setExpandedStreamRows] = useState<Set<string>>(() => new Set())
 
     const [form, setForm] = useState<StationForm>({
         name: '',
         streams: [createEmptyStream(1)],
         logo: '',
         website: '',
-        genre_tags: '',
-        subgenre_tags: '',
+        genre_tags: [],
+        subgenre_tags: [],
         language: '',
         country: '',
         city: '',
-        style_tags: '',
-        format_tags: '',
-        texture_tags: '',
+        style_tags: [],
+        format_tags: [],
+        texture_tags: [],
         overview: '',
         status: 'pending',
         featured: false,
@@ -398,14 +574,14 @@ export default function StationEditorPage() {
                 }),
             logo: logoURL,
             website: websiteURL,
-            genre_tags: form.genre_tags.split(',').map((g) => g.trim()).filter(Boolean),
-            subgenre_tags: form.subgenre_tags.split(',').map((g) => g.trim()).filter(Boolean),
+            genre_tags: cleanTags(form.genre_tags),
+            subgenre_tags: cleanTags(form.subgenre_tags),
             language: form.language.trim(),
             country: form.country.trim(),
             city: form.city.trim(),
-            style_tags: form.style_tags.split(',').map((t) => t.trim()).filter(Boolean),
-            format_tags: form.format_tags.split(',').map((t) => t.trim()).filter(Boolean),
-            texture_tags: form.texture_tags.split(',').map((t) => t.trim()).filter(Boolean),
+            style_tags: cleanTags(form.style_tags),
+            format_tags: cleanTags(form.format_tags),
+            texture_tags: cleanTags(form.texture_tags),
             overview: form.overview.trim() || null,
             status: form.status,
             featured: form.featured,
@@ -462,21 +638,25 @@ export default function StationEditorPage() {
         return <p className="text-destructive">Station not found</p>
     }
 
-    const currentStyleTags = form.style_tags.split(',').map((t) => t.trim()).filter(Boolean)
-    const currentFormatTags = form.format_tags.split(',').map((t) => t.trim()).filter(Boolean)
-    const currentTextureTags = form.texture_tags.split(',').map((t) => t.trim()).filter(Boolean)
-    const currentGenreTags = form.genre_tags.split(',').map((g) => g.trim().toLowerCase()).filter(Boolean)
-    const currentSubgenreTags = form.subgenre_tags.split(',').map((g) => g.trim().toLowerCase()).filter(Boolean)
+    const currentStyleTags = cleanTags(form.style_tags)
+    const currentFormatTags = cleanTags(form.format_tags)
+    const currentTextureTags = cleanTags(form.texture_tags)
+    const currentGenreTags = cleanTags(form.genre_tags).map((g) => g.toLowerCase())
+    const currentSubgenreTags = cleanTags(form.subgenre_tags).map((g) => g.toLowerCase())
     const allCurrentTags = [...new Set([...currentGenreTags, ...currentSubgenreTags, ...currentStyleTags, ...currentFormatTags, ...currentTextureTags])]
     const iconUrl = getPreferredMediaUrl(stationIcon) || logoURL
     const streamDetails = [...(station.streams ?? [])].sort((a, b) => a.priority - b.priority)
-    const savedStreamByPriority = new Map(streamDetails.map((stream) => [stream.priority, stream]))
+    const savedStreamByID = new Map(streamDetails.map((stream) => [stream.id, stream]))
+    const streamRows = form.streams.map((stream) => ({
+        form: stream,
+        persisted: persistedStreamForForm(stream, savedStreamByID),
+    }))
     const previewStreams = [...form.streams]
         .filter((stream) => stream.url.trim() !== '')
         .sort((a, b) => a.priority - b.priority)
         .map((stream, index) => {
             const trimmedUrl = stream.url.trim()
-            const savedStream = savedStreamByPriority.get(stream.priority)
+            const savedStream = persistedStreamForForm(stream, savedStreamByID)
 
             return {
                 id: savedStream?.id ?? `preview-${index + 1}`,
@@ -501,23 +681,13 @@ export default function StationEditorPage() {
                 loudnessSampleDurationSeconds: savedStream?.loudness_sample_duration_seconds,
                 loudnessMeasuredAt: savedStream?.loudness_measured_at,
                 loudnessMeasurementStatus: savedStream?.loudness_measurement_status,
-                metadataEnabled: stream.metadata_enabled,
+                metadataEnabled: false,
                 metadataType: savedStream?.metadata_type,
                 metadataSource: savedStream?.metadata_source,
                 metadataUrl: savedStream?.metadata_url,
-                metadataResolver: savedStream?.metadata_resolver,
+                metadataResolver: 'none' as const,
                 metadataResolverCheckedAt: savedStream?.metadata_resolver_checked_at,
-                metadataPlan: savedStream?.metadata_plan ? {
-                    resolver: savedStream.metadata_plan.resolver,
-                    delivery: savedStream.metadata_plan.delivery,
-                    preferredStrategy: savedStream.metadata_plan.preferred_strategy,
-                    supportsClient: savedStream.metadata_plan.supports_client,
-                    supportsServer: savedStream.metadata_plan.supports_server,
-                    supportsServerSnapshot: savedStream.metadata_plan.supports_server_snapshot,
-                    requiresClientConnectSrc: savedStream.metadata_plan.requires_client_connect_src,
-                    pressureClass: savedStream.metadata_plan.pressure_class,
-                    reason: savedStream.metadata_plan.reason,
-                } : undefined,
+                metadataPlan: undefined,
                 metadataDelayed: savedStream?.metadata_delayed,
                 lastCheckedAt: savedStream?.last_checked_at,
                 lastError: savedStream?.last_error,
@@ -586,7 +756,7 @@ export default function StationEditorPage() {
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <SourceField label="Genre tags" value={form.genre_tags} />
+                                    <SourceField label="Genre tags" value={tagListLabel(form.genre_tags)} />
                                     <SourceField label="Language" value={form.language} />
                                     <SourceField label="Country" value={form.country} />
                                     <SourceField label="City" value={form.city} />
@@ -643,29 +813,19 @@ export default function StationEditorPage() {
                                     <p className="mb-1.5 text-xs text-muted-foreground">Tags</p>
                                     <div className="flex flex-wrap gap-1.5">
                                         {currentGenreTags.map((t) => (
-                                            <Badge key={`genre-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                {t}
-                                            </Badge>
+                                            <StatusBadge key={`genre-${t}`} item={{ label: t }} />
                                         ))}
                                         {currentSubgenreTags.map((t) => (
-                                            <Badge key={`subgenre-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                {t}
-                                            </Badge>
+                                            <StatusBadge key={`subgenre-${t}`} item={{ label: t }} />
                                         ))}
                                         {currentStyleTags.map((t) => (
-                                            <Badge key={`style-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                {t}
-                                            </Badge>
+                                            <StatusBadge key={`style-${t}`} item={{ label: t }} />
                                         ))}
                                         {currentFormatTags.map((t) => (
-                                            <Badge key={`format-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                {t}
-                                            </Badge>
+                                            <StatusBadge key={`format-${t}`} item={{ label: t }} />
                                         ))}
                                         {currentTextureTags.map((t) => (
-                                            <Badge key={`texture-${t}`} variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                {t}
-                                            </Badge>
+                                            <StatusBadge key={`texture-${t}`} item={{ label: t }} />
                                         ))}
                                     </div>
                                 </div>
@@ -682,15 +842,51 @@ export default function StationEditorPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
-                                {form.streams.map((stream, i) => (
-                                    <div key={i} className="space-y-3 rounded-lg border p-3">
+                                {streamRows.map(({ form: stream, persisted: persistedStream }, i) => {
+                                    const metadataDiagnosis = persistedStream ? buildMetadataDiagnosis(persistedStream, stream) : null
+                                    const rowKey = streamRowKey(stream, i)
+                                    const isExpanded = expandedStreamRows.has(rowKey)
+                                    const streamHealthBadge = buildStreamHealthBadge(stream, persistedStream, streamValidationMessages[i] ?? '')
+                                    const metadataHealthBadge = buildMetadataHealthBadge(stream, persistedStream, metadataDiagnosis, streamValidationMessages[i] ?? '')
+                                    const streamQualityBadges = buildStreamQualityBadges(stream, persistedStream)
+
+                                    return (
+                                    <div key={rowKey} className="rounded-lg bg-muted/20">
+                                        <button
+                                            type="button"
+                                            className="flex w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            aria-expanded={isExpanded}
+                                            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} stream ${i + 1}`}
+                                            onClick={() => setExpandedStreamRows((prev) => {
+                                                const next = new Set(prev)
+                                                if (next.has(rowKey)) {
+                                                    next.delete(rowKey)
+                                                } else {
+                                                    next.add(rowKey)
+                                                }
+                                                return next
+                                            })}
+                                        >
+                                            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                                                <StatusBadge item={{ label: `Priority ${stream.priority || i + 1}` }} />
+                                                <StatusBadge item={streamHealthBadge} />
+                                                <StatusBadge item={metadataHealthBadge} />
+                                                {streamQualityBadges.map((item) => (
+                                                    <StatusBadge key={item.label} item={item} />
+                                                ))}
+                                            </div>
+                                            <CaretDownIcon className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {isExpanded && (
+                                        <div className="space-y-3 px-3 pb-3">
                                         <div className="flex items-center gap-2">
                                             <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{i + 1}</span>
                                             <div className="flex-1 space-y-1">
                                                 <Input
                                                     value={stream.url}
                                                     placeholder="https://…"
-                                                    className="flex-1"
+                                                    className={`flex-1 ${TECHNICAL_INPUT_CLASS}`}
                                                     onChange={(e) => setForm((prev) => ({
                                                         ...prev,
                                                         streams: prev.streams.map((s, idx) =>
@@ -775,6 +971,7 @@ export default function StationEditorPage() {
                                                     <Input
                                                         value={stream.metadata_provider_value}
                                                         placeholder="wxxx or https://api.composer.nprstations.org/..."
+                                                        className={TECHNICAL_INPUT_CLASS}
                                                         onChange={(e) => setForm((prev) => ({
                                                             ...prev,
                                                             streams: prev.streams.map((s, idx) =>
@@ -813,83 +1010,69 @@ export default function StationEditorPage() {
                                             <p className="text-xs text-destructive">{metadataProviderValidationMessages[i]}</p>
                                         )}
 
-                                        {streamDetails[i] && (
+                                        {persistedStream ? (
                                             <div className="rounded-md border bg-muted/30 px-3 py-2">
                                                 <div className="space-y-2">
                                                     <div className="space-y-1">
                                                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Stream URL</p>
-                                                        <p className="break-all font-mono text-xs text-foreground/80">
+                                                        <p className={TECHNICAL_VALUE_CLASS}>
                                                             {stream.url.trim() || 'Not set'}
                                                         </p>
                                                     </div>
-                                                    {streamDetails[i].metadata_url && (
+                                                    {persistedStream.metadata_url && (
                                                         <div className="space-y-1">
                                                             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Metadata URL</p>
-                                                            <p className="break-all font-mono text-xs text-foreground/80">
-                                                                {streamDetails[i].metadata_url}
+                                                            <p className={TECHNICAL_VALUE_CLASS}>
+                                                                {persistedStream.metadata_url}
                                                             </p>
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
-                                        )}
+                                        ) : stream.url.trim() ? (
+                                            <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                                                Save this stream before trusting probe, metadata, or loudness diagnostics.
+                                            </div>
+                                        ) : null}
 
-                                        {streamDetails[i] && (
+                                        {persistedStream && metadataDiagnosis && (
                                             <div className="grid gap-3 xl:grid-cols-3">
-                                                <div className="flex h-full flex-col rounded-lg border p-3">
+                                                <div className="flex h-full flex-col rounded-md bg-background/60 p-3">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0">
                                                             <p className="text-xs text-muted-foreground">Stream status</p>
                                                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                                <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                    {streamDetails[i].kind}
-                                                                </Badge>
-                                                                {streamDetails[i].codec && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].codec}
-                                                                    </Badge>
+                                                                <StatusBadge item={{ label: persistedStream.kind }} />
+                                                                {persistedStream.codec && (
+                                                                    <StatusBadge item={{ label: persistedStream.codec }} />
                                                                 )}
-                                                                {streamDetails[i].lossless && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        Lossless
-                                                                    </Badge>
+                                                                {persistedStream.lossless && (
+                                                                    <StatusBadge item={{ label: 'Lossless', tone: 'success' }} />
                                                                 )}
-                                                                {typeof streamDetails[i].health_score === 'number' && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {Math.round(streamDetails[i].health_score * 100)}%
-                                                                    </Badge>
+                                                                {typeof persistedStream.health_score === 'number' && (
+                                                                    <StatusBadge item={{ label: `${Math.round(persistedStream.health_score * 100)}%`, tone: persistedStream.health_score >= 0.5 ? 'success' : 'warning' }} />
                                                                 )}
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {(streamDetails[i].lossless || streamDetails[i].codec.toUpperCase().includes('FLAC') || streamDetails[i].bit_depth > 0 || streamDetails[i].sample_rate_hz > 0 || streamDetails[i].channels > 0 || streamDetails[i].bitrate > 0) && (
+                                                    {(persistedStream.lossless || persistedStream.codec.toUpperCase().includes('FLAC') || persistedStream.bit_depth > 0 || persistedStream.sample_rate_hz > 0 || persistedStream.channels > 0 || persistedStream.bitrate > 0) && (
                                                         <div className="mt-3 space-y-1">
                                                             <p className="text-xs text-muted-foreground">Audio details</p>
                                                             <div className="flex flex-wrap gap-2">
-                                                                {streamDetails[i].bit_depth > 0 && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].bit_depth}-bit
-                                                                    </Badge>
+                                                                {persistedStream.bit_depth > 0 && (
+                                                                    <StatusBadge item={{ label: `${persistedStream.bit_depth}-bit` }} />
                                                                 )}
-                                                                {streamDetails[i].sample_rate_hz > 0 && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].sample_rate_hz} Hz
-                                                                    </Badge>
+                                                                {persistedStream.sample_rate_hz > 0 && (
+                                                                    <StatusBadge item={{ label: `${persistedStream.sample_rate_hz} Hz` }} />
                                                                 )}
-                                                                {streamDetails[i].channels > 0 && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].channels}ch
-                                                                    </Badge>
+                                                                {persistedStream.channels > 0 && (
+                                                                    <StatusBadge item={{ label: `${persistedStream.channels}ch` }} />
                                                                 )}
-                                                                {(streamDetails[i].lossless || streamDetails[i].codec.toUpperCase().includes('FLAC') || streamDetails[i].bit_depth > 0 || streamDetails[i].sample_rate_hz > 0 || streamDetails[i].channels > 0) && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {formatSampleRateConfidenceLabel(streamDetails[i])}
-                                                                    </Badge>
+                                                                {(persistedStream.lossless || persistedStream.codec.toUpperCase().includes('FLAC') || persistedStream.bit_depth > 0 || persistedStream.sample_rate_hz > 0 || persistedStream.channels > 0) && (
+                                                                    <StatusBadge item={{ label: formatSampleRateConfidenceLabel(persistedStream) }} />
                                                                 )}
-                                                                {streamDetails[i].bitrate > 0 && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].bitrate} kbps
-                                                                    </Badge>
+                                                                {persistedStream.bitrate > 0 && (
+                                                                    <StatusBadge item={{ label: `${persistedStream.bitrate} kbps` }} />
                                                                 )}
                                                             </div>
                                                         </div>
@@ -897,35 +1080,48 @@ export default function StationEditorPage() {
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Latest probe</p>
                                                         <p className="text-sm">
-                                                            {streamDetails[i].last_error ? streamDetails[i].last_error : 'No stream errors recorded'}
+                                                            {persistedStream.last_error ? persistedStream.last_error : 'No stream errors recorded'}
                                                         </p>
                                                     </div>
-                                                    <div className="mt-auto pt-4">
+                                                    <div className="mt-auto grid gap-2 pt-4">
                                                         <Button
                                                             type="button"
                                                             size="sm"
                                                             variant="outline"
                                                             className="h-8 w-full gap-1.5 px-2.5 text-xs"
-                                                            disabled={probingAction === `${streamDetails[i].id}:quality`}
-                                                            onClick={() => handleProbeStream(streamDetails[i].id, 'quality')}
+                                                            disabled={probingAction === `${persistedStream.id}:quality`}
+                                                            onClick={() => handleProbeStream(persistedStream.id, 'quality')}
                                                         >
-                                                            {probingAction === `${streamDetails[i].id}:quality` ? (
+                                                            {probingAction === `${persistedStream.id}:quality` ? (
                                                                 <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
                                                             ) : (
                                                                 <WaveformIcon className="h-4 w-4" weight="fill" />
                                                             )}
                                                             Refresh quality
                                                         </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 w-full gap-1.5 px-2.5 text-xs"
+                                                            disabled={probingAction === `${persistedStream.id}:full`}
+                                                            onClick={() => handleProbeStream(persistedStream.id, 'full')}
+                                                        >
+                                                            {probingAction === `${persistedStream.id}:full` ? (
+                                                                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
+                                                            ) : (
+                                                                <ArrowsClockwiseIcon className="h-4 w-4" weight="bold" />
+                                                            )}
+                                                            Full re-probe
+                                                        </Button>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex h-full flex-col rounded-lg border p-3">
+                                                <div className="flex h-full flex-col rounded-md bg-background/60 p-3">
                                                     <div className="space-y-1">
                                                         <p className="text-xs text-muted-foreground">Metadata status</p>
                                                         <div className="flex flex-wrap items-center gap-3">
-                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                {stream.metadata_enabled ? 'Enabled' : 'Disabled'}
-                                                            </Badge>
+                                                            <StatusBadge item={{ label: stream.metadata_enabled ? 'Enabled' : 'Disabled', tone: stream.metadata_enabled ? 'success' : 'warning' }} />
                                                             <Switch
                                                                 checked={stream.metadata_enabled}
                                                                 onCheckedChange={(checked) => setForm((prev) => ({
@@ -939,50 +1135,21 @@ export default function StationEditorPage() {
                                                     </div>
                                                     <div className="mt-3 min-w-0">
                                                         <div className="min-w-0">
-                                                            <p className="text-xs text-muted-foreground">Metadata type</p>
+                                                            <p className="text-xs text-muted-foreground">Metadata diagnosis</p>
                                                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                                {streamDetails[i].metadata_type && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].metadata_type}
-                                                                    </Badge>
-                                                                )}
-                                                                {streamDetails[i].metadata_source && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].metadata_source}
-                                                                    </Badge>
-                                                                )}
-                                                                {streamDetails[i].metadata_resolver && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].metadata_resolver}
-                                                                    </Badge>
-                                                                )}
-                                                                {streamDetails[i].metadata_provider && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].metadata_provider}
-                                                                    </Badge>
-                                                                )}
-                                                                {streamDetails[i].metadata_delayed ? (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        delayed metadata
-                                                                    </Badge>
-                                                                ) : null}
-                                                                {streamDetails[i].metadata_error_code && (
-                                                                    <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                        {streamDetails[i].metadata_error_code}
-                                                                    </Badge>
-                                                                )}
+                                                                <StatusBadge item={metadataDiagnosis.primary} />
+                                                                {metadataDiagnosis.evidence.map((item) => (
+                                                                    <StatusBadge key={item.label} item={item} />
+                                                                ))}
                                                             </div>
+                                                            <p className="mt-2 text-xs leading-5 text-muted-foreground">{metadataDiagnosis.detail}</p>
                                                         </div>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Metadata timing</p>
                                                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                {streamDetails[i].metadata_delayed ? 'delayed' : 'normal'}
-                                                            </Badge>
-                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                {streamDetails[i].metadata_delayed ? METADATA_WAIT_SECONDS_DELAYED : METADATA_WAIT_SECONDS_NORMAL} seconds
-                                                            </Badge>
+                                                            <StatusBadge item={{ label: persistedStream.metadata_delayed ? 'Delayed' : 'Normal' }} />
+                                                            <StatusBadge item={{ label: `${persistedStream.metadata_delayed ? METADATA_WAIT_SECONDS_DELAYED : METADATA_WAIT_SECONDS_NORMAL} seconds` }} />
                                                         </div>
                                                         <p className="text-xs text-muted-foreground">
                                                             Server-side ICY metadata budget.
@@ -991,7 +1158,7 @@ export default function StationEditorPage() {
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Latest metadata check</p>
                                                         <p className="text-sm">
-                                                            {streamDetails[i].metadata_error ? streamDetails[i].metadata_error : 'No metadata errors recorded'}
+                                                            {persistedStream.metadata_error ? persistedStream.metadata_error : 'No metadata errors recorded'}
                                                         </p>
                                                         <p className="text-xs text-muted-foreground">
                                                             Refreshing metadata also recalculates the resolver for this stream.
@@ -1000,8 +1167,8 @@ export default function StationEditorPage() {
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Last checked</p>
                                                         <p className="text-sm">
-                                                            {streamDetails[i].metadata_last_fetched_at
-                                                                ? new Date(streamDetails[i].metadata_last_fetched_at!).toLocaleString()
+                                                            {persistedStream.metadata_last_fetched_at
+                                                                ? new Date(persistedStream.metadata_last_fetched_at!).toLocaleString()
                                                                 : 'Not checked yet'}
                                                         </p>
                                                     </div>
@@ -1011,10 +1178,25 @@ export default function StationEditorPage() {
                                                             size="sm"
                                                             variant="outline"
                                                             className="h-8 w-full gap-1.5 px-2.5 text-xs"
-                                                            disabled={probingAction === `${streamDetails[i].id}:metadata`}
-                                                            onClick={() => handleProbeStream(streamDetails[i].id, 'metadata')}
+                                                            disabled={probingAction === `${persistedStream.id}:resolver`}
+                                                            onClick={() => handleProbeStream(persistedStream.id, 'resolver')}
                                                         >
-                                                            {probingAction === `${streamDetails[i].id}:metadata` ? (
+                                                            {probingAction === `${persistedStream.id}:resolver` ? (
+                                                                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
+                                                            ) : (
+                                                                <ArrowsClockwiseIcon className="h-4 w-4" weight="bold" />
+                                                            )}
+                                                            Refresh resolver
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 w-full gap-1.5 px-2.5 text-xs"
+                                                            disabled={probingAction === `${persistedStream.id}:metadata`}
+                                                            onClick={() => handleProbeStream(persistedStream.id, 'metadata')}
+                                                        >
+                                                            {probingAction === `${persistedStream.id}:metadata` ? (
                                                                 <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
                                                             ) : (
                                                                 <ArrowsClockwiseIcon className="h-4 w-4" weight="bold" />
@@ -1024,31 +1206,25 @@ export default function StationEditorPage() {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex h-full flex-col rounded-lg border p-3">
+                                                <div className="flex h-full flex-col rounded-md bg-background/60 p-3">
                                                     <div className="min-w-0">
                                                         <p className="text-xs text-muted-foreground">Loudness status</p>
                                                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                {formatLoudnessStatusLabel(streamDetails[i].loudness_measurement_status)}
-                                                            </Badge>
+                                                            <StatusBadge item={{ label: formatLoudnessStatusLabel(persistedStream.loudness_measurement_status), tone: persistedStream.loudness_measurement_status === 'measured' ? 'success' : 'neutral' }} />
                                                         </div>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Measured loudness</p>
-                                                        {typeof streamDetails[i].loudness_integrated_lufs === 'number' ? (
-                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                {(streamDetails[i].loudness_integrated_lufs ?? 0).toFixed(1)} LUFS
-                                                            </Badge>
+                                                        {typeof persistedStream.loudness_integrated_lufs === 'number' ? (
+                                                            <StatusBadge item={{ label: `${(persistedStream.loudness_integrated_lufs ?? 0).toFixed(1)} LUFS` }} />
                                                         ) : (
                                                             <p className="text-sm">No loudness measurement recorded</p>
                                                         )}
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">True peak</p>
-                                                        {typeof streamDetails[i].loudness_peak_dbfs === 'number' ? (
-                                                            <Badge variant="secondary" className={ADMIN_TAG_BADGE_CLASS}>
-                                                                {(streamDetails[i].loudness_peak_dbfs ?? 0).toFixed(1)} dBFS
-                                                            </Badge>
+                                                        {typeof persistedStream.loudness_peak_dbfs === 'number' ? (
+                                                            <StatusBadge item={{ label: `${(persistedStream.loudness_peak_dbfs ?? 0).toFixed(1)} dBFS` }} />
                                                         ) : (
                                                             <p className="text-sm">Peak not measured</p>
                                                         )}
@@ -1056,16 +1232,16 @@ export default function StationEditorPage() {
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Sample window</p>
                                                         <p className="text-sm">
-                                                            {typeof streamDetails[i].loudness_sample_duration_seconds === 'number' && (streamDetails[i].loudness_sample_duration_seconds ?? 0) > 0
-                                                                ? `${(streamDetails[i].loudness_sample_duration_seconds ?? 0).toFixed(1)} seconds`
+                                                            {typeof persistedStream.loudness_sample_duration_seconds === 'number' && (persistedStream.loudness_sample_duration_seconds ?? 0) > 0
+                                                                ? `${(persistedStream.loudness_sample_duration_seconds ?? 0).toFixed(1)} seconds`
                                                                 : 'No sample duration recorded'}
                                                         </p>
                                                     </div>
                                                     <div className="mt-3 space-y-1">
                                                         <p className="text-xs text-muted-foreground">Last measured</p>
                                                         <p className="text-sm">
-                                                            {streamDetails[i].loudness_measured_at
-                                                                ? new Date(streamDetails[i].loudness_measured_at ?? '').toLocaleString()
+                                                            {persistedStream.loudness_measured_at
+                                                                ? new Date(persistedStream.loudness_measured_at ?? '').toLocaleString()
                                                                 : 'Not measured yet'}
                                                         </p>
                                                     </div>
@@ -1075,10 +1251,10 @@ export default function StationEditorPage() {
                                                             size="sm"
                                                             variant="outline"
                                                             className="h-8 w-full gap-1.5 px-2.5 text-xs"
-                                                            disabled={probingAction === `${streamDetails[i].id}:loudness`}
-                                                            onClick={() => handleProbeStream(streamDetails[i].id, 'loudness')}
+                                                            disabled={probingAction === `${persistedStream.id}:loudness`}
+                                                            onClick={() => handleProbeStream(persistedStream.id, 'loudness')}
                                                         >
-                                                            {probingAction === `${streamDetails[i].id}:loudness` ? (
+                                                            {probingAction === `${persistedStream.id}:loudness` ? (
                                                                 <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" />
                                                             ) : (
                                                                 <WaveformIcon className="h-4 w-4" weight="fill" />
@@ -1089,8 +1265,11 @@ export default function StationEditorPage() {
                                                 </div>
                                             </div>
                                         )}
+                                        </div>
+                                        )}
                                     </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                             <Button
                                 type="button"
@@ -1171,12 +1350,12 @@ export default function StationEditorPage() {
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="logo">Logo URL</Label>
-                                    <Input id="logo" value={form.logo} onChange={(e) => setForm((prev) => ({ ...prev, logo: e.target.value }))} />
+                                    <Input id="logo" value={form.logo} className={TECHNICAL_INPUT_CLASS} onChange={(e) => setForm((prev) => ({ ...prev, logo: e.target.value }))} />
                                     {!hasValidLogoURL && <p className="text-xs text-destructive">Logo URL must be a valid absolute URL</p>}
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="website">Website URL</Label>
-                                    <Input id="website" value={form.website} onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))} />
+                                    <Input id="website" value={form.website} className={TECHNICAL_INPUT_CLASS} onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))} />
                                     {!hasValidWebsiteURL && <p className="text-xs text-destructive">Website URL must be a valid absolute URL</p>}
                                 </div>
                             </div>
@@ -1184,11 +1363,11 @@ export default function StationEditorPage() {
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="genre-tags">Genre tags</Label>
-                                    <Input id="genre-tags" value={form.genre_tags} onChange={(e) => setForm((prev) => ({ ...prev, genre_tags: e.target.value }))} />
+                                    <TagInput value={form.genre_tags} lowercase onChange={(next) => setForm((prev) => ({ ...prev, genre_tags: next }))} placeholder="Add genre, press Enter" />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="subgenre-tags">Subgenre tags</Label>
-                                    <Input id="subgenre-tags" value={form.subgenre_tags} onChange={(e) => setForm((prev) => ({ ...prev, subgenre_tags: e.target.value }))} />
+                                    <TagInput value={form.subgenre_tags} lowercase onChange={(next) => setForm((prev) => ({ ...prev, subgenre_tags: next }))} placeholder="Add subgenre, press Enter" />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="language">Language</Label>
@@ -1203,16 +1382,16 @@ export default function StationEditorPage() {
                                     <Input id="city" value={form.city} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} />
                                 </div>
                                 <div className="space-y-1.5 sm:col-span-2">
-                                    <Label htmlFor="style-tags">Style tags (comma-separated)</Label>
-                                    <Input id="style-tags" placeholder="e.g. curated, underground, editorial" value={form.style_tags} onChange={(e) => setForm((prev) => ({ ...prev, style_tags: e.target.value }))} />
+                                    <Label htmlFor="style-tags">Style tags</Label>
+                                    <TagInput value={form.style_tags} onChange={(next) => setForm((prev) => ({ ...prev, style_tags: next }))} placeholder="Add style, press Enter" />
                                 </div>
                                 <div className="space-y-1.5 sm:col-span-2">
-                                    <Label htmlFor="format-tags">Format tags (comma-separated)</Label>
-                                    <Input id="format-tags" placeholder="e.g. live, hosted, freeform" value={form.format_tags} onChange={(e) => setForm((prev) => ({ ...prev, format_tags: e.target.value }))} />
+                                    <Label htmlFor="format-tags">Format tags</Label>
+                                    <TagInput value={form.format_tags} onChange={(next) => setForm((prev) => ({ ...prev, format_tags: next }))} placeholder="Add format, press Enter" />
                                 </div>
                                 <div className="space-y-1.5 sm:col-span-2">
-                                    <Label htmlFor="texture-tags">Texture tags (comma-separated)</Label>
-                                    <Input id="texture-tags" placeholder="e.g. smooth, raw, minimal" value={form.texture_tags} onChange={(e) => setForm((prev) => ({ ...prev, texture_tags: e.target.value }))} />
+                                    <Label htmlFor="texture-tags">Texture tags</Label>
+                                    <TagInput value={form.texture_tags} onChange={(next) => setForm((prev) => ({ ...prev, texture_tags: next }))} placeholder="Add texture, press Enter" />
                                 </div>
                             </div>
 

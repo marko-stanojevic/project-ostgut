@@ -347,6 +347,9 @@ func hasIssueCategory(issues []adminOverviewIssue, codes ...string) bool {
 }
 
 func limitAdminOverviewStations(stations []adminOverviewStationHealth) []adminOverviewStationHealth {
+	if stations == nil {
+		return []adminOverviewStationHealth{}
+	}
 	if len(stations) <= adminOverviewSectionLimit {
 		return stations
 	}
