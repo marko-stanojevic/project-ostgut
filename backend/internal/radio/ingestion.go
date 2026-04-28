@@ -291,25 +291,6 @@ func parseTags(raw string) []string {
 	return tags
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		v = strings.TrimSpace(v)
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func firstPositive(values ...int) int {
-	for _, v := range values {
-		if v > 0 {
-			return v
-		}
-	}
-	return 0
-}
-
 // genreKeywords maps common radio tags to a canonical genre name.
 var genreKeywords = []struct {
 	keyword string

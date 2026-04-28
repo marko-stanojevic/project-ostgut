@@ -10,7 +10,7 @@ import (
 func TestBuildStationStreamsAlwaysEnablesMetadata(t *testing.T) {
 	h := &Handler{}
 
-	streams, err := h.buildStationStreams(nil, []adminStreamRequest{{
+	streams, err := h.buildStationStreams([]adminStreamRequest{{
 		URL:             "https://somafm.example/groovesalad",
 		Priority:        1,
 		MetadataEnabled: boolPtr(false),
