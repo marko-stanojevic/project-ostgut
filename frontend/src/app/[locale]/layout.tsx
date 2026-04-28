@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import { Suspense } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { AuthProvider } from '@/context/AuthContext'
@@ -49,11 +50,18 @@ async function LocaleContent({
   }
 
   const messages = await getMessages()
+  const nonce = (await headers()).get('x-nonce') ?? undefined
 
   return (
     <div lang={locale}>
       <NextIntlClientProvider messages={messages}>
-        <ThemeProvider attribute="data-theme" defaultTheme={defaultTheme} enableSystem={false} themes={themeOptions.map(({ value }) => value)}>
+        <ThemeProvider
+          attribute="data-theme"
+          defaultTheme={defaultTheme}
+          enableSystem={false}
+          nonce={nonce}
+          themes={themeOptions.map(({ value }) => value)}
+        >
           <SessionProvider>
             <AuthProvider>
               <PlayerProvider>
