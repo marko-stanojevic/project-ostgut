@@ -986,3 +986,20 @@ func (s *StationStreamStore) UpdateMetadataResolver(
 	}
 	return nil
 }
+
+func (s *StationStreamStore) UpdateMetadataEnabled(ctx context.Context, id string, enabled bool) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE station_streams
+		SET
+			metadata_enabled = $1,
+			updated_at = NOW()
+		WHERE id = $2
+		  AND metadata_enabled IS DISTINCT FROM $1`,
+		enabled,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("update metadata enabled: %w", err)
+	}
+	return nil
+}

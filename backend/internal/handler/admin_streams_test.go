@@ -45,7 +45,21 @@ func TestShouldRefreshMetadataRoutingForEditorRequiresEnabledActiveUnclassifiedS
 	}
 }
 
+func TestShouldRefreshMetadataRoutingForEditorRecoversPersistedDisabledStream(t *testing.T) {
+	stream := &store.StationStream{
+		MetadataEnabled: false,
+		MetadataURL:     testStringPtr("https://somafm.example/status-json.xsl"),
+	}
+	if !shouldRefreshMetadataRoutingForEditor(stream) {
+		t.Fatal("expected recoverable metadata-disabled stream without resolver check to refresh")
+	}
+}
+
 func timePtr() *time.Time {
 	now := time.Now().UTC()
 	return &now
+}
+
+func testStringPtr(value string) *string {
+	return &value
 }

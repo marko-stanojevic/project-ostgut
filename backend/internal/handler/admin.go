@@ -146,6 +146,12 @@ func (h *Handler) refreshEditorStreamMetadataRouting(ctx context.Context, stream
 	if !shouldRefreshMetadataRoutingForEditor(stream) {
 		return nil
 	}
+	if metadataEnabledForResponse(stream) && !stream.MetadataEnabled {
+		if err := h.admin.streams.UpdateMetadataEnabled(context.WithoutCancel(ctx), stream.ID, true); err != nil {
+			return err
+		}
+		stream.MetadataEnabled = true
+	}
 
 	streamURL := strings.TrimSpace(stream.ResolvedURL)
 	if streamURL == "" {
@@ -409,6 +415,14 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		}
 		hintedMetadataURL := stringValue(target.MetadataURL)
 		metadataEnabled := metadataEnabledForResponse(target)
+		if metadataEnabled && !target.MetadataEnabled {
+			if err := h.admin.streams.UpdateMetadataEnabled(context.WithoutCancel(c.Request.Context()), target.ID, true); err != nil {
+				h.log.Error("admin probe stream enable metadata", "stream_id", target.ID, "scope", scope, "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+				return
+			}
+			target.MetadataEnabled = true
+		}
 		routing := h.admin.metadataRouter.Classify(c.Request.Context(), radio.MetadataRouteInput{
 			StreamURL:       metadataURL,
 			MetadataURLHint: hintedMetadataURL,

@@ -391,6 +391,16 @@ function buildLoudnessOpsFields(persistedStream: AdminStream): MetadataOpsField[
     ]
 }
 
+function metadataRefreshScope(persistedStream: AdminStream): StreamProbeScope {
+    if (!persistedStream.metadata_last_fetched_at || !persistedStream.metadata_resolver_checked_at) {
+        return 'full'
+    }
+    if (!persistedStream.metadata_source && !persistedStream.metadata_url) {
+        return 'full'
+    }
+    return 'metadata'
+}
+
 function MetadataOpsFieldList({ fields }: { fields: MetadataOpsField[] }) {
     return (
         <div className="grid gap-3">
@@ -777,17 +787,23 @@ export default function StationEditorPage() {
     const handleProbeStream = async (streamID: string, scope: StreamProbeScope) => {
         if (!accessToken) return
 
+        const startedAt = Date.now()
         setProbingAction(`${streamID}:${scope}`)
         setProbeError('')
 
         try {
-            const updated = await probeEditorStationStream(accessToken, id, streamID, scope)
-            setStation(updated)
+            await probeEditorStationStream(accessToken, id, streamID, scope)
+            const refreshed = await getEditorStation(accessToken, id)
+            setStation(refreshed)
             setSaved(true)
             setTimeout(() => setSaved(false), 3000)
         } catch (err) {
             setProbeError(err instanceof Error ? err.message : 'Failed to refresh stream diagnostics')
         } finally {
+            const remaining = 500 - (Date.now() - startedAt)
+            if (remaining > 0) {
+                await new Promise((resolve) => window.setTimeout(resolve, remaining))
+            }
             setProbingAction('')
         }
     }
@@ -1281,7 +1297,7 @@ export default function StationEditorPage() {
                                                             variant="outline"
                                                             className="gap-2"
                                                             disabled={probingAction === `${persistedStream.id}:metadata`}
-                                                            onClick={() => handleProbeStream(persistedStream.id, 'metadata')}
+                                                            onClick={() => handleProbeStream(persistedStream.id, metadataRefreshScope(persistedStream))}
                                                         >
                                                             {probingAction === `${persistedStream.id}:metadata` ? <CircleNotchIcon className="h-4 w-4 animate-spin" /> : <ArrowsClockwiseIcon className="h-4 w-4" />}
                                                             Refresh metadata
