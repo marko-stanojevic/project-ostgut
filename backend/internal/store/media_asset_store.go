@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -46,6 +47,24 @@ type MediaAssetAdminSummary struct {
 	Pending  int
 	Rejected int
 	Bytes    int64
+}
+
+// MediaAssetAdminDetailedSummary extends the overview summary with per-kind
+// breakdowns, storage stats, and content-hash integrity coverage.
+type MediaAssetAdminDetailedSummary struct {
+	Total            int
+	Ready            int
+	Pending          int
+	Rejected         int
+	TotalBytes       int64
+	AvatarTotal      int
+	AvatarBytes      int64
+	StationIconTotal int
+	StationIconBytes int64
+	AvgReadyBytes    int64
+	HashCovered      int
+	LatestCreatedAt  *time.Time
+	LatestReadyAt    *time.Time
 }
 
 // CreateMediaAssetParams contains fields for creating a pending media asset row.
@@ -91,6 +110,48 @@ func (s *MediaAssetStore) AdminSummary(ctx context.Context) (*MediaAssetAdminSum
 	).Scan(&summary.Total, &summary.Ready, &summary.Pending, &summary.Rejected, &summary.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("admin media asset summary: %w", err)
+	}
+	return &summary, nil
+}
+
+// AdminDetailedSummary returns extended media-asset pipeline aggregates for the
+// admin media diagnostics page. All byte counts reflect ready assets only since
+// pending and rejected rows do not have a stored byte_size.
+func (s *MediaAssetStore) AdminDetailedSummary(ctx context.Context) (*MediaAssetAdminDetailedSummary, error) {
+	var summary MediaAssetAdminDetailedSummary
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COUNT(*) FILTER (WHERE status = 'ready')::int,
+			COUNT(*) FILTER (WHERE status = 'pending')::int,
+			COUNT(*) FILTER (WHERE status = 'rejected')::int,
+			COALESCE(SUM(byte_size) FILTER (WHERE status = 'ready'), 0)::bigint,
+			COUNT(*) FILTER (WHERE kind = 'avatar')::int,
+			COALESCE(SUM(byte_size) FILTER (WHERE kind = 'avatar' AND status = 'ready'), 0)::bigint,
+			COUNT(*) FILTER (WHERE kind = 'station_icon')::int,
+			COALESCE(SUM(byte_size) FILTER (WHERE kind = 'station_icon' AND status = 'ready'), 0)::bigint,
+			COALESCE(AVG(byte_size) FILTER (WHERE status = 'ready'), 0)::bigint,
+			COUNT(*) FILTER (WHERE content_hash IS NOT NULL AND status = 'ready')::int,
+			MAX(created_at),
+			MAX(updated_at) FILTER (WHERE status = 'ready')
+		FROM media_assets`,
+	).Scan(
+		&summary.Total,
+		&summary.Ready,
+		&summary.Pending,
+		&summary.Rejected,
+		&summary.TotalBytes,
+		&summary.AvatarTotal,
+		&summary.AvatarBytes,
+		&summary.StationIconTotal,
+		&summary.StationIconBytes,
+		&summary.AvgReadyBytes,
+		&summary.HashCovered,
+		&summary.LatestCreatedAt,
+		&summary.LatestReadyAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("admin media asset detailed summary: %w", err)
 	}
 	return &summary, nil
 }
@@ -154,7 +215,20 @@ func validateKind(kind string) error {
 	}
 }
 
-// CreatePending inserts a pending media asset row.
+// pendingAssetTTL is how long a pending asset row survives before the cleaner
+// removes it. It intentionally exceeds the 15-minute upload-token TTL so a
+// slow-but-valid upload is not evicted mid-flight.
+const pendingAssetTTL = 20 * time.Minute
+
+// ExpiredPendingAsset is a row deleted by DeleteExpiredPending. It carries
+// the storage key so the caller can purge any uploaded blob.
+type ExpiredPendingAsset struct {
+	ID                 string
+	StorageKeyOriginal string
+}
+
+// CreatePending inserts a pending media asset row with an expiry deadline
+// after which the background cleaner will remove it if never completed.
 func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetParams) (*MediaAsset, error) {
 	if err := validateOwnerType(p.OwnerType); err != nil {
 		return nil, err
@@ -164,8 +238,8 @@ func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetP
 	}
 
 	row := s.pool.QueryRow(ctx,
-		`INSERT INTO media_assets (owner_type, owner_id, kind, storage_key_original, mime_type, status)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO media_assets (owner_type, owner_id, kind, storage_key_original, mime_type, status, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, NOW() + $7::interval)
 		 RETURNING `+mediaAssetColumns,
 		p.OwnerType,
 		p.OwnerID,
@@ -173,6 +247,7 @@ func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetP
 		p.StorageKeyOriginal,
 		p.MIMEType,
 		MediaAssetStatusPending,
+		pendingAssetTTL.String(),
 	)
 
 	a, err := scanMediaAsset(row)
@@ -180,6 +255,34 @@ func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetP
 		return nil, fmt.Errorf("create media asset: %w", err)
 	}
 	return a, nil
+}
+
+// DeleteExpiredPending hard-deletes pending rows whose expires_at has passed
+// and returns the deleted rows so the caller can clean up any uploaded blobs.
+func (s *MediaAssetStore) DeleteExpiredPending(ctx context.Context) ([]ExpiredPendingAsset, error) {
+	rows, err := s.pool.Query(ctx, `
+		DELETE FROM media_assets
+		WHERE status = 'pending'
+		  AND (
+		    (expires_at IS NOT NULL AND expires_at < NOW())
+		    OR (expires_at IS NULL AND created_at < NOW() - $1::interval)
+		  )
+		RETURNING id, storage_key_original`,
+		pendingAssetTTL.String())
+	if err != nil {
+		return nil, fmt.Errorf("delete expired pending media assets: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ExpiredPendingAsset
+	for rows.Next() {
+		var a ExpiredPendingAsset
+		if err := rows.Scan(&a.ID, &a.StorageKeyOriginal); err != nil {
+			return nil, fmt.Errorf("scan expired pending asset: %w", err)
+		}
+		result = append(result, a)
+	}
+	return result, rows.Err()
 }
 
 // GetByID fetches a media asset by UUID.
@@ -257,6 +360,7 @@ func (s *MediaAssetStore) MarkReady(ctx context.Context, id string, p MarkMediaA
 		     content_hash = $6,
 		     status = $7,
 		     rejection_reason = NULL,
+		     expires_at = NULL,
 		     updated_at = NOW()
 		 WHERE id = $8`,
 		variantsJSON,
@@ -283,6 +387,7 @@ func (s *MediaAssetStore) MarkRejected(ctx context.Context, id, reason string) e
 		`UPDATE media_assets
 		 SET status = $1,
 		     rejection_reason = $2,
+		     expires_at = NULL,
 		     updated_at = NOW()
 		 WHERE id = $3`,
 		MediaAssetStatusRejected,

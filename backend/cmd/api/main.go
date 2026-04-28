@@ -121,6 +121,9 @@ func main() {
 	metaPoller := h.MetadataPoller()
 	go metaPoller.Run(syncCtx)
 
+	// Start background media cleaner (evicts expired pending asset rows + blobs).
+	go h.MediaCleaner().Run(syncCtx)
+
 	nrApp, err := newrelic.NewApplication(
 		newrelic.ConfigAppName(cfg.NewRelicAppName),
 		newrelic.ConfigLicense(cfg.NewRelicLicenseKey),
@@ -255,6 +258,7 @@ func main() {
 		admin.GET("/diagnostics/api", h.AdminAPIDiagnostics)
 		admin.GET("/diagnostics/database", h.AdminDatabaseDiagnostics)
 		admin.GET("/diagnostics/jobs", h.AdminJobsDiagnostics)
+		admin.GET("/diagnostics/media", h.AdminMediaDiagnostics)
 		admin.POST("/jobs/:jobID/trigger", h.AdminTriggerJob)
 		admin.GET("/stats", h.AdminStats)
 		admin.GET("/users", h.AdminListUsers)

@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 const groupLinks: Record<string, { href: string; label: string }> = {
   users_access: { href: '/admin/users', label: 'Manage users' },
   content_pipeline: { href: '/editor/stations', label: 'Open editor' },
+  media_storage: { href: '/admin/media', label: 'View details' },
 }
 
 function formatMetricValue(metric: AdminMetric) {

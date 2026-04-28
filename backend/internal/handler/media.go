@@ -917,6 +917,31 @@ func (h *Handler) mediaBlobStorageClient() (*azblob.Client, error) {
 	return h.mediaBlobClient, nil
 }
 
+// deleteMediaBlob removes an object from blob storage. For the managed-identity
+// path it issues a real delete; for the base-URL fallback (local dev / Azurite)
+// it is a no-op because there is no standard HTTP DELETE contract and orphaned
+// local blobs are harmless.
+func (h *Handler) deleteMediaBlob(ctx context.Context, objectKey string) error {
+	if objectKey == "" {
+		return nil
+	}
+	if !h.hasManagedIdentityMediaStorage() {
+		return nil
+	}
+	client, err := h.mediaBlobStorageClient()
+	if err != nil {
+		return err
+	}
+	_, err = client.DeleteBlob(ctx, h.media.config.storageContainer, objectKey, nil)
+	if err != nil {
+		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+			return nil
+		}
+		return fmt.Errorf("delete media blob %q: %w", objectKey, err)
+	}
+	return nil
+}
+
 func (h *Handler) readMediaObject(ctx context.Context, objectKey string, maxBytes int64) ([]byte, bool, error) {
 	if h.hasManagedIdentityMediaStorage() {
 		return h.readMediaObjectWithManagedIdentity(ctx, objectKey, maxBytes)

@@ -4,7 +4,7 @@ import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 
 const ADMIN_DIAGNOSTICS_CONTRACT = 'admin diagnostics payload'
 
-export type AdminDiagnosticKind = 'api' | 'database' | 'jobs'
+export type AdminDiagnosticKind = 'api' | 'database' | 'jobs' | 'media'
 export type AdminDiagnosticStatus = 'operational' | 'attention'
 export type AdminDiagnosticTone = 'neutral' | 'attention'
 export type AdminJobTriggerID = 'station-sync' | 'stream-reprobe' | 'metadata-fetch'
@@ -53,6 +53,7 @@ const diagnosticPaths: Record<AdminDiagnosticKind, string> = {
   api: '/admin/diagnostics/api',
   database: '/admin/diagnostics/database',
   jobs: '/admin/diagnostics/jobs',
+  media: '/admin/diagnostics/media',
 }
 
 export async function getAdminDiagnostics(

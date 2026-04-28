@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { AdminSearchContext, useAdminSearch } from './admin-search-context'
 import { useTranslations } from 'next-intl'
-import { SquaresFourIcon, UsersIcon, ArrowLeftIcon, RadioIcon } from '@phosphor-icons/react'
+import { SquaresFourIcon, UsersIcon, ArrowLeftIcon, RadioIcon, HardDrivesIcon } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { AccountMenu } from '@/components/account-menu'
 import { SearchInput } from '@/components/search-input'
@@ -22,6 +22,7 @@ function AdminTopNav() {
     { title: 'API', href: '/admin/api' },
     { title: 'Database', href: '/admin/database' },
     { title: 'Jobs', href: '/admin/jobs' },
+    { title: 'Media', href: '/admin/media' },
     { title: t('nav_users'), href: '/admin/users' },
   ]
 
@@ -62,6 +63,7 @@ function AdminTopNavMobile() {
     { title: 'API', href: '/admin/api', icon: SquaresFourIcon },
     { title: 'Database', href: '/admin/database', icon: SquaresFourIcon },
     { title: 'Jobs', href: '/admin/jobs', icon: RadioIcon },
+    { title: 'Media', href: '/admin/media', icon: HardDrivesIcon },
     { title: t('nav_users'), href: '/admin/users', icon: UsersIcon },
   ]
 

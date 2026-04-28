@@ -123,6 +123,7 @@ type Handler struct {
 	station                     stationHandlers
 	media                       mediaHandlers
 	admin                       adminHandlers
+	mediaCleaner                *MediaCleaner
 	enforcePublicQueryAllowlist bool
 	publicAPIBaseURL            string
 	log                         *slog.Logger
@@ -136,7 +137,7 @@ func New(deps Dependencies, opts Options) *Handler {
 	streamProbeClient := &http.Client{Timeout: 8 * time.Second}
 	metaFetcher := metadata.NewFetcher(opts.Log)
 	metaPoller := NewMetadataPoller(deps.StationStreamStore, deps.StreamNowPlayingStore, metaFetcher, opts.Log)
-	return &Handler{
+	h := &Handler{
 		auth: authHandlers{
 			users:       deps.UserStore,
 			refresh:     deps.RefreshTokenStore,
@@ -196,10 +197,18 @@ func New(deps Dependencies, opts Options) *Handler {
 		log:                         opts.Log,
 		startedAt:                   time.Now().UTC(),
 	}
+	h.mediaCleaner = newMediaCleaner(deps.MediaAssetStore, h.deleteMediaBlob, opts.Log)
+	return h
 }
 
 // MetadataPoller returns the shared MetadataPoller instance. main.go calls
 // this to start the poller goroutine after the handler is constructed.
 func (h *Handler) MetadataPoller() *MetadataPoller {
 	return h.station.metaPoller
+}
+
+// MediaCleaner returns the shared MediaCleaner instance. main.go calls
+// this to start the cleaner goroutine after the handler is constructed.
+func (h *Handler) MediaCleaner() *MediaCleaner {
+	return h.mediaCleaner
 }
