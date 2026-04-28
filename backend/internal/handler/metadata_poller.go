@@ -178,7 +178,7 @@ func (p *MetadataPoller) TriggerApprovedMetadataFetch(ctx context.Context) bool 
 	p.bulkMu.Lock()
 	if p.bulkActive {
 		p.bulkMu.Unlock()
-		p.log.Info("metadata poller: approved metadata fetch skipped; job already running")
+		p.log.Info("approved metadata fetch skipped", "event", "approved_metadata_fetch_skipped", "reason", "already_running")
 		return false
 	}
 	p.bulkActive = true
@@ -202,7 +202,7 @@ func (p *MetadataPoller) fetchApprovedMetadata(ctx context.Context) {
 		return
 	}
 
-	p.log.Info("metadata poller: starting approved metadata fetch", "streams", len(streams))
+	p.log.Info("approved metadata fetch started", "event", "approved_metadata_fetch_started", "streams", len(streams))
 	start := time.Now()
 	var wg sync.WaitGroup
 	jobs := make(chan *store.StationStream)
@@ -235,7 +235,7 @@ func (p *MetadataPoller) fetchApprovedMetadata(ctx context.Context) {
 	}
 	close(jobs)
 	wg.Wait()
-	p.log.Info("metadata poller: approved metadata fetch done", "streams", len(streams), "duration", time.Since(start).Round(time.Second))
+	p.log.Info("approved metadata fetch completed", "event", "approved_metadata_fetch_completed", "streams", len(streams), "duration_ms", time.Since(start).Milliseconds())
 }
 
 func (p *MetadataPoller) pollLoop(ctx context.Context, stream *store.StationStream, ch *pollerChannel) {
@@ -285,10 +285,18 @@ func (p *MetadataPoller) pollLoop(ctx context.Context, stream *store.StationStre
 }
 
 func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.StationStream, forceUpstream bool) (*Snapshot, error) {
+	startedAt := time.Now()
 	fetchCtx, cancel := context.WithTimeout(ctx, pollerFetchBudget)
 	defer cancel()
 	release, ok := p.acquireFetchSlot(fetchCtx)
 	if !ok {
+		p.log.Warn("metadata fetch skipped", append(requestLogAttrs(ctx),
+			"event", "metadata_fetch_skipped",
+			"stream_id", stream.ID,
+			"force_upstream", forceUpstream,
+			"reason", "fetch_slot_unavailable",
+			"error", fetchCtx.Err(),
+		)...)
 		return nil, fetchCtx.Err()
 	}
 	defer release()
@@ -298,6 +306,12 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 		streamURL = strings.TrimSpace(stream.URL)
 	}
 	if streamURL == "" {
+		p.log.Warn("metadata fetch skipped", append(requestLogAttrs(ctx),
+			"event", "metadata_fetch_skipped",
+			"stream_id", stream.ID,
+			"force_upstream", forceUpstream,
+			"reason", "missing_stream_url",
+		)...)
 		return nil, errors.New("no stream url")
 	}
 
@@ -319,6 +333,16 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 	} else {
 		np, ev = p.fetcher.Fetch(fetchCtx, streamURL, cfg)
 	}
+	p.log.Info("metadata fetch completed", append(requestLogAttrs(ctx),
+		"event", "metadata_fetch_completed",
+		"stream_id", stream.ID,
+		"force_upstream", forceUpstream,
+		"metadata_source", np.Source,
+		"metadata_error_code", np.ErrorCode,
+		"metadata_delayed", ev.DelayedICY,
+		"title_present", np.Title != "",
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+	)...)
 
 	persistCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

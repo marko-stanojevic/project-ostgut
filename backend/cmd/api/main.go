@@ -23,6 +23,7 @@ import (
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/db"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/handler"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/middleware"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/platformlog"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 	"github.com/marko-stanojevic/project-ostgut/backend/migrations"
@@ -38,11 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logLevel := slog.LevelInfo
-	if cfg.LogLevel == "debug" {
-		logLevel = slog.LevelDebug
-	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	logger := platformlog.New(cfg.Env, cfg.LogLevel, os.Stdout)
 	logMediaStorageMode(
 		logger,
 		cfg.MediaUploadBaseURL,
@@ -151,6 +148,7 @@ func main() {
 	}
 
 	router.Use(gin.Recovery())
+	router.Use(middleware.RequestLogger(logger))
 	router.Use(middleware.SecurityHeaders())
 	if nrApp != nil {
 		router.Use(nrgin.Middleware(nrApp))
