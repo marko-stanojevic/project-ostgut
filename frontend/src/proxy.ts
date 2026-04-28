@@ -85,7 +85,10 @@ function buildCSP(nonce: string): string {
     `'nonce-${nonce}'`,
     "'strict-dynamic'",
     process.env.NODE_ENV === 'development' ? "'unsafe-eval'" : '',
-    'https:',
+    // Safari-class browsers may fall back to host sources instead of fully
+    // honoring `strict-dynamic`, so keep the external allowlist explicit.
+    'https://js-agent.newrelic.com',
+    'https://www.gstatic.com',
   ].filter(Boolean)
 
   return [
@@ -121,24 +124,21 @@ function generateNonce(): string {
   return btoa(binary)
 }
 
-function mergeExistingRequestOverrides(responseHeaders: Headers, requestHeaders: Headers) {
-  const existing = responseHeaders.get('x-middleware-override-headers')
-  const keys = existing
-    ?.split(',')
-    .map((key) => key.trim().toLowerCase())
-    .filter(Boolean)
-
-  for (const key of keys ?? []) {
-    const value = responseHeaders.get(`x-middleware-request-${key}`)
-    if (value !== null) requestHeaders.set(key, value)
-  }
+function getOverrideKeys(responseHeaders: Headers): string[] {
+  return (
+    responseHeaders
+      .get('x-middleware-override-headers')
+      ?.split(',')
+      .map((key) => key.trim().toLowerCase())
+      .filter(Boolean) ?? []
+  )
 }
 
-function forwardRequestHeaders(response: NextResponse, requestHeaders: Headers) {
-  const keys = [...requestHeaders.keys()]
+function forwardRequestOverrides(response: NextResponse, overrides: Map<string, string>) {
+  const keys = [...overrides.keys()]
 
   for (const key of keys) {
-    response.headers.set(`x-middleware-request-${key}`, requestHeaders.get(key) ?? '')
+    response.headers.set(`x-middleware-request-${key}`, overrides.get(key) ?? '')
   }
   response.headers.set('x-middleware-override-headers', keys.join(','))
 }
@@ -177,12 +177,18 @@ export function proxy(req: NextRequest) {
   // `headers().get('x-nonce')` without mutating the incoming request object.
   const nonce = generateNonce()
   const csp = buildCSP(nonce)
-  const requestHeaders = new Headers(req.headers)
-  requestHeaders.set('x-nonce', nonce)
 
   const res = handleI18n(req)
-  mergeExistingRequestOverrides(res.headers, requestHeaders)
-  forwardRequestHeaders(res, requestHeaders)
+  const requestOverrides = new Map<string, string>()
+  for (const key of getOverrideKeys(res.headers)) {
+    const value = res.headers.get(`x-middleware-request-${key}`)
+    if (value !== null) requestOverrides.set(key, value)
+  }
+  // Next.js reads the CSP from the request during render to decide which
+  // nonce to stamp onto its own framework/hydration scripts.
+  requestOverrides.set('content-security-policy', csp)
+  requestOverrides.set('x-nonce', nonce)
+  forwardRequestOverrides(res, requestOverrides)
 
   res.headers.set('Content-Security-Policy', csp)
   // Reporting-Endpoints declares the named group referenced by `report-to`
