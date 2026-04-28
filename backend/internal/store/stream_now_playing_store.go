@@ -46,16 +46,22 @@ func NewStreamNowPlayingStore(pool *pgxpool.Pool) *StreamNowPlayingStore {
 }
 
 // AdminSummary returns metadata snapshot freshness metrics for admin diagnostics.
+// Only snapshots for streams on approved, active stations are counted — this
+// matches the scope of the bulk metadata fetch job.
 func (s *StreamNowPlayingStore) AdminSummary(ctx context.Context, freshAfter time.Duration) (*StreamNowPlayingAdminSummary, error) {
 	var summary StreamNowPlayingAdminSummary
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*)::int,
-			COUNT(*) FILTER (WHERE fetched_at >= NOW() - $1::interval)::int,
-			COUNT(*) FILTER (WHERE trim(COALESCE(error, '')) <> '' OR trim(COALESCE(error_code, '')) <> '')::int,
-			MAX(fetched_at),
-			MIN(fetched_at)
-		FROM stream_now_playing`,
+			COUNT(*) FILTER (WHERE snp.fetched_at >= NOW() - $1::interval)::int,
+			COUNT(*) FILTER (WHERE trim(COALESCE(snp.error, '')) <> '' OR trim(COALESCE(snp.error_code, '')) <> '')::int,
+			MAX(snp.fetched_at),
+			MIN(snp.fetched_at)
+		FROM stream_now_playing snp
+		JOIN station_streams ss ON ss.id = snp.stream_id
+		JOIN stations st ON st.id = ss.station_id
+		WHERE st.status = 'approved'
+		  AND st.is_active = true`,
 		postgresInterval(freshAfter),
 	).Scan(&summary.Snapshots, &summary.FreshSnapshots, &summary.ErroredSnapshots, &summary.LatestFetchedAt, &summary.OldestFetchedAt)
 	if err != nil {

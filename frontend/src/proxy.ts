@@ -102,7 +102,7 @@ function buildCSP(nonce: string): string {
     "form-action 'self'",
     "base-uri 'self'",
     "object-src 'none'",
-    'upgrade-insecure-requests',
+    ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
     // Violation reports — both legacy `report-uri` (broad browser support)
     // and the modern Reports API (`report-to` + Reporting-Endpoints header
     // set below). Browsers prefer report-to when both are present.
@@ -192,5 +192,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/).*)'],
+  matcher: ['/((?!_next/|favicon.ico|api/).*)'],
 }
