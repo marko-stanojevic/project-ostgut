@@ -220,8 +220,8 @@ func validateKind(kind string) error {
 // slow-but-valid upload is not evicted mid-flight.
 const pendingAssetTTL = 20 * time.Minute
 
-// ExpiredPendingAsset is a row deleted by DeleteExpiredPending. It carries
-// the storage key so the caller can purge any uploaded blob.
+// ExpiredPendingAsset is an expired pending row claimed for cleanup. It carries
+// the storage key so the caller can purge any uploaded blob before final delete.
 type ExpiredPendingAsset struct {
 	ID                 string
 	StorageKeyOriginal string
@@ -257,20 +257,37 @@ func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetP
 	return a, nil
 }
 
-// DeleteExpiredPending hard-deletes pending rows whose expires_at has passed
-// and returns the deleted rows so the caller can clean up any uploaded blobs.
-func (s *MediaAssetStore) DeleteExpiredPending(ctx context.Context) ([]ExpiredPendingAsset, error) {
+// ClaimExpiredPending marks a bounded batch of expired pending rows as owned by
+// the cleaner and returns them so the caller can delete blobs outside the txn.
+func (s *MediaAssetStore) ClaimExpiredPending(ctx context.Context, limit int) ([]ExpiredPendingAsset, error) {
+	if limit <= 0 {
+		limit = 100
+	}
 	rows, err := s.pool.Query(ctx, `
-		DELETE FROM media_assets
-		WHERE status = 'pending'
-		  AND (
-		    (expires_at IS NOT NULL AND expires_at < NOW())
-		    OR (expires_at IS NULL AND created_at < NOW() - $1::interval)
-		  )
-		RETURNING id, storage_key_original`,
-		pendingAssetTTL.String())
+		WITH expired AS (
+			SELECT id, storage_key_original
+			FROM media_assets
+			WHERE status = 'pending'
+			  AND cleanup_claimed_at IS NULL
+			  AND (
+			    (expires_at IS NOT NULL AND expires_at < NOW())
+			    OR (expires_at IS NULL AND created_at < NOW() - $1::interval)
+			  )
+			ORDER BY expires_at ASC NULLS FIRST, created_at ASC
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE media_assets AS m
+		SET cleanup_claimed_at = NOW(),
+		    updated_at = NOW()
+		FROM expired
+		WHERE m.id = expired.id
+		RETURNING m.id, m.storage_key_original`,
+		pendingAssetTTL.String(),
+		limit,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("delete expired pending media assets: %w", err)
+		return nil, fmt.Errorf("claim expired pending media assets: %w", err)
 	}
 	defer rows.Close()
 
@@ -283,6 +300,45 @@ func (s *MediaAssetStore) DeleteExpiredPending(ctx context.Context) ([]ExpiredPe
 		result = append(result, a)
 	}
 	return result, rows.Err()
+}
+
+// DeleteClaimedPending hard-deletes a row only if it is still pending and still
+// owned by the cleanup worker.
+func (s *MediaAssetStore) DeleteClaimedPending(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `
+		DELETE FROM media_assets
+		WHERE id = $1
+		  AND status = 'pending'
+		  AND cleanup_claimed_at IS NOT NULL`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("delete claimed pending media asset: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ReleaseCleanupClaim clears the retry claim when blob deletion failed so the
+// next cleaner pass can try again.
+func (s *MediaAssetStore) ReleaseCleanupClaim(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE media_assets
+		SET cleanup_claimed_at = NULL,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND status = 'pending'`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("release cleanup claim: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // GetByID fetches a media asset by UUID.
@@ -360,9 +416,11 @@ func (s *MediaAssetStore) MarkReady(ctx context.Context, id string, p MarkMediaA
 		     content_hash = $6,
 		     status = $7,
 		     rejection_reason = NULL,
+		     cleanup_claimed_at = NULL,
 		     expires_at = NULL,
 		     updated_at = NOW()
-		 WHERE id = $8`,
+		 WHERE id = $8
+		   AND cleanup_claimed_at IS NULL`,
 		variantsJSON,
 		p.MIMEType,
 		p.Width,
@@ -387,9 +445,11 @@ func (s *MediaAssetStore) MarkRejected(ctx context.Context, id, reason string) e
 		`UPDATE media_assets
 		 SET status = $1,
 		     rejection_reason = $2,
+		     cleanup_claimed_at = NULL,
 		     expires_at = NULL,
 		     updated_at = NOW()
-		 WHERE id = $3`,
+		 WHERE id = $3
+		   AND cleanup_claimed_at IS NULL`,
 		MediaAssetStatusRejected,
 		reason,
 		id,

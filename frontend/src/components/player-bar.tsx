@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { usePlayer } from '@/context/PlayerContext'
 import { useNowPlaying } from '@/hooks/useNowPlaying'
+import { useAuth } from '@/context/AuthContext'
 import { FullScreenPlayer } from '@/components/full-screen-player'
 import { PlayerDeviceMenu } from '@/components/player-device-menu'
 import { PlayerVolumeControl } from '@/components/player-volume-control'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { buildMetadataBadges } from '@/lib/metadata-badges'
 import { resolveDisplayStream } from '@/components/player/resolve-stream'
+import { Link } from '@/i18n/navigation'
 import type { NowPlaying } from '@/lib/now-playing'
 import type { StationStream } from '@/types/player'
 import {
@@ -20,6 +22,7 @@ import {
   RadioIcon,
   CircleNotchIcon,
   CornersOutIcon,
+  PencilSimpleIcon,
 } from '@phosphor-icons/react'
 
 type PlayerStatBadge = {
@@ -109,6 +112,7 @@ export function PlayerBar() {
   const [fullScreen, setFullScreen] = useState(false)
   const [statsExpanded, setStatsExpanded] = useState(false)
   useEffect(() => setMounted(true), [])
+  const { isEditor } = useAuth()
 
   const {
     station,
@@ -206,9 +210,28 @@ export function PlayerBar() {
             )}
           </div>
           <div className="flex h-10 min-w-0 flex-1 flex-col justify-center pl-[7.55rem] sm:h-12 sm:pl-[9.25rem]">
-            <p className="truncate text-[1rem] font-semibold tracking-tight text-player-bar-fg sm:text-[1.4rem]">
-              {station?.name ?? '—'}
-            </p>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="truncate text-[1rem] font-semibold tracking-tight text-player-bar-fg sm:text-[1.4rem]">
+                {station?.name ?? '—'}
+              </p>
+              {isEditor && station && (
+                <Tooltip>
+                  <TooltipTrigger
+                    delay={300}
+                    render={
+                      <Link
+                        href={`/editor/stations/${station.id}`}
+                        aria-label="Edit station"
+                        className="shrink-0 flex items-center justify-center text-player-bar-muted transition-colors hover:text-player-bar-icon-hover"
+                      />
+                    }
+                  >
+                    <PencilSimpleIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" weight="light" />
+                  </TooltipTrigger>
+                  <TooltipContent>Edit station</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
             <div className={`flex h-3.5 min-w-0 items-center ${isError ? 'text-destructive' : 'text-player-bar-secondary'}`}>
               {!isReconnecting && secondaryLine ? (
                 <PlayerMetadataTicker className="w-full min-w-0 text-[11px] sm:text-[13px]" text={secondaryLine} active={isPlaying} />

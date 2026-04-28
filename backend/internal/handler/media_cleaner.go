@@ -8,7 +8,10 @@ import (
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
-const mediaCleanerInterval = 10 * time.Minute
+const (
+	mediaCleanerInterval  = 10 * time.Minute
+	mediaCleanerBatchSize = 100
+)
 
 // MediaCleaner periodically hard-deletes expired pending media asset rows and
 // their uploaded blobs. It runs on a fixed cadence; there is no manual trigger
@@ -29,6 +32,8 @@ func newMediaCleaner(
 
 // Run blocks, cleaning expired pending assets on mediaCleanerInterval.
 func (c *MediaCleaner) Run(ctx context.Context) {
+	c.runOnce(ctx)
+
 	ticker := time.NewTicker(mediaCleanerInterval)
 	defer ticker.Stop()
 	for {
@@ -42,9 +47,9 @@ func (c *MediaCleaner) Run(ctx context.Context) {
 }
 
 func (c *MediaCleaner) runOnce(ctx context.Context) {
-	expired, err := c.assets.DeleteExpiredPending(ctx)
+	expired, err := c.assets.ClaimExpiredPending(ctx, mediaCleanerBatchSize)
 	if err != nil {
-		c.log.Error("media cleaner: delete expired pending", "error", err)
+		c.log.Error("media cleaner: claim expired pending", "error", err)
 		return
 	}
 	if len(expired) == 0 {
@@ -54,11 +59,21 @@ func (c *MediaCleaner) runOnce(ctx context.Context) {
 	c.log.Info("media cleaner: removed expired pending assets", "count", len(expired))
 
 	for _, asset := range expired {
-		if asset.StorageKeyOriginal == "" {
-			continue
+		if asset.StorageKeyOriginal != "" {
+			if err := c.deleteBlob(ctx, asset.StorageKeyOriginal); err != nil {
+				c.log.Error("media cleaner: delete blob", "asset_id", asset.ID, "key", asset.StorageKeyOriginal, "error", err)
+				if releaseErr := c.assets.ReleaseCleanupClaim(ctx, asset.ID); releaseErr != nil && releaseErr != store.ErrNotFound {
+					c.log.Error("media cleaner: release cleanup claim", "asset_id", asset.ID, "error", releaseErr)
+				}
+				continue
+			}
 		}
-		if err := c.deleteBlob(ctx, asset.StorageKeyOriginal); err != nil {
-			c.log.Error("media cleaner: delete blob", "asset_id", asset.ID, "key", asset.StorageKeyOriginal, "error", err)
+		if err := c.assets.DeleteClaimedPending(ctx, asset.ID); err != nil && err != store.ErrNotFound {
+			c.log.Error("media cleaner: delete claimed row", "asset_id", asset.ID, "error", err)
+			if releaseErr := c.assets.ReleaseCleanupClaim(ctx, asset.ID); releaseErr != nil && releaseErr != store.ErrNotFound {
+				c.log.Error("media cleaner: release cleanup claim", "asset_id", asset.ID, "error", releaseErr)
+			}
+			continue
 		}
 	}
 }
