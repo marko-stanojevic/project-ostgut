@@ -47,6 +47,29 @@ func TestToStationResponsePublishesEditorialReviewNotInternalNotes(t *testing.T)
 	}
 }
 
+func TestMetadataResolverForResponseRecoversClientResolverFromBrowserReadableHint(t *testing.T) {
+	stream := &store.StationStream{
+		MetadataEnabled:  true,
+		MetadataResolver: "none",
+		MetadataURL:      stringPtr("https://somafm.example/status-json.xsl"),
+	}
+
+	if got := metadataResolverForResponse(stream); got != "client" {
+		t.Fatalf("expected client resolver from browser-readable metadata hint, got %q", got)
+	}
+}
+
+func TestMetadataEnabledForResponseRecoversDisabledStreamFromMetadataHint(t *testing.T) {
+	stream := &store.StationStream{
+		MetadataEnabled: false,
+		MetadataURL:     stringPtr("https://somafm.example/status-json.xsl"),
+	}
+
+	if !metadataEnabledForResponse(stream) {
+		t.Fatal("expected browser-readable metadata hint to recover metadata enabled state")
+	}
+}
+
 func stringPtr(value string) *string {
 	return &value
 }

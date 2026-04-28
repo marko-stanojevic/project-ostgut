@@ -136,7 +136,7 @@ type Handler struct {
 func New(deps Dependencies, opts Options) *Handler {
 	streamProbeClient := &http.Client{Timeout: 8 * time.Second}
 	metaFetcher := metadata.NewFetcher(opts.Log)
-	metaPoller := NewMetadataPoller(deps.StationStreamStore, deps.StreamNowPlayingStore, metaFetcher, opts.Log)
+	metaPoller := NewMetadataPoller(deps.StationStreamStore, deps.StreamNowPlayingStore, metaFetcher, opts.Log, opts.BrowserMetadataProbeOrigins)
 	h := &Handler{
 		auth: authHandlers{
 			users:       deps.UserStore,

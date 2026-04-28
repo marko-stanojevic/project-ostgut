@@ -117,6 +117,8 @@ function CuratedDetailsContent({ initialStation, initialError }: CuratedDetailsC
                                     src={initialStation.logo}
                                     alt={initialStation.name}
                                     fill
+                                    loading="eager"
+                                    fetchPriority="high"
                                     priority
                                     sizes="(max-width: 1024px) 100vw, 260px"
                                     className="object-cover"

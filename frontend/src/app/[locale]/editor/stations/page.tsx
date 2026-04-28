@@ -65,7 +65,13 @@ function metadataHealthBadge(streams: AdminStream[] | undefined): { label: strin
   const s = primaryActiveStream(streams)
   if (!s) return { label: '—', className: 'bg-secondary text-secondary-foreground' }
   if (!s.metadata_enabled) return { label: 'Disabled', className: 'bg-secondary text-secondary-foreground' }
-  if (s.metadata_error_code === 'no_metadata' || s.metadata_plan?.delivery === 'none') {
+  if (s.metadata_plan?.delivery === 'client-poll') {
+    return { label: 'Client', className: 'bg-success-soft text-success' }
+  }
+  if (s.metadata_plan?.delivery === 'hls-id3') {
+    return { label: 'HLS-ID3', className: 'bg-success-soft text-success' }
+  }
+  if (s.metadata_plan?.delivery === 'none' || s.metadata_error_code === 'no_metadata') {
     return { label: 'No metadata', className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' }
   }
   if (s.metadata_error || s.metadata_error_code) {

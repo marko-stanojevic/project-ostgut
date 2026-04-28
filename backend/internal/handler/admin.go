@@ -132,6 +132,86 @@ func (h *Handler) adminStationWithStreams(ctx context.Context, s *store.Station)
 	return toAdminStationResponse(s, streamMap[s.ID]), nil
 }
 
+func shouldRefreshMetadataRoutingForEditor(stream *store.StationStream) bool {
+	if stream == nil || !stream.IsActive {
+		return false
+	}
+	if !metadataEnabledForResponse(stream) {
+		return false
+	}
+	return stream.MetadataResolverCheckedAt == nil
+}
+
+func (h *Handler) refreshEditorStreamMetadataRouting(ctx context.Context, stream *store.StationStream) error {
+	if !shouldRefreshMetadataRoutingForEditor(stream) {
+		return nil
+	}
+
+	streamURL := strings.TrimSpace(stream.ResolvedURL)
+	if streamURL == "" {
+		streamURL = strings.TrimSpace(stream.URL)
+	}
+	if streamURL == "" {
+		return nil
+	}
+
+	resolvedKind := strings.TrimSpace(stream.Kind)
+	resolvedContainer := strings.TrimSpace(stream.Container)
+	if resolvedKind == "" || resolvedContainer == "" {
+		classified := radio.LightClassifyStreamURL(streamURL)
+		if resolvedKind == "" {
+			resolvedKind = strings.TrimSpace(classified.Kind)
+		}
+		if resolvedContainer == "" {
+			resolvedContainer = strings.TrimSpace(classified.Container)
+		}
+	}
+	if resolvedKind == "" {
+		resolvedKind = "direct"
+	}
+	if resolvedContainer == "" {
+		resolvedContainer = "none"
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+
+	metadataEnabled := metadataEnabledForResponse(stream)
+	clientMetadata := radio.ProbeClientMetadataSupport(
+		probeCtx,
+		h.admin.streamProbeClient,
+		h.admin.browserProbeOrigins,
+		streamURL,
+		stringValue(stream.MetadataURL),
+		resolvedKind,
+		resolvedContainer,
+		metadataEnabled,
+		stream.MetadataType,
+	)
+
+	hlsID3Supported := false
+	if metadataEnabled && strings.EqualFold(resolvedKind, "hls") {
+		hlsID3Supported = radio.ProbeHLSID3Support(probeCtx, h.admin.streamProbeClient, streamURL)
+	}
+
+	checkedAt := clientMetadata.CheckedAt
+	if checkedAt.IsZero() {
+		checkedAt = time.Now().UTC()
+	}
+
+	nextResolver := radio.ResolveMetadataResolverForStream(metadataEnabled, resolvedKind, clientMetadata.Supported, hlsID3Supported)
+	nextMetadataURL := optionalString(clientMetadata.MetadataURL)
+	if strings.EqualFold(nextResolver, metadata.ResolverClient) && nextMetadataURL == nil && strings.EqualFold(resolvedKind, "hls") {
+		nextMetadataURL = optionalString(streamURL)
+	}
+
+	return h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(ctx), stream.ID, store.MetadataResolverSnapshot{
+		Resolver:    nextResolver,
+		MetadataURL: nextMetadataURL,
+		CheckedAt:   &checkedAt,
+	})
+}
+
 type adminStreamRequest struct {
 	URL                    string          `json:"url"`
 	Priority               int             `json:"priority"`
@@ -426,7 +506,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 				return
 			}
-			if np.ErrorCode == metadata.ErrorCodeNoMeta {
+			if np.ErrorCode == metadata.ErrorCodeNoMeta && nextResolver != metadata.ResolverClient {
 				nextResolver = metadata.ResolverNone
 				nextMetadataURL = nil
 			}
@@ -537,6 +617,19 @@ func (h *Handler) AdminGetStation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
+
+	streams, err := h.admin.streams.ListByStationID(c.Request.Context(), s.ID)
+	if err != nil {
+		h.log.Error("admin get station streams for metadata refresh", "station_id", s.ID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	for _, stream := range streams {
+		if err := h.refreshEditorStreamMetadataRouting(c.Request.Context(), stream); err != nil {
+			h.log.Warn("admin get station metadata refresh", "station_id", s.ID, "stream_id", stream.ID, "error", err)
+		}
+	}
+
 	resp, err := h.adminStationWithStreams(c.Request.Context(), s)
 	if err != nil {
 		h.log.Error("admin get station streams", "station_id", s.ID, "error", err)
@@ -857,9 +950,6 @@ func (h *Handler) buildStationStreams(
 			isActive = *stream.IsActive
 		}
 		metadataEnabled := true
-		if stream.MetadataEnabled != nil {
-			metadataEnabled = *stream.MetadataEnabled
-		}
 		metadataType := "auto"
 		if stream.MetadataType != nil {
 			metadataType = normalizeMetadataType(*stream.MetadataType)

@@ -37,6 +37,7 @@ export function useNowPlaying(
   const streamMetadataErrorCode = stream?.metadataErrorCode || ''
   const streamMetadataDelivery = stream?.metadataPlan?.delivery || metadataDeliveryFromResolver(stream?.metadataResolver, streamKind)
   const streamMetadataResolver = stream?.metadataPlan?.resolver || stream?.metadataResolver
+  const usesClientMetadataDelivery = streamMetadataDelivery === 'client-poll' || streamMetadataDelivery === 'hls-id3'
   const streamSupportsServerSnapshot = Boolean(stream?.metadataPlan?.supportsServerSnapshot && streamMetadataDelivery === 'sse')
   const streamLeaseKey = streamId ? getClientMetadataLeaseStorageKey(streamId) : ''
   const streamSharedSnapshotKey = streamId ? getClientMetadataSnapshotStorageKey(streamId) : ''
@@ -179,7 +180,7 @@ export function useNowPlaying(
       retryLeadership()
     }
 
-    if (!streamMetadataEnabled || streamMetadataErrorCode === 'no_metadata' || streamMetadataResolver === 'none' || streamMetadataDelivery === 'none') {
+    if (!streamMetadataEnabled || (streamMetadataErrorCode === 'no_metadata' && !usesClientMetadataDelivery) || streamMetadataResolver === 'none' || streamMetadataDelivery === 'none') {
       setNowPlaying(null)
       setSettled(true)
       return () => {
@@ -444,6 +445,7 @@ export function useNowPlaying(
     streamMetadataErrorCode,
     streamMetadataResolver,
     streamMetadataDelivery,
+    usesClientMetadataDelivery,
     streamSupportsServerSnapshot,
     streamLeaseKey,
     streamSharedSnapshotKey,

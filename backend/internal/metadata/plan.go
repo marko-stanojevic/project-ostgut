@@ -130,6 +130,33 @@ func normalizeResolver(enabled bool, resolver string) string {
 	}
 }
 
+func IsBrowserReadableMetadataURLHint(metadataURL string) bool {
+	switch hintedMetadataKind(metadataURL, "") {
+	case TypeIcecast, TypeShoutcast:
+		return true
+	default:
+		return false
+	}
+}
+
+func HasRecoverableMetadataCapability(metadataURL string, provider string, sourceHint string, resolver string) bool {
+	if normalizeProvider(provider) != "" {
+		return true
+	}
+	if IsBrowserReadableMetadataURLHint(metadataURL) {
+		return true
+	}
+	if normalizeType(sourceHint) != "" && normalizeType(sourceHint) != TypeAuto {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(resolver)) {
+	case ResolverClient, ResolverServer:
+		return true
+	default:
+		return false
+	}
+}
+
 func planPreferredStrategy(metadataType, sourceHint, metadataURL string) string {
 	if normalized := normalizeType(metadataType); normalized != "" && normalized != TypeAuto {
 		return normalized

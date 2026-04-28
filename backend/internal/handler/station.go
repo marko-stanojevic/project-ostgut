@@ -80,6 +80,7 @@ type streamResponse struct {
 }
 
 func toStreamResponse(s *store.StationStream, nowPlaying *store.StreamNowPlaying) streamResponse {
+	metadataEnabled := metadataEnabledForResponse(s)
 	var lastCheckedAt *string
 	if s.LastCheckedAt != nil {
 		formatted := s.LastCheckedAt.UTC().Format(time.RFC3339)
@@ -126,7 +127,7 @@ func toStreamResponse(s *store.StationStream, nowPlaying *store.StreamNowPlaying
 		LoudnessSampleDuration:    s.LoudnessSampleDuration,
 		LoudnessMeasuredAt:        loudnessMeasuredAt,
 		LoudnessStatus:            s.LoudnessStatus,
-		MetadataEnabled:           s.MetadataEnabled,
+		MetadataEnabled:           metadataEnabled,
 		MetadataType:              s.MetadataType,
 		MetadataSource:            s.MetadataSource,
 		MetadataURL:               s.MetadataURL,
@@ -135,7 +136,7 @@ func toStreamResponse(s *store.StationStream, nowPlaying *store.StreamNowPlaying
 		MetadataProvider:          s.MetadataProvider,
 		MetadataProviderConfig:    decodeMetadataProviderConfig(s.MetadataProviderConfig),
 		MetadataPlan: metadata.BuildStreamPlan(metadata.StreamPlanInput{
-			Enabled:     s.MetadataEnabled,
+			Enabled:     metadataEnabled,
 			Type:        s.MetadataType,
 			SourceHint:  stringValue(s.MetadataSource),
 			MetadataURL: stringValue(s.MetadataURL),
@@ -153,6 +154,21 @@ func toStreamResponse(s *store.StationStream, nowPlaying *store.StreamNowPlaying
 		LastCheckedAt:         lastCheckedAt,
 		LastError:             s.LastError,
 	}
+}
+
+func metadataEnabledForResponse(s *store.StationStream) bool {
+	if s == nil {
+		return false
+	}
+	if s.MetadataEnabled {
+		return true
+	}
+	return metadata.HasRecoverableMetadataCapability(
+		stringValue(s.MetadataURL),
+		stringValue(s.MetadataProvider),
+		stringValue(s.MetadataSource),
+		s.MetadataResolver,
+	)
 }
 
 var publicStationListQueryParams = map[string]struct{}{
@@ -178,13 +194,16 @@ var publicStationSearchQueryParams = map[string]struct{}{
 }
 
 func metadataResolverForResponse(s *store.StationStream) string {
-	if s == nil || !s.MetadataEnabled {
+	if s == nil || !metadataEnabledForResponse(s) {
 		return metadata.ResolverNone
 	}
 	switch strings.ToLower(strings.TrimSpace(s.MetadataResolver)) {
 	case metadata.ResolverClient:
 		return metadata.ResolverClient
 	case metadata.ResolverNone:
+		if metadata.IsBrowserReadableMetadataURLHint(stringValue(s.MetadataURL)) {
+			return metadata.ResolverClient
+		}
 		return metadata.ResolverNone
 	default:
 		return metadata.ResolverServer
