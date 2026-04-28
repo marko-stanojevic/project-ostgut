@@ -92,6 +92,45 @@ unblock later ones.
 
 ### Validation
 
+- [ ] **Re-enable full GitHub Actions gates before launch**
+  Restore the development-disabled automation before public traffic. The
+  current reduced workflow set exists only to control pre-launch billing while
+  the same checks are expected to run locally before merge. Before launch,
+  explicitly put the hosted gate back in place:
+  - Re-enable [../../.github/workflows/ci.yml](../../.github/workflows/ci.yml)
+    on `push main`, not just on pull requests, so the protected branch itself
+    is validated after merge and before release operations depend on it.
+  - Restore the Docker validation jobs in `CI` for both backend and frontend,
+    so multi-stage Dockerfiles, distroless runtime assumptions, and build args
+    are exercised in hosted automation instead of only on developer machines.
+  - Restore any removed hosted verification steps that were trimmed for minute
+    control, including backend coverage artifact generation/upload if the team
+    wants coverage trend visibility again.
+  - Re-enable [../../.github/workflows/security.yml](../../.github/workflows/security.yml)
+    on both pull requests and `push main`, not only schedule/manual dispatch.
+    The launch-state expectation is that dependency, static-analysis, SBOM,
+    and image-scan failures are visible immediately on code changes.
+  - Confirm the security workflow again runs the full launch-time set:
+    `govulncheck`, `gosec`, `npm audit`, SBOM generation, Trivy filesystem
+    scanning, and backend/frontend image vulnerability scans.
+  - Decide whether [../../.github/workflows/deploy.yml](../../.github/workflows/deploy.yml)
+    should stay manual-only or return to automatic staging deploys from
+    `main`. If automatic deploys are restored, reintroduce the trigger only
+    after hosted branch validation is back in place; do not chain deploys to
+    an unvalidated branch.
+  - Replace the development-era expectation of running
+    `All: Validate Before Push` locally as the primary gate. Keep the VS Code
+    tasks as a fast local preflight, but make hosted GitHub Actions the source
+    of truth again for merge safety.
+  - Re-enable branch protection on `main` so merge is blocked unless the full
+    required check set passes. At minimum this should require the restored
+    `CI` workflow and the restored `Security` workflow; if automatic staging
+    deploys are part of launch operations, also require the deploy preconditions
+    that feed that path.
+  - Review artifact retention and job scope after re-enabling the full gate
+    set so minute reduction work does not silently leave production with a
+    weaker validation contract than intended.
+
 - [x] **Threat model document** (backlog 4.3)
   [Threat model](../security/threat-model.md) maps the OWASP Top 10 to endpoints
   with status (Mitigated / Accepted / TODO). It forces explicit
