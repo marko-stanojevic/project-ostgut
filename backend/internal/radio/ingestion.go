@@ -57,7 +57,6 @@ type Syncer struct {
 	streamStore *store.StationStreamStore
 	log         *slog.Logger
 	client      *http.Client // Radio Browser API requests
-	probeClient *http.Client // stream probing — shorter timeout
 	mu          sync.Mutex
 }
 
@@ -68,7 +67,6 @@ func NewSyncer(s *store.StationStore, streamStore *store.StationStreamStore, log
 		streamStore: streamStore,
 		log:         log,
 		client:      &http.Client{Timeout: 30 * time.Second},
-		probeClient: &http.Client{Timeout: 8 * time.Second},
 	}
 }
 
@@ -85,6 +83,15 @@ func (s *Syncer) Run(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// IsRunning reports whether a station sync is currently in progress.
+func (s *Syncer) IsRunning() bool {
+	if s.mu.TryLock() {
+		s.mu.Unlock()
+		return false
+	}
+	return true
 }
 
 // Trigger starts a manual station sync if one is not already running.
@@ -130,40 +137,20 @@ func (s *Syncer) sync(ctx context.Context) {
 			continue
 		}
 
+		// Light classification only — no network calls. Full probing (URL
+		// resolution, codec detection, metadata routing) is handled by the
+		// Prober once a station is approved for listener-facing use.
 		probe := LightClassifyStreamURL(st.SeedStreamURL)
-		// Playlist containers (m3u, pls) must be resolved to find the actual
-		// audio URL. We also probe opaque direct URLs (no known extension/codec)
-		// to classify HLS/audio by content-type instead of filename suffix.
-		if shouldProbeIngestionStream(probe) {
-			probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-			probe = ProbeStream(probeCtx, s.probeClient, st.SeedStreamURL)
-			cancel()
-		}
 		err = s.streamStore.UpsertPrimaryForStation(ctx, stationID, store.StationStreamInput{
-			URL:                    probe.URL,
-			ResolvedURL:            probe.ResolvedURL,
-			Kind:                   probe.Kind,
-			Container:              probe.Container,
-			Transport:              probe.Transport,
-			MimeType:               probe.MimeType,
-			Codec:                  probe.Codec,
-			Bitrate:                probe.Bitrate,
-			BitDepth:               probe.BitDepth,
-			SampleRateHz:           probe.SampleRateHz,
-			SampleRateConfidence:   probe.SampleRateConfidence,
-			Channels:               probe.Channels,
-			Priority:               1,
-			IsActive:               true,
-			LoudnessIntegratedLUFS: probe.LoudnessIntegratedLUFS,
-			LoudnessPeakDBFS:       probe.LoudnessPeakDBFS,
-			LoudnessSampleDuration: probe.LoudnessSampleDuration,
-			LoudnessMeasuredAt:     probe.LoudnessMeasuredAt,
-			LoudnessStatus:         probe.LoudnessStatus,
-			MetadataEnabled:        true,
-			MetadataType:           "auto",
-			HealthScore:            clamp(st.ReliabilityScore, 0, 1),
-			LastCheckedAt:          &probe.LastCheckedAt,
-			LastError:              probe.LastError,
+			URL:         probe.URL,
+			ResolvedURL: probe.ResolvedURL,
+			Kind:        probe.Kind,
+			Container:   probe.Container,
+			Transport:   probe.Transport,
+			Codec:       probe.Codec,
+			Priority:    1,
+			IsActive:    true,
+			HealthScore: clamp(st.ReliabilityScore, 0, 1),
 		})
 		if err != nil {
 			s.log.Warn("radio: stream upsert failed", "station", st.Name, "error", err)
@@ -172,13 +159,6 @@ func (s *Syncer) sync(ctx context.Context) {
 	}
 
 	s.log.Info("radio: sync done", "saved", saved, "duration", time.Since(start).Round(time.Second))
-}
-
-func shouldProbeIngestionStream(p StreamProbeResult) bool {
-	if p.Kind == "playlist" {
-		return true
-	}
-	return p.Kind == "direct" && p.Container == "none" && strings.TrimSpace(p.Codec) == ""
 }
 
 // fetch retrieves stations from Radio Browser, paginating until exhausted.
@@ -202,15 +182,17 @@ func (s *Syncer) fetch(ctx context.Context) ([]radioBrowserStation, error) {
 		if err != nil {
 			return nil, fmt.Errorf("radio browser request: %w", err)
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
 			return nil, fmt.Errorf("radio browser returned %d", resp.StatusCode)
 		}
 
 		var batch []radioBrowserStation
-		if err := json.NewDecoder(resp.Body).Decode(&batch); err != nil {
-			return nil, fmt.Errorf("decode: %w", err)
+		decodeErr := json.NewDecoder(resp.Body).Decode(&batch)
+		resp.Body.Close()
+		if decodeErr != nil {
+			return nil, fmt.Errorf("decode: %w", decodeErr)
 		}
 
 		all = append(all, batch...)

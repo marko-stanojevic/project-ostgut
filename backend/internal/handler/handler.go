@@ -111,6 +111,7 @@ type adminHandlers struct {
 	streamProber        *radio.Prober
 	metaFetcher         *metadata.Fetcher
 	streamProbeClient   *http.Client
+	metadataRouter      *radio.MetadataRouter
 	browserProbeOrigins []string
 }
 
@@ -123,6 +124,7 @@ type Handler struct {
 	station                     stationHandlers
 	media                       mediaHandlers
 	admin                       adminHandlers
+	mediaCleaner                *MediaCleaner
 	enforcePublicQueryAllowlist bool
 	publicAPIBaseURL            string
 	log                         *slog.Logger
@@ -134,9 +136,10 @@ type Handler struct {
 // New creates a Handler with grouped dependencies and runtime options.
 func New(deps Dependencies, opts Options) *Handler {
 	streamProbeClient := &http.Client{Timeout: 8 * time.Second}
+	metadataRouter := radio.NewMetadataRouter(streamProbeClient, opts.BrowserMetadataProbeOrigins)
 	metaFetcher := metadata.NewFetcher(opts.Log)
-	metaPoller := NewMetadataPoller(deps.StationStreamStore, deps.StreamNowPlayingStore, metaFetcher, opts.Log)
-	return &Handler{
+	metaPoller := NewMetadataPoller(deps.StationStreamStore, deps.StreamNowPlayingStore, metaFetcher, opts.Log, opts.BrowserMetadataProbeOrigins)
+	h := &Handler{
 		auth: authHandlers{
 			users:       deps.UserStore,
 			refresh:     deps.RefreshTokenStore,
@@ -189,6 +192,7 @@ func New(deps Dependencies, opts Options) *Handler {
 			streamProber:        deps.StreamProber,
 			metaFetcher:         metaFetcher,
 			streamProbeClient:   streamProbeClient,
+			metadataRouter:      metadataRouter,
 			browserProbeOrigins: append([]string(nil), opts.BrowserMetadataProbeOrigins...),
 		},
 		enforcePublicQueryAllowlist: opts.EnforcePublicQueryAllowlist,
@@ -196,10 +200,18 @@ func New(deps Dependencies, opts Options) *Handler {
 		log:                         opts.Log,
 		startedAt:                   time.Now().UTC(),
 	}
+	h.mediaCleaner = newMediaCleaner(deps.MediaAssetStore, h.deleteMediaBlob, opts.Log)
+	return h
 }
 
 // MetadataPoller returns the shared MetadataPoller instance. main.go calls
 // this to start the poller goroutine after the handler is constructed.
 func (h *Handler) MetadataPoller() *MetadataPoller {
 	return h.station.metaPoller
+}
+
+// MediaCleaner returns the shared MediaCleaner instance. main.go calls
+// this to start the cleaner goroutine after the handler is constructed.
+func (h *Handler) MediaCleaner() *MediaCleaner {
+	return h.mediaCleaner
 }

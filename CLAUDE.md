@@ -181,6 +181,7 @@ project-ostgut/
 - **pgcrypto is banned on Azure PostgreSQL Flexible Server** — use `gen_random_uuid()` built-in (PG 13+), no extension needed
 - **Config**: all env vars loaded in `config.Load()`. Add new vars there, never call `os.Getenv` directly in handlers
 - **Handler wiring**: add method to `internal/handler/` in its own file, add stores/deps to `Handler` struct in `handler.go` and `New()`, register route in `cmd/api/main.go`
+- **Timestamp formatting — two rules**: (1) Machine-consumed API fields (billing dates, player preferences, conflict resolution) use `RFC3339` / `RFC3339Nano`. (2) Human-readable display values in admin diagnostic items use `formatAdminDisplayTime()` in `handler/admin_diagnostics.go`, which produces `"Jan 2, 15:04 UTC"` (current year) or `"Jan 2 2006, 15:04 UTC"` (past year). Never pass raw RFC3339 to a field that renders directly in the UI.
 
 ## Frontend conventions
 
@@ -195,6 +196,7 @@ project-ostgut/
 - **Auth**: `useAuth()` from `@/context/AuthContext` gives `{ user, session, signOut }`. `session.accessToken` is the JWT for backend calls
 - **API calls**: use `process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'` as base URL, always pass `Authorization: Bearer ${session.accessToken}` on protected endpoints
 - **Audio player**: global state in `PlayerContext` — persists across navigation. Player bar is pinned to bottom of the protected layout. Volume and last station survive page reload (localStorage) and are synced per-user to the backend. Shared player primitives (stream resolution, waveform bars) live in `src/components/player/` and are reused by both the bar and the full-screen view.
+- **Timestamp display — relative vs absolute**: the `formatDateTime` helper in `admin-diagnostics-page.tsx` is the canonical pattern for human-facing timestamps. It returns relative time for recent values ("just now", "X minutes ago", "X hours ago") and falls back to `"Mon D at HH:MM"` / `"Mon D YYYY at HH:MM"` (UTC) for older dates. Do not use `toLocaleString()` or raw RFC3339 in any rendered label — both produce noisy, locale-dependent or machine-readable output.
 - **Frontend container runtime**: staging and production frontend images must remain distroless. Node upgrades are allowed, but do not switch the runtime stage to a general-purpose base image.
 
 ## Radio platform

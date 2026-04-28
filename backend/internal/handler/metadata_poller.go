@@ -13,11 +13,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -49,6 +51,7 @@ type MetadataPoller struct {
 	streams    *store.StationStreamStore
 	now        *store.StreamNowPlayingStore
 	fetcher    *metadata.Fetcher
+	router     *radio.MetadataRouter
 	log        *slog.Logger
 	fetchSlots chan struct{}
 	bulkMu     sync.Mutex
@@ -66,11 +69,13 @@ type pollerChannel struct {
 }
 
 // NewMetadataPoller wires the dependencies.
-func NewMetadataPoller(streams *store.StationStreamStore, now *store.StreamNowPlayingStore, fetcher *metadata.Fetcher, log *slog.Logger) *MetadataPoller {
+func NewMetadataPoller(streams *store.StationStreamStore, now *store.StreamNowPlayingStore, fetcher *metadata.Fetcher, log *slog.Logger, browserProbeOrigins []string) *MetadataPoller {
+	client := &http.Client{Timeout: 15 * time.Second}
 	return &MetadataPoller{
 		streams:    streams,
 		now:        now,
 		fetcher:    fetcher,
+		router:     radio.NewMetadataRouter(client, browserProbeOrigins),
 		log:        log,
 		fetchSlots: make(chan struct{}, pollerMaxConcurrentFetches),
 		channels:   make(map[string]*pollerChannel),
@@ -156,6 +161,13 @@ func (p *MetadataPoller) RefreshOnce(ctx context.Context, stream *store.StationS
 		defer cancel()
 		_, _ = p.fetchAndPersist(fetchCtx, stream, false)
 	}()
+}
+
+// BulkFetchIsRunning reports whether an admin-triggered metadata coverage pass is in progress.
+func (p *MetadataPoller) BulkFetchIsRunning() bool {
+	p.bulkMu.Lock()
+	defer p.bulkMu.Unlock()
+	return p.bulkActive
 }
 
 // TriggerApprovedMetadataFetch starts an explicit admin-requested metadata
@@ -330,11 +342,8 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 		if checkedAt.IsZero() {
 			checkedAt = time.Now().UTC()
 		}
-		if err := p.streams.UpdateMetadataResolver(persistCtx, stream.ID, store.MetadataResolverSnapshot{
-			Resolver:  metadata.ResolverNone,
-			CheckedAt: &checkedAt,
-			Delayed:   &ev.DelayedICY,
-		}); err != nil {
+		snapshot := p.metadataResolverSnapshotAfterNoMetadata(fetchCtx, stream, checkedAt, ev.DelayedICY)
+		if err := p.streams.UpdateMetadataResolver(persistCtx, stream.ID, snapshot); err != nil {
 			p.log.Warn("metadata poller: disable metadata resolver failed", "stream_id", stream.ID, "error", err)
 		}
 	}
@@ -364,6 +373,43 @@ func (p *MetadataPoller) acquireFetchSlot(ctx context.Context) (func(), bool) {
 
 func isNoMetadataSnapshot(snap *Snapshot) bool {
 	return snap != nil && snap.ErrorCode == metadata.ErrorCodeNoMeta
+}
+
+func (p *MetadataPoller) metadataResolverSnapshotAfterNoMetadata(
+	ctx context.Context,
+	stream *store.StationStream,
+	checkedAt time.Time,
+	delayed bool,
+) store.MetadataResolverSnapshot {
+	snapshot := store.MetadataResolverSnapshot{
+		Resolver:  metadata.ResolverNone,
+		CheckedAt: &checkedAt,
+		Delayed:   &delayed,
+	}
+	if stream == nil || !metadataEnabledForResponse(stream) {
+		return snapshot
+	}
+
+	streamURL := strings.TrimSpace(stream.ResolvedURL)
+	if streamURL == "" {
+		streamURL = strings.TrimSpace(stream.URL)
+	}
+	if streamURL == "" {
+		return snapshot
+	}
+
+	routing := p.router.Classify(ctx, radio.MetadataRouteInput{
+		StreamURL:       streamURL,
+		MetadataURLHint: stringValue(stream.MetadataURL),
+		Kind:            stream.Kind,
+		Container:       stream.Container,
+		MetadataEnabled: metadataEnabledForResponse(stream),
+		MetadataType:    stream.MetadataType,
+	})
+	snapshot.Resolver = routing.Resolver
+	snapshot.MetadataURL = routing.MetadataURL
+	snapshot.CheckedAt = &routing.CheckedAt
+	return snapshot
 }
 
 func (p *MetadataPoller) broadcast(ch *pollerChannel, snap Snapshot) {

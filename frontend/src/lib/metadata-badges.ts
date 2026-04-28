@@ -7,7 +7,8 @@ export function buildMetadataBadges(
   nowPlaying: NowPlaying | null,
 ): string[] {
   if (!stream?.metadataEnabled) return []
-  if (stream.metadataErrorCode === 'no_metadata') return []
+  const usesClientMetadataDelivery = stream.metadataPlan?.delivery === 'client-poll' || stream.metadataPlan?.delivery === 'hls-id3'
+  if (stream.metadataErrorCode === 'no_metadata' && !usesClientMetadataDelivery) return []
   if (stream.metadataPlan?.delivery === 'none' || stream.metadataPlan?.resolver === 'none') return []
 
   const hasLiveMetadata = nowPlaying?.status === 'ok' && Boolean(nowPlaying.title)

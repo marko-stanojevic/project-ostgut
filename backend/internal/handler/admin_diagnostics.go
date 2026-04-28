@@ -129,7 +129,7 @@ func (h *Handler) AdminDatabaseDiagnostics(c *gin.Context) {
 				Items: []adminDiagnosticItem{
 					adminDiagnosticItemValue("database", "Database", diagnostics.DatabaseName, "neutral", "Connected database name."),
 					adminDiagnosticItemValue("user", "Database user", diagnostics.DatabaseUser, "neutral", "Database role used by the API."),
-					adminDiagnosticItemValue("server_started", "Server started", diagnostics.ServerStartedAt.Format(time.RFC3339), "neutral", "PostgreSQL postmaster start time."),
+					adminDiagnosticItemValue("server_started", "Server started", formatAdminDisplayTime(diagnostics.ServerStartedAt.UTC()), "neutral", "PostgreSQL postmaster start time."),
 					adminDiagnosticItemValue("server_uptime", "Server uptime", formatAdminSystemDuration(now.Sub(diagnostics.ServerStartedAt.UTC())), "neutral", "How long the PostgreSQL server has been running."),
 					adminDiagnosticItemValue("server_version", "Server version", summarizePostgresVersion(diagnostics.ServerVersion), "neutral", "PostgreSQL server version string."),
 				},
@@ -192,14 +192,17 @@ func (h *Handler) AdminJobsDiagnostics(c *gin.Context) {
 		return
 	}
 
+	syncCheck := stationSyncStatusCheck(stations.LastSyncedAt, now)
+	syncCheck.Running = h.admin.stationSyncer.IsRunning()
+	probeCheck := streamProbeStatusCheck(streams, now)
+	probeCheck.Running = h.admin.streamProber.IsRunning()
+	metaCheck := metadataStatusCheck(streams, now)
+	metaCheck.Running = h.station.metaPoller.BulkFetchIsRunning()
+
 	response := adminDiagnosticResponse{
 		Title:       "Jobs diagnostics",
 		Description: "Background worker cadence and freshness inferred from approved, listener-facing data they maintain.",
-		StatusChecks: []adminSystemStatusCheck{
-			stationSyncStatusCheck(stations.LastSyncedAt, now),
-			streamProbeStatusCheck(streams, now),
-			metadataStatusCheck(streams, now),
-		},
+		StatusChecks: []adminSystemStatusCheck{syncCheck, probeCheck, metaCheck},
 		Sections: []adminDiagnosticSection{
 			{
 				ID:          "station_sync",
@@ -365,7 +368,14 @@ func formatOptionalTime(value *time.Time) string {
 	if value == nil {
 		return "Not recorded"
 	}
-	return value.UTC().Format(time.RFC3339)
+	return formatAdminDisplayTime(value.UTC())
+}
+
+func formatAdminDisplayTime(t time.Time) string {
+	if t.UTC().Year() == time.Now().UTC().Year() {
+		return t.UTC().Format("Jan 2, 15:04 UTC")
+	}
+	return t.UTC().Format("Jan 2 2006, 15:04 UTC")
 }
 
 func formatBool(value bool) string {

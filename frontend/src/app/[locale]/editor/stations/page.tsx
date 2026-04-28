@@ -5,8 +5,11 @@ import { useSearchParams } from 'next/navigation'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { useAuth } from '@/context/AuthContext'
+import { usePlayer } from '@/context/PlayerContext'
+import { toStation } from '@/lib/station'
 import { useEditorSearch } from '../editor-search-context'
-import { bulkUpdateEditorStations, createEditorStation, listEditorStations, normalizeModerationStatus, type AdminStation, type StationModerationStatus } from '@/lib/editor-stations'
+import { bulkUpdateEditorStations, createEditorStation, listEditorStations, normalizeModerationStatus, type AdminStation, type AdminStream, type StationModerationStatus } from '@/lib/editor-stations'
+import type { ApiStation } from '@/types/station'
 import { AdminPagination } from '@/components/admin/admin-pagination'
 import { AdminTableSkeletonRows } from '@/components/admin/admin-table-skeleton-rows'
 import { Button } from '@/components/ui/button'
@@ -26,7 +29,8 @@ import {
 import {
   CheckCircleIcon,
   ClockIcon,
-  ArrowSquareOutIcon,
+  PlayIcon,
+  PauseIcon,
 } from '@phosphor-icons/react'
 
 const PAGE_SIZE = 50
@@ -35,10 +39,50 @@ const stationSkeletonCells = [
   { tdClassName: 'px-4 py-3', skeletonClassName: 'h-4 w-4' },
   { tdClassName: 'px-4 py-3', items: ['h-7 w-7 rounded shrink-0', 'h-4 w-36'] },
   { tdClassName: 'px-4 py-3 hidden md:table-cell', skeletonClassName: 'h-4 w-20' },
-  { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-16' },
   { tdClassName: 'px-4 py-3 hidden lg:table-cell', skeletonClassName: 'h-4 w-20' },
-  { tdClassName: 'px-4 py-3', skeletonClassName: 'h-7 w-16 ml-auto' },
+  { tdClassName: 'px-4 py-3', skeletonClassName: 'h-7 w-7 mx-auto' },
+  { tdClassName: 'px-4 py-3 hidden md:table-cell', skeletonClassName: 'h-5 w-16' },
+  { tdClassName: 'px-4 py-3 hidden md:table-cell', skeletonClassName: 'h-5 w-20' },
 ]
+
+const HEALTH_BADGE_BASE = 'inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em]'
+
+function primaryActiveStream(streams: AdminStream[] | undefined): AdminStream | null {
+  return [...(streams ?? [])]
+    .filter((s) => s.is_active)
+    .sort((a, b) => a.priority - b.priority)[0] ?? null
+}
+
+function streamHealthBadge(streams: AdminStream[] | undefined): { label: string; className: string } {
+  const s = primaryActiveStream(streams)
+  if (!s) return { label: 'No stream', className: 'bg-secondary text-secondary-foreground' }
+  if (s.health_score >= 0.8) return { label: 'Healthy', className: 'bg-success-soft text-success' }
+  if (s.health_score >= 0.5) return { label: 'Degraded', className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' }
+  return { label: 'Poor', className: 'bg-destructive-soft text-destructive' }
+}
+
+function metadataHealthBadge(streams: AdminStream[] | undefined): { label: string; className: string } {
+  const s = primaryActiveStream(streams)
+  if (!s) return { label: '—', className: 'bg-secondary text-secondary-foreground' }
+  if (!s.metadata_enabled) return { label: 'Disabled', className: 'bg-secondary text-secondary-foreground' }
+  if (s.metadata_plan?.delivery === 'client-poll') {
+    return { label: 'Client', className: 'bg-success-soft text-success' }
+  }
+  if (s.metadata_plan?.delivery === 'hls-id3') {
+    return { label: 'HLS-ID3', className: 'bg-success-soft text-success' }
+  }
+  if (s.metadata_plan?.delivery === 'none' || s.metadata_error_code === 'no_metadata') {
+    return { label: 'No metadata', className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' }
+  }
+  if (s.metadata_error || s.metadata_error_code) {
+    return { label: 'Error', className: 'bg-destructive-soft text-destructive' }
+  }
+  const deliveryLabel: Record<string, string> = { sse: 'SSE', 'client-poll': 'Client', 'hls-id3': 'HLS-ID3' }
+  if (s.metadata_plan?.delivery) {
+    return { label: deliveryLabel[s.metadata_plan.delivery] ?? s.metadata_plan.delivery, className: 'bg-success-soft text-success' }
+  }
+  return { label: 'Unknown', className: 'bg-secondary text-secondary-foreground' }
+}
 
 interface CreateStationForm {
   name: string
@@ -75,9 +119,14 @@ function isValidAbsoluteURL(value: string) {
   }
 }
 
+function adminStationToPlayerStation(s: AdminStation) {
+  return toStation(s as unknown as ApiStation)
+}
+
 export default function AdminStationsPage() {
   const t = useTranslations('admin')
   const { session } = useAuth()
+  const { station: playingStation, state: playerState, play, pause } = usePlayer()
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -276,12 +325,9 @@ export default function AdminStationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t('stations_title')}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{t('stations_description')}</p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)}>{t('add_station')}</Button>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('stations_title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('stations_description')}</p>
       </div>
 
       {/* Status selector */}
@@ -305,8 +351,12 @@ export default function AdminStationsPage() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
+        <Button onClick={() => setCreateOpen(true)} className="ml-auto">
+          {t('add_station')}
+        </Button>
+
         {selected.size > 0 && (
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{t('selected', { count: selected.size })}</span>
             <Button
               size="sm"
@@ -339,8 +389,9 @@ export default function AdminStationsPage() {
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('col_station')}</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">{t('col_genre')}</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">{t('field_city')}</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">{t('col_country')}</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t('col_actions')}</th>
+              <th className="w-12 px-2 py-3 text-center font-medium text-muted-foreground">Play</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Stream</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Metadata</th>
             </tr>
           </thead>
           <tbody>
@@ -348,7 +399,7 @@ export default function AdminStationsPage() {
               <AdminTableSkeletonRows cells={stationSkeletonCells} />
             ) : stations.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-16 text-center text-muted-foreground text-sm">
+                <td colSpan={6} className="px-4 py-16 text-center text-muted-foreground text-sm">
                   {t('no_stations')}
                 </td>
               </tr>
@@ -393,14 +444,36 @@ export default function AdminStationsPage() {
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{(s.genre_tags ?? []).join(', ') || '—'}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.city || '—'}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.country || '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Link href={`/editor/stations/${s.id}`}>
-                        <Button variant="ghost" size="sm" className="h-7 gap-1.5">
-                          {t('edit')}
-                          <ArrowSquareOutIcon className="h-3 w-3" />
-                        </Button>
-                      </Link>
+                    <td className="px-2 py-3 text-center">
+                      <button
+                        type="button"
+                        aria-label={playingStation?.id === s.id && playerState === 'playing' ? `Pause ${s.name}` : `Play ${s.name}`}
+                        onClick={() => {
+                          if (playingStation?.id === s.id && playerState === 'playing') {
+                            pause()
+                          } else {
+                            play(adminStationToPlayerStation(s))
+                          }
+                        }}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        {playingStation?.id === s.id && playerState === 'playing'
+                          ? <PauseIcon weight="fill" className="h-3.5 w-3.5" />
+                          : <PlayIcon weight="fill" className="h-3.5 w-3.5" />
+                        }
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {(() => {
+                        const badge = streamHealthBadge(s.streams)
+                        return <span className={`${HEALTH_BADGE_BASE} ${badge.className}`}>{badge.label}</span>
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {(() => {
+                        const badge = metadataHealthBadge(s.streams)
+                        return <span className={`${HEALTH_BADGE_BASE} ${badge.className}`}>{badge.label}</span>
+                      })()}
                     </td>
                   </tr>
                 )

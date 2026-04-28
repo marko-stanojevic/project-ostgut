@@ -645,7 +645,10 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			metadata_provider = EXCLUDED.metadata_provider,
 			metadata_provider_config = EXCLUDED.metadata_provider_config,
 			health_score = EXCLUDED.health_score,
-			next_probe_at = EXCLUDED.next_probe_at,
+			next_probe_at = CASE
+				WHEN station_streams.url != EXCLUDED.url THEN NOW()
+				ELSE station_streams.next_probe_at
+			END,
 			last_checked_at = EXCLUDED.last_checked_at,
 			last_error = EXCLUDED.last_error,
 			last_probe_error_code = EXCLUDED.last_probe_error_code,
@@ -980,6 +983,23 @@ func (s *StationStreamStore) UpdateMetadataResolver(
 	)
 	if err != nil {
 		return fmt.Errorf("update metadata resolver: %w", err)
+	}
+	return nil
+}
+
+func (s *StationStreamStore) UpdateMetadataEnabled(ctx context.Context, id string, enabled bool) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE station_streams
+		SET
+			metadata_enabled = $1,
+			updated_at = NOW()
+		WHERE id = $2
+		  AND metadata_enabled IS DISTINCT FROM $1`,
+		enabled,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("update metadata enabled: %w", err)
 	}
 	return nil
 }

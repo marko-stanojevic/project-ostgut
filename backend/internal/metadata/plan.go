@@ -21,6 +21,7 @@ const (
 	PlanReasonBrowserReadableStream = "browser-readable-stream"
 	PlanReasonBrowserMetadataURL    = "browser-readable-metadata-endpoint"
 	PlanReasonHLSID3                = "hls-id3"
+	PlanReasonMetadataUnavailable   = "metadata-unavailable"
 	PlanReasonUnsupportedKind       = "unsupported-kind"
 	PlanReasonSupplementalProvider  = "supplemental-provider"
 )
@@ -110,6 +111,8 @@ func BuildStreamPlan(in StreamPlanInput) StreamPlan {
 
 	if kind == "hls" {
 		plan.Reason = PlanReasonHLSID3
+	} else if supportsServer {
+		plan.Reason = PlanReasonMetadataUnavailable
 	} else if kind == "dash" || container == "mpd" {
 		plan.Reason = PlanReasonUnsupportedKind
 	}
@@ -127,6 +130,33 @@ func normalizeResolver(enabled bool, resolver string) string {
 		return ResolverNone
 	default:
 		return ResolverServer
+	}
+}
+
+func IsBrowserReadableMetadataURLHint(metadataURL string) bool {
+	switch hintedMetadataKind(metadataURL, "") {
+	case TypeIcecast, TypeShoutcast:
+		return true
+	default:
+		return false
+	}
+}
+
+func HasRecoverableMetadataCapability(metadataURL string, provider string, sourceHint string, resolver string) bool {
+	if normalizeProvider(provider) != "" {
+		return true
+	}
+	if IsBrowserReadableMetadataURLHint(metadataURL) {
+		return true
+	}
+	if normalizeType(sourceHint) != "" && normalizeType(sourceHint) != TypeAuto {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(resolver)) {
+	case ResolverClient, ResolverServer:
+		return true
+	default:
+		return false
 	}
 }
 

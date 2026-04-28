@@ -161,6 +161,16 @@ Return `store.ErrNotFound` from store methods when a row is missing. Check with 
 ### Config
 All env vars must be added to `internal/config/config.go` `Config` struct and `Load()`. Never call `os.Getenv` elsewhere.
 
+### Timestamp formatting
+Two rules — pick the right one for the context:
+
+| Use case | Format | Example |
+|----------|--------|---------|
+| Machine-consumed API fields (billing, player prefs, conflict resolution) | `RFC3339` / `RFC3339Nano` | `2026-04-27T14:32:05Z` |
+| Human-readable display values in admin diagnostic items | `formatAdminDisplayTime()` in `handler/admin_diagnostics.go` | `Apr 27, 14:32 UTC` / `Apr 27 2024, 14:32 UTC` |
+
+Never pass a raw RFC3339 string into a struct field that renders directly in the UI.
+
 ## Frontend patterns
 
 ### shadcn/ui v4 — render prop (not asChild)
@@ -208,6 +218,18 @@ Global state lives in `PlayerContext`. Always use the context to set/read the cu
 ### Frontend container runtime
 The frontend container for staging and production must remain distroless. Upgrade the Node major when needed, but do not replace the runtime stage with a general-purpose Linux image.
 
+### Timestamp display
+Use relative time for freshness labels; use the absolute fallback for static data values. The canonical helper is `formatDateTime` in `src/components/admin-diagnostics-page.tsx`:
+
+```typescript
+// < 60s  → "just now"
+// < 60m  → "3 minutes ago"
+// < 24h  → "2 hours ago"
+// older  → "Apr 27 at 14:32" / "Apr 27 2024 at 14:32"  (UTC, no locale noise)
+```
+
+Never use `Date.toLocaleString()` or render a raw RFC3339 string in any label or table cell.
+
 ## Radio station model
 
 ```typescript
@@ -253,3 +275,5 @@ interface Station {
 - Large station lists without pagination (max ~50 per view)
 - Playback state managed locally in a page component
 - A non-distroless frontend runtime image for staging or production
+- Raw RFC3339 strings in rendered UI labels or table cells — use `formatAdminDisplayTime()` (backend) or `formatDateTime()` (frontend) instead
+- `Date.toLocaleString()` for any displayed timestamp — it produces locale-dependent, noisy output

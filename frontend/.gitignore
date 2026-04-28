@@ -11,6 +11,7 @@ coverage
 .next-wsl
 .wsl-cache
 out
+next-env.d.ts
 
 # Production
 build

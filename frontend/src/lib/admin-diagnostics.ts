@@ -4,7 +4,7 @@ import { fetchJSONWithAuth } from '@/lib/auth-fetch'
 
 const ADMIN_DIAGNOSTICS_CONTRACT = 'admin diagnostics payload'
 
-export type AdminDiagnosticKind = 'api' | 'database' | 'jobs'
+export type AdminDiagnosticKind = 'api' | 'database' | 'jobs' | 'media'
 export type AdminDiagnosticStatus = 'operational' | 'attention'
 export type AdminDiagnosticTone = 'neutral' | 'attention'
 export type AdminJobTriggerID = 'station-sync' | 'stream-reprobe' | 'metadata-fetch'
@@ -24,6 +24,7 @@ export type AdminDiagnosticStatusCheck = {
   status: AdminDiagnosticStatus
   detail: string
   checked_at: string
+  running: boolean
 }
 
 export type AdminDiagnosticSection = {
@@ -52,6 +53,7 @@ const diagnosticPaths: Record<AdminDiagnosticKind, string> = {
   api: '/admin/diagnostics/api',
   database: '/admin/diagnostics/database',
   jobs: '/admin/diagnostics/jobs',
+  media: '/admin/diagnostics/media',
 }
 
 export async function getAdminDiagnostics(
@@ -108,6 +110,7 @@ function parseStatusCheck(payload: unknown, index: number): AdminDiagnosticStatu
     status: requireStatus(statusCheck.status, `status_checks[${index}].status`),
     detail: requireString(statusCheck.detail, `status_checks[${index}].detail`, ADMIN_DIAGNOSTICS_CONTRACT),
     checked_at: requireString(statusCheck.checked_at, `status_checks[${index}].checked_at`, ADMIN_DIAGNOSTICS_CONTRACT),
+    running: statusCheck.running === true,
   }
 }
 

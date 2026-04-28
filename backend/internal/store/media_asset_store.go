@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -46,6 +47,24 @@ type MediaAssetAdminSummary struct {
 	Pending  int
 	Rejected int
 	Bytes    int64
+}
+
+// MediaAssetAdminDetailedSummary extends the overview summary with per-kind
+// breakdowns, storage stats, and content-hash integrity coverage.
+type MediaAssetAdminDetailedSummary struct {
+	Total            int
+	Ready            int
+	Pending          int
+	Rejected         int
+	TotalBytes       int64
+	AvatarTotal      int
+	AvatarBytes      int64
+	StationIconTotal int
+	StationIconBytes int64
+	AvgReadyBytes    int64
+	HashCovered      int
+	LatestCreatedAt  *time.Time
+	LatestReadyAt    *time.Time
 }
 
 // CreateMediaAssetParams contains fields for creating a pending media asset row.
@@ -91,6 +110,48 @@ func (s *MediaAssetStore) AdminSummary(ctx context.Context) (*MediaAssetAdminSum
 	).Scan(&summary.Total, &summary.Ready, &summary.Pending, &summary.Rejected, &summary.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("admin media asset summary: %w", err)
+	}
+	return &summary, nil
+}
+
+// AdminDetailedSummary returns extended media-asset pipeline aggregates for the
+// admin media diagnostics page. All byte counts reflect ready assets only since
+// pending and rejected rows do not have a stored byte_size.
+func (s *MediaAssetStore) AdminDetailedSummary(ctx context.Context) (*MediaAssetAdminDetailedSummary, error) {
+	var summary MediaAssetAdminDetailedSummary
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COUNT(*) FILTER (WHERE status = 'ready')::int,
+			COUNT(*) FILTER (WHERE status = 'pending')::int,
+			COUNT(*) FILTER (WHERE status = 'rejected')::int,
+			COALESCE(SUM(byte_size) FILTER (WHERE status = 'ready'), 0)::bigint,
+			COUNT(*) FILTER (WHERE kind = 'avatar')::int,
+			COALESCE(SUM(byte_size) FILTER (WHERE kind = 'avatar' AND status = 'ready'), 0)::bigint,
+			COUNT(*) FILTER (WHERE kind = 'station_icon')::int,
+			COALESCE(SUM(byte_size) FILTER (WHERE kind = 'station_icon' AND status = 'ready'), 0)::bigint,
+			COALESCE(AVG(byte_size) FILTER (WHERE status = 'ready'), 0)::bigint,
+			COUNT(*) FILTER (WHERE content_hash IS NOT NULL AND status = 'ready')::int,
+			MAX(created_at),
+			MAX(updated_at) FILTER (WHERE status = 'ready')
+		FROM media_assets`,
+	).Scan(
+		&summary.Total,
+		&summary.Ready,
+		&summary.Pending,
+		&summary.Rejected,
+		&summary.TotalBytes,
+		&summary.AvatarTotal,
+		&summary.AvatarBytes,
+		&summary.StationIconTotal,
+		&summary.StationIconBytes,
+		&summary.AvgReadyBytes,
+		&summary.HashCovered,
+		&summary.LatestCreatedAt,
+		&summary.LatestReadyAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("admin media asset detailed summary: %w", err)
 	}
 	return &summary, nil
 }
@@ -154,7 +215,20 @@ func validateKind(kind string) error {
 	}
 }
 
-// CreatePending inserts a pending media asset row.
+// pendingAssetTTL is how long a pending asset row survives before the cleaner
+// removes it. It intentionally exceeds the 15-minute upload-token TTL so a
+// slow-but-valid upload is not evicted mid-flight.
+const pendingAssetTTL = 20 * time.Minute
+
+// ExpiredPendingAsset is an expired pending row claimed for cleanup. It carries
+// the storage key so the caller can purge any uploaded blob before final delete.
+type ExpiredPendingAsset struct {
+	ID                 string
+	StorageKeyOriginal string
+}
+
+// CreatePending inserts a pending media asset row with an expiry deadline
+// after which the background cleaner will remove it if never completed.
 func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetParams) (*MediaAsset, error) {
 	if err := validateOwnerType(p.OwnerType); err != nil {
 		return nil, err
@@ -164,8 +238,8 @@ func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetP
 	}
 
 	row := s.pool.QueryRow(ctx,
-		`INSERT INTO media_assets (owner_type, owner_id, kind, storage_key_original, mime_type, status)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO media_assets (owner_type, owner_id, kind, storage_key_original, mime_type, status, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, NOW() + $7::interval)
 		 RETURNING `+mediaAssetColumns,
 		p.OwnerType,
 		p.OwnerID,
@@ -173,6 +247,7 @@ func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetP
 		p.StorageKeyOriginal,
 		p.MIMEType,
 		MediaAssetStatusPending,
+		pendingAssetTTL.String(),
 	)
 
 	a, err := scanMediaAsset(row)
@@ -180,6 +255,90 @@ func (s *MediaAssetStore) CreatePending(ctx context.Context, p CreateMediaAssetP
 		return nil, fmt.Errorf("create media asset: %w", err)
 	}
 	return a, nil
+}
+
+// ClaimExpiredPending marks a bounded batch of expired pending rows as owned by
+// the cleaner and returns them so the caller can delete blobs outside the txn.
+func (s *MediaAssetStore) ClaimExpiredPending(ctx context.Context, limit int) ([]ExpiredPendingAsset, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx, `
+		WITH expired AS (
+			SELECT id, storage_key_original
+			FROM media_assets
+			WHERE status = 'pending'
+			  AND cleanup_claimed_at IS NULL
+			  AND (
+			    (expires_at IS NOT NULL AND expires_at < NOW())
+			    OR (expires_at IS NULL AND created_at < NOW() - $1::interval)
+			  )
+			ORDER BY expires_at ASC NULLS FIRST, created_at ASC
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE media_assets AS m
+		SET cleanup_claimed_at = NOW(),
+		    updated_at = NOW()
+		FROM expired
+		WHERE m.id = expired.id
+		RETURNING m.id, m.storage_key_original`,
+		pendingAssetTTL.String(),
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("claim expired pending media assets: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ExpiredPendingAsset
+	for rows.Next() {
+		var a ExpiredPendingAsset
+		if err := rows.Scan(&a.ID, &a.StorageKeyOriginal); err != nil {
+			return nil, fmt.Errorf("scan expired pending asset: %w", err)
+		}
+		result = append(result, a)
+	}
+	return result, rows.Err()
+}
+
+// DeleteClaimedPending hard-deletes a row only if it is still pending and still
+// owned by the cleanup worker.
+func (s *MediaAssetStore) DeleteClaimedPending(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `
+		DELETE FROM media_assets
+		WHERE id = $1
+		  AND status = 'pending'
+		  AND cleanup_claimed_at IS NOT NULL`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("delete claimed pending media asset: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ReleaseCleanupClaim clears the retry claim when blob deletion failed so the
+// next cleaner pass can try again.
+func (s *MediaAssetStore) ReleaseCleanupClaim(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE media_assets
+		SET cleanup_claimed_at = NULL,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND status = 'pending'`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("release cleanup claim: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // GetByID fetches a media asset by UUID.
@@ -257,8 +416,11 @@ func (s *MediaAssetStore) MarkReady(ctx context.Context, id string, p MarkMediaA
 		     content_hash = $6,
 		     status = $7,
 		     rejection_reason = NULL,
+		     cleanup_claimed_at = NULL,
+		     expires_at = NULL,
 		     updated_at = NOW()
-		 WHERE id = $8`,
+		 WHERE id = $8
+		   AND cleanup_claimed_at IS NULL`,
 		variantsJSON,
 		p.MIMEType,
 		p.Width,
@@ -283,8 +445,11 @@ func (s *MediaAssetStore) MarkRejected(ctx context.Context, id, reason string) e
 		`UPDATE media_assets
 		 SET status = $1,
 		     rejection_reason = $2,
+		     cleanup_claimed_at = NULL,
+		     expires_at = NULL,
 		     updated_at = NOW()
-		 WHERE id = $3`,
+		 WHERE id = $3
+		   AND cleanup_claimed_at IS NULL`,
 		MediaAssetStatusRejected,
 		reason,
 		id,

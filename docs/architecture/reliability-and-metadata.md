@@ -177,17 +177,18 @@ The frontend treats `metadata_plan.delivery` as the runtime source of truth. A s
 Resolver checks run in two places:
 
 - the 12-hour background prober
-- the manual `Probe resolver`, `Probe metadata`, and `Probe full` actions in admin
+- explicit metadata probe endpoints used by internal operations
+- the editor station detail read path for active, enabled streams that still have no resolver check recorded
 
-The backend decides routing by testing realistic browser constraints such as CORS and readable metadata endpoints, using configured app origins. Client-readable metadata is always preferred when available; `server` exists as the fallback path for streams that only the backend can read. For HLS streams, the prober also checks whether early media segments expose ID3 tags; HLS streams with detectable ID3 resolve to `client`, while HLS streams without ID3 resolve to `none`.
+The backend decides routing through one shared metadata router service. It tests realistic browser constraints such as CORS and readable metadata endpoints, using configured app origins. Client-readable metadata is always preferred when available; `server` exists as the fallback path for streams that only the backend can read. For HLS streams, the same router also checks whether early media segments expose ID3 tags; HLS streams with detectable ID3 resolve to `client`, while HLS streams without ID3 resolve to `none`.
 
 When a client-capability check succeeds, OSTGUT persists the resolver plus the winning client-readable `metadata_url`. When a backend metadata fetch succeeds, OSTGUT also persists the detected `metadata_source` and exact winning `metadata_url`. Both the backend poller and later manual probes reuse those hints before falling back to broader discovery. When a backend metadata fetch confirms `no_metadata`, the poller writes the error snapshot, sets the resolver to `none`, and exits any active poll loop for that stream.
 
-### Manual probe behavior
+### Operational probe behavior
 
-Admin saves no longer perform live remote probes. Probe-derived metadata is now owned only by explicit manual probe actions and the scheduled background worker.
+Admin saves no longer perform live remote probes. Probe-derived metadata is now owned by explicit operational probe endpoints, the scheduled background worker, and the editor detail page's one-time on-read route classification for unclassified streams.
 
-The stream probe actions are:
+The stream probe endpoints are:
 
 - `Probe resolver`: refresh `metadata_resolver` only
 - `Probe metadata`: refresh resolver, refresh the cached now-playing snapshot, and persist detected `metadata_source`/`metadata_url` hints from the backend fetcher
@@ -195,7 +196,7 @@ The stream probe actions are:
 - `Probe loudness`: refresh loudness fields only
 - `Probe full`: refresh signal, resolver, metadata snapshot, loudness, and any detected metadata hints
 
-This keeps admin saves fast and predictable while still giving editors precise operational tools.
+This keeps admin saves fast and predictable while still preserving precise operational diagnostics when the backend needs to learn or refresh metadata capabilities.
 
 ### Runtime now-playing behavior
 
@@ -223,6 +224,7 @@ Primary implementation lives in:
 - `backend/internal/handler/nowplaying.go`
 - `backend/internal/handler/metadata_poller.go`
 - `backend/internal/handler/admin.go`
+- `backend/internal/radio/metadata_router.go`
 - `backend/internal/radio/hls_metadata_probe.go`
 - `backend/internal/radio/client_metadata_support.go`
 - `backend/internal/radio/prober.go`
