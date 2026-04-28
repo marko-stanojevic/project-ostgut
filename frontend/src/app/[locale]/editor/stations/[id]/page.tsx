@@ -790,9 +790,7 @@ export default function StationEditorPage() {
         setProbingAction(`${streamID}:${scope}`)
         setProbeError('')
 
-        let startedAt = 0
         try {
-            startedAt = Date.now()
             await probeEditorStationStream(accessToken, id, streamID, scope)
             const refreshed = await getEditorStation(accessToken, id)
             setStation(refreshed)
@@ -801,10 +799,7 @@ export default function StationEditorPage() {
         } catch (err) {
             setProbeError(err instanceof Error ? err.message : 'Failed to refresh stream diagnostics')
         } finally {
-            const remaining = 500 - (Date.now() - startedAt)
-            if (remaining > 0) {
-                await new Promise((resolve) => window.setTimeout(resolve, remaining))
-            }
+            await new Promise((resolve) => window.setTimeout(resolve, 500))
             setProbingAction('')
         }
     }
