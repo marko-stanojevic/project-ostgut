@@ -22,8 +22,7 @@ const (
 	reprobeBatchLimit = 500
 
 	// reprobeTimeout is the per-stream HTTP probe deadline.
-	reprobeTimeout       = 10 * time.Second
-	resolverProbeTimeout = 8 * time.Second
+	reprobeTimeout = 10 * time.Second
 )
 
 // Prober periodically re-probes active stream variants for approved stations to
@@ -32,17 +31,18 @@ type Prober struct {
 	streamStore         *store.StationStreamStore
 	log                 *slog.Logger
 	client              *http.Client
-	browserProbeOrigins []string
+	metadataRouter      *MetadataRouter
 	mu                  sync.Mutex
 }
 
 // NewProber creates a Prober.
 func NewProber(streamStore *store.StationStreamStore, log *slog.Logger, browserProbeOrigins []string) *Prober {
+	client := &http.Client{Timeout: reprobeTimeout}
 	return &Prober{
 		streamStore:         streamStore,
 		log:                 log,
-		client:              &http.Client{Timeout: reprobeTimeout},
-		browserProbeOrigins: append([]string(nil), browserProbeOrigins...),
+		client:              client,
+		metadataRouter:      NewMetadataRouter(client, browserProbeOrigins),
 	}
 }
 
@@ -144,38 +144,14 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 				resolverContainer = "none"
 			}
 
-			resolverCheckedAt := time.Now().UTC()
-			resolverProbeCtx, resolverCancel := context.WithTimeout(ctx, resolverProbeTimeout)
-			hintedMetadataURL := ""
-			if stream.MetadataURL != nil {
-				hintedMetadataURL = strings.TrimSpace(*stream.MetadataURL)
-			}
-			clientMetadata := ProbeClientMetadataSupport(
-				resolverProbeCtx,
-				p.client,
-				p.browserProbeOrigins,
-				resolverURL,
-				hintedMetadataURL,
-				resolverKind,
-				resolverContainer,
-				stream.MetadataEnabled,
-				stream.MetadataType,
-			)
-			resolverCancel()
-			hlsID3Supported := false
-			if stream.MetadataEnabled && strings.EqualFold(resolverKind, "hls") {
-				hlsProbeCtx, hlsCancel := context.WithTimeout(ctx, resolverProbeTimeout)
-				hlsID3Supported = ProbeHLSID3Support(hlsProbeCtx, p.client, resolverURL)
-				hlsCancel()
-			}
-			if !clientMetadata.CheckedAt.IsZero() {
-				resolverCheckedAt = clientMetadata.CheckedAt
-			}
-			nextResolver := ResolveMetadataResolverForStream(stream.MetadataEnabled, resolverKind, clientMetadata.Supported, hlsID3Supported)
-			nextMetadataURL := normalizeMetadataValue(clientMetadata.MetadataURL)
-			if strings.EqualFold(nextResolver, "client") && nextMetadataURL == nil && strings.EqualFold(resolverKind, "hls") {
-				nextMetadataURL = normalizeMetadataValue(resolverURL)
-			}
+			routing := p.metadataRouter.Classify(ctx, MetadataRouteInput{
+				StreamURL:       resolverURL,
+				MetadataURLHint: derefString(stream.MetadataURL),
+				Kind:            resolverKind,
+				Container:       resolverContainer,
+				MetadataEnabled: stream.MetadataEnabled,
+				MetadataType:    stream.MetadataType,
+			})
 			nextHealth := nextProbeHealthScore(stream.HealthScore, result.LastError == nil)
 			nextProbeAt := NextProbeAt(result.LastCheckedAt, result.LastErrorCode)
 
@@ -193,9 +169,9 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 				Channels:                  result.Channels,
 				HealthScore:               &nextHealth,
 				IncludeMetadataResolver:   true,
-				MetadataResolver:          nextResolver,
-				MetadataResolverCheckedAt: &resolverCheckedAt,
-				MetadataURL:               nextMetadataURL,
+				MetadataResolver:          routing.Resolver,
+				MetadataResolverCheckedAt: &routing.CheckedAt,
+				MetadataURL:               routing.MetadataURL,
 				NextProbeAt:               &nextProbeAt,
 				LastCheckedAt:             result.LastCheckedAt,
 				LastError:                 result.LastError,
@@ -216,6 +192,13 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 		"due_approved_streams", len(streams),
 		"duration", time.Since(start).Round(time.Second),
 	)
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
 }
 
 // NextProbeAt returns the next recurring maintenance time for a probe result.

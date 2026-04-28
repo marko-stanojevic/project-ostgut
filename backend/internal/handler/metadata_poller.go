@@ -51,8 +51,7 @@ type MetadataPoller struct {
 	streams    *store.StationStreamStore
 	now        *store.StreamNowPlayingStore
 	fetcher    *metadata.Fetcher
-	client     *http.Client
-	origins    []string
+	router     *radio.MetadataRouter
 	log        *slog.Logger
 	fetchSlots chan struct{}
 	bulkMu     sync.Mutex
@@ -71,12 +70,12 @@ type pollerChannel struct {
 
 // NewMetadataPoller wires the dependencies.
 func NewMetadataPoller(streams *store.StationStreamStore, now *store.StreamNowPlayingStore, fetcher *metadata.Fetcher, log *slog.Logger, browserProbeOrigins []string) *MetadataPoller {
+	client := &http.Client{Timeout: 15 * time.Second}
 	return &MetadataPoller{
 		streams:    streams,
 		now:        now,
 		fetcher:    fetcher,
-		client:     &http.Client{Timeout: 15 * time.Second},
-		origins:    append([]string(nil), browserProbeOrigins...),
+		router:     radio.NewMetadataRouter(client, browserProbeOrigins),
 		log:        log,
 		fetchSlots: make(chan struct{}, pollerMaxConcurrentFetches),
 		channels:   make(map[string]*pollerChannel),
@@ -387,7 +386,7 @@ func (p *MetadataPoller) metadataResolverSnapshotAfterNoMetadata(
 		CheckedAt: &checkedAt,
 		Delayed:   &delayed,
 	}
-	if stream == nil || !stream.MetadataEnabled {
+	if stream == nil || !metadataEnabledForResponse(stream) {
 		return snapshot
 	}
 
@@ -399,21 +398,17 @@ func (p *MetadataPoller) metadataResolverSnapshotAfterNoMetadata(
 		return snapshot
 	}
 
-	clientMetadata := radio.ProbeClientMetadataSupport(
-		ctx,
-		p.client,
-		p.origins,
-		streamURL,
-		stringValue(stream.MetadataURL),
-		stream.Kind,
-		stream.Container,
-		stream.MetadataEnabled,
-		stream.MetadataType,
-	)
-	if clientMetadata.Supported {
-		snapshot.Resolver = metadata.ResolverClient
-		snapshot.MetadataURL = optionalString(clientMetadata.MetadataURL)
-	}
+	routing := p.router.Classify(ctx, radio.MetadataRouteInput{
+		StreamURL:       streamURL,
+		MetadataURLHint: stringValue(stream.MetadataURL),
+		Kind:            stream.Kind,
+		Container:       stream.Container,
+		MetadataEnabled: metadataEnabledForResponse(stream),
+		MetadataType:    stream.MetadataType,
+	})
+	snapshot.Resolver = routing.Resolver
+	snapshot.MetadataURL = routing.MetadataURL
+	snapshot.CheckedAt = &routing.CheckedAt
 	return snapshot
 }
 

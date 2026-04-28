@@ -99,7 +99,7 @@ Playlist failures use typed codes such as `playlist_depth_exceeded`, `playlist_e
 
 ### 6. Metadata resolver probe
 
-Recurring and manual resolver/full probes separately test browser metadata support using `ProbeClientMetadataSupport`:
+Recurring probes, explicit metadata probe endpoints, poller fallback, and editor-detail cold reads all go through one shared metadata router service. That router tests browser metadata support using `ProbeClientMetadataSupport`:
 
 - ICY CORS preflight/read support
 - Icecast `status-json.xsl`
@@ -107,7 +107,7 @@ Recurring and manual resolver/full probes separately test browser metadata suppo
 - Shoutcast `7.html`
 - configured/hinted metadata URLs when present
 
-HLS streams use an HLS ID3 check. If ID3 metadata is not supported, HLS metadata routing becomes `none` rather than forcing server polling.
+HLS streams use the same shared HLS ID3 check. If ID3 metadata is not supported, HLS metadata routing becomes `none` rather than forcing server polling.
 
 Metadata resolver checks use a separate 8-second budget in the recurring worker.
 
@@ -125,9 +125,9 @@ Metadata resolver checks use a separate 8-second budget in the recurring worker.
 
 If a station is moved to `approved`, its streams are marked due immediately by setting `next_probe_at = NOW()`.
 
-### Manual admin probes
+### Explicit operational probes
 
-The admin station detail page owns explicit, user-triggered probes:
+The backend still exposes explicit probe modes for internal operations:
 
 - `Probe quality`: stream reachability, resolved URL, content/codec fields, health, typed failure code, and next probe schedule
 - `Probe resolver`: metadata routing only
@@ -135,7 +135,7 @@ The admin station detail page owns explicit, user-triggered probes:
 - `Probe loudness`: loudness only
 - `Probe full`: quality, resolver, metadata, loudness, and detection hints
 
-Manual probes can run on pending stations. That preserves editorial ability to validate a candidate before approval.
+Explicit probes can run on pending stations. That preserves editorial ability to validate a candidate before approval even though the current station detail UI is read-only.
 
 ### Ingestion sync
 
@@ -152,7 +152,7 @@ The `Prober` goroutine runs once on startup and then every 12 hours. It does not
 
 The batch limit is `500`, and up to `10` workers probe in parallel. Rows are ordered by `next_probe_at ASC, last_checked_at ASC NULLS FIRST` so the oldest due work is handled first.
 
-Recurring probes do not measure loudness and do not fetch now-playing snapshots. They update stream quality fields, health, typed failure code, `next_probe_at`, and metadata resolver routing.
+Recurring probes do not measure loudness and do not fetch now-playing snapshots. They update stream quality fields, health, typed failure code, `next_probe_at`, and metadata resolver routing through the shared router.
 
 Recurring resolver checks are capability checks. Actual backend metadata discovery is owned by explicit metadata probes, the bulk metadata fetch job, and active SSE polling. If those discovery paths confirm `no_metadata`, they set `metadata_resolver = none` so future player sessions do not open server metadata polling for that stream.
 

@@ -94,3 +94,20 @@ func TestBuildStreamPlanDisabled(t *testing.T) {
 		t.Fatalf("expected disabled reason, got %q", plan.Reason)
 	}
 }
+
+func TestBuildStreamPlanDirectResolverNoneUsesMetadataUnavailableReason(t *testing.T) {
+	plan := BuildStreamPlan(StreamPlanInput{
+		Enabled:   true,
+		Resolver:  ResolverNone,
+		Kind:      "direct",
+		Container: "none",
+		Type:      TypeAuto,
+	})
+
+	if plan.Delivery != DeliveryNone {
+		t.Fatalf("expected none delivery, got %q", plan.Delivery)
+	}
+	if plan.Reason != PlanReasonMetadataUnavailable {
+		t.Fatalf("expected metadata-unavailable reason, got %q", plan.Reason)
+	}
+}

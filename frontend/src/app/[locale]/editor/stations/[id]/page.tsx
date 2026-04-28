@@ -6,7 +6,7 @@ import { useRouter } from '@/i18n/navigation'
 import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import { usePlayer, type Station as PlayerStation } from '@/context/PlayerContext'
-import { getEditorStation, getEditorStationIcon, updateEditorStation, type AdminStation, type AdminStream, type EditorStationPayload, type SupplementalMetadataProvider } from '@/lib/editor-stations'
+import { getEditorStation, getEditorStationIcon, probeEditorStationStream, updateEditorStation, type AdminStation, type AdminStream, type EditorStationPayload, type StreamProbeScope, type SupplementalMetadataProvider } from '@/lib/editor-stations'
 import { getPreferredMediaUrl, type MediaAssetResponse } from '@/lib/media'
 import { uploadMediaAsset } from '@/lib/media-upload'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,6 +23,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
     RadioIcon,
     ArrowLeftIcon,
+    ArrowsClockwiseIcon,
+    CircleNotchIcon,
     FloppyDiskIcon,
     UploadSimpleIcon,
     PlayIcon,
@@ -589,9 +591,11 @@ export default function StationEditorPage() {
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [error, setError] = useState('')
+    const [probeError, setProbeError] = useState('')
     const [stationIcon, setStationIcon] = useState<MediaAssetResponse | null>(null)
     const [uploadingIcon, setUploadingIcon] = useState(false)
     const [iconError, setIconError] = useState('')
+    const [probingAction, setProbingAction] = useState('')
     const [expandedStreamRows, setExpandedStreamRows] = useState<Set<string>>(() => new Set())
 
     const [form, setForm] = useState<StationForm>({
@@ -639,6 +643,7 @@ export default function StationEditorPage() {
         const loadStation = async () => {
             setLoading(true)
             setError('')
+            setProbeError('')
 
             try {
                 const s = await getEditorStation(accessToken, id)
@@ -769,6 +774,24 @@ export default function StationEditorPage() {
         }
     }
 
+    const handleProbeStream = async (streamID: string, scope: StreamProbeScope) => {
+        if (!accessToken) return
+
+        setProbingAction(`${streamID}:${scope}`)
+        setProbeError('')
+
+        try {
+            const updated = await probeEditorStationStream(accessToken, id, streamID, scope)
+            setStation(updated)
+            setSaved(true)
+            setTimeout(() => setSaved(false), 3000)
+        } catch (err) {
+            setProbeError(err instanceof Error ? err.message : 'Failed to refresh stream diagnostics')
+        } finally {
+            setProbingAction('')
+        }
+    }
+
     if (loading) {
         return (
             <div className="space-y-6">
@@ -886,6 +909,7 @@ export default function StationEditorPage() {
 
                 <div className="flex shrink-0 items-center gap-2">
                     {error && <p className="text-sm text-destructive">{error}</p>}
+                    {probeError && <p className="text-sm text-destructive">{probeError}</p>}
                     {saved && <p className="text-sm text-success">Saved</p>}
                     <Button onClick={handleSave} disabled={saving || !canSave} className="gap-2">
                         <FloppyDiskIcon className="h-4 w-4" />
@@ -1217,6 +1241,19 @@ export default function StationEditorPage() {
                                                             )}
                                                         />
                                                     </div>
+                                                    <div className="mt-auto flex flex-wrap gap-2 border-t border-border/50 pt-4">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="gap-2"
+                                                            disabled={probingAction === `${persistedStream.id}:quality`}
+                                                            onClick={() => handleProbeStream(persistedStream.id, 'quality')}
+                                                        >
+                                                            {probingAction === `${persistedStream.id}:quality` ? <CircleNotchIcon className="h-4 w-4 animate-spin" /> : <ArrowsClockwiseIcon className="h-4 w-4" />}
+                                                            Refresh stream
+                                                        </Button>
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex h-full flex-col rounded-md bg-background/60 p-3">
@@ -1237,6 +1274,19 @@ export default function StationEditorPage() {
                                                             fields={buildMetadataOpsFields(stream, persistedStream, metadataDiagnosis)}
                                                         />
                                                     </div>
+                                                    <div className="mt-auto flex flex-wrap gap-2 border-t border-border/50 pt-4">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="gap-2"
+                                                            disabled={probingAction === `${persistedStream.id}:metadata`}
+                                                            onClick={() => handleProbeStream(persistedStream.id, 'metadata')}
+                                                        >
+                                                            {probingAction === `${persistedStream.id}:metadata` ? <CircleNotchIcon className="h-4 w-4 animate-spin" /> : <ArrowsClockwiseIcon className="h-4 w-4" />}
+                                                            Refresh metadata
+                                                        </Button>
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex h-full flex-col rounded-md bg-background/60 p-3">
@@ -1250,6 +1300,19 @@ export default function StationEditorPage() {
                                                         <MetadataOpsFieldList
                                                             fields={buildLoudnessOpsFields(persistedStream)}
                                                         />
+                                                    </div>
+                                                    <div className="mt-auto flex flex-wrap gap-2 border-t border-border/50 pt-4">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="gap-2"
+                                                            disabled={probingAction === `${persistedStream.id}:loudness`}
+                                                            onClick={() => handleProbeStream(persistedStream.id, 'loudness')}
+                                                        >
+                                                            {probingAction === `${persistedStream.id}:loudness` ? <CircleNotchIcon className="h-4 w-4 animate-spin" /> : <ArrowsClockwiseIcon className="h-4 w-4" />}
+                                                            Refresh loudness
+                                                        </Button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1281,7 +1344,7 @@ export default function StationEditorPage() {
                                 </p>
                             )}
                         <p className="text-xs text-muted-foreground">
-                            Saving updates the stream list without running diagnostics. Stream, metadata, and loudness observability appears below for saved streams. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
+                            Saving updates the stream list without running diagnostics. Use the refresh actions below each saved stream to update stream, metadata, and loudness state on demand. Stream variants must use HTTPS so they stay playable on the HTTPS web app. The first entry is primary and determines the station&apos;s canonical stream URL.
                         </p>
                     </CardContent>
                     </Card>

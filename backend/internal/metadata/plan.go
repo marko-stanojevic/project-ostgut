@@ -21,6 +21,7 @@ const (
 	PlanReasonBrowserReadableStream = "browser-readable-stream"
 	PlanReasonBrowserMetadataURL    = "browser-readable-metadata-endpoint"
 	PlanReasonHLSID3                = "hls-id3"
+	PlanReasonMetadataUnavailable   = "metadata-unavailable"
 	PlanReasonUnsupportedKind       = "unsupported-kind"
 	PlanReasonSupplementalProvider  = "supplemental-provider"
 )
@@ -110,6 +111,8 @@ func BuildStreamPlan(in StreamPlanInput) StreamPlan {
 
 	if kind == "hls" {
 		plan.Reason = PlanReasonHLSID3
+	} else if supportsServer {
+		plan.Reason = PlanReasonMetadataUnavailable
 	} else if kind == "dash" || container == "mpd" {
 		plan.Reason = PlanReasonUnsupportedKind
 	}

@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/radio"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
 func TestMetadataResolverSnapshotAfterNoMetadataRecoversClientResolver(t *testing.T) {
 	poller := &MetadataPoller{
-		client: &http.Client{
+		router: radio.NewMetadataRouter(&http.Client{
 			Transport: metadataPollerRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 				if req.URL.String() != "https://somafm.example/status-json.xsl" {
 					t.Fatalf("unexpected request %s", req.URL.String())
@@ -30,8 +31,7 @@ func TestMetadataResolverSnapshotAfterNoMetadataRecoversClientResolver(t *testin
 				}, nil
 			}),
 			Timeout: 2 * time.Second,
-		},
-		origins: []string{"http://localhost:3000"},
+		}, []string{"http://localhost:3000"}),
 	}
 
 	checkedAt := time.Date(2026, 4, 28, 12, 0, 0, 0, time.UTC)

@@ -111,6 +111,7 @@ type adminHandlers struct {
 	streamProber        *radio.Prober
 	metaFetcher         *metadata.Fetcher
 	streamProbeClient   *http.Client
+	metadataRouter      *radio.MetadataRouter
 	browserProbeOrigins []string
 }
 
@@ -135,6 +136,7 @@ type Handler struct {
 // New creates a Handler with grouped dependencies and runtime options.
 func New(deps Dependencies, opts Options) *Handler {
 	streamProbeClient := &http.Client{Timeout: 8 * time.Second}
+	metadataRouter := radio.NewMetadataRouter(streamProbeClient, opts.BrowserMetadataProbeOrigins)
 	metaFetcher := metadata.NewFetcher(opts.Log)
 	metaPoller := NewMetadataPoller(deps.StationStreamStore, deps.StreamNowPlayingStore, metaFetcher, opts.Log, opts.BrowserMetadataProbeOrigins)
 	h := &Handler{
@@ -190,6 +192,7 @@ func New(deps Dependencies, opts Options) *Handler {
 			streamProber:        deps.StreamProber,
 			metaFetcher:         metaFetcher,
 			streamProbeClient:   streamProbeClient,
+			metadataRouter:      metadataRouter,
 			browserProbeOrigins: append([]string(nil), opts.BrowserMetadataProbeOrigins...),
 		},
 		enforcePublicQueryAllowlist: opts.EnforcePublicQueryAllowlist,
