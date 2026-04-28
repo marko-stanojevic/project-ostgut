@@ -46,10 +46,27 @@ const jobActions: Array<{
   },
 ]
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString()
+
+  const diffMs = Date.now() - date.getTime()
+  if (diffMs < 60_000) return 'just now'
+
+  const diffMins = Math.floor(diffMs / 60_000)
+  if (diffMins < 60) return `${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'} ago`
+
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`
+
+  const sameYear = date.getUTCFullYear() === new Date().getUTCFullYear()
+  const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
+  const day = date.getUTCDate()
+  const hh = String(date.getUTCHours()).padStart(2, '0')
+  const mm = String(date.getUTCMinutes()).padStart(2, '0')
+  return sameYear
+    ? `${month} ${day} at ${hh}:${mm}`
+    : `${month} ${day} ${date.getUTCFullYear()} at ${hh}:${mm}`
 }
 
 function StatusCheckCard({
