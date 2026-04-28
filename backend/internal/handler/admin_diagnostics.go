@@ -200,8 +200,8 @@ func (h *Handler) AdminJobsDiagnostics(c *gin.Context) {
 	metaCheck.Running = h.station.metaPoller.BulkFetchIsRunning()
 
 	response := adminDiagnosticResponse{
-		Title:       "Jobs diagnostics",
-		Description: "Background worker cadence and freshness inferred from approved, listener-facing data they maintain.",
+		Title:        "Jobs diagnostics",
+		Description:  "Background worker cadence and freshness inferred from approved, listener-facing data they maintain.",
 		StatusChecks: []adminSystemStatusCheck{syncCheck, probeCheck, metaCheck},
 		Sections: []adminDiagnosticSection{
 			{
@@ -234,9 +234,9 @@ func (h *Handler) AdminJobsDiagnostics(c *gin.Context) {
 				Description: "Server metadata polling is subscriber-driven; resolver maintenance follows approved active streams while snapshot freshness reflects recent listening activity and cache warming.",
 				Items: []adminDiagnosticItem{
 					adminDiagnosticItemValue("active_pollers", "Active pollers", formatInt(int64(h.station.metaPoller.ActiveStreamCount())), "neutral", "Streams currently held open by server-side metadata subscribers."),
-					adminDiagnosticItemValue("metadata_enabled", "Metadata-enabled streams", formatInt(int64(streams.MetadataEnabledStreams)), "neutral", "Approved active streams configured for metadata."),
-					adminDiagnosticItemValue("resolver_checked", "Resolver checked", formatInt(int64(streams.MetadataResolverChecked)), "neutral", "Approved metadata-enabled streams with resolver check evidence."),
-					adminDiagnosticItemValue("resolver_stale", "Resolver stale", formatInt(int64(streams.MetadataResolverStale)), adminToneForPositive(streams.MetadataResolverStale), "Approved metadata-enabled streams without a recent resolver check."),
+					adminDiagnosticItemValue("metadata_configured", "Metadata configured", formatInt(int64(streams.MetadataConfiguredStreams)), "neutral", "Approved active streams whose editorial metadata mode is auto."),
+					adminDiagnosticItemValue("resolver_checked", "Resolver checked", formatInt(int64(streams.MetadataResolverChecked)), "neutral", "Approved metadata-configured streams with resolver check evidence."),
+					adminDiagnosticItemValue("resolver_stale", "Resolver stale", formatInt(int64(streams.MetadataResolverStale)), adminToneForPositive(streams.MetadataResolverStale), "Approved metadata-configured streams without a recent resolver check."),
 					adminDiagnosticItemValue("latest_resolver", "Latest resolver check", formatOptionalTime(streams.LastMetadataResolverCheckAt), adminToneForNilTime(streams.LastMetadataResolverCheckAt), "Most recent metadata resolver check timestamp."),
 					adminDiagnosticItemValue("snapshots", "Snapshots", formatInt(int64(nowPlaying.Snapshots)), "neutral", "Rows in stream_now_playing."),
 					adminDiagnosticItemValue("fresh_snapshots", "Fresh snapshots", formatInt(int64(nowPlaying.FreshSnapshots)), "neutral", "Snapshots fetched within the freshness window."),
@@ -283,7 +283,7 @@ func (h *Handler) AdminTriggerJob(c *gin.Context) {
 			return
 		}
 		started = h.station.metaPoller.TriggerApprovedMetadataFetch(ctx)
-		message = "Metadata fetch started for approved metadata-enabled streams. Now-playing snapshots will update as streams complete."
+		message = "Metadata fetch started for approved active streams. Now-playing snapshots and metadata routing will update as streams complete."
 	default:
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown job"})
 		return
@@ -331,9 +331,9 @@ func streamProbeStatusCheck(summary *store.StationStreamJobSummary, now time.Tim
 
 func metadataStatusCheck(summary *store.StationStreamJobSummary, now time.Time) adminSystemStatusCheck {
 	if summary.MetadataResolverStale > 0 {
-		return adminSystemStatusCheck{ID: "metadata", Label: "Metadata", Status: "attention", Detail: fmt.Sprintf("%d metadata-enabled streams need a resolver check.", summary.MetadataResolverStale), CheckedAt: now.Format(time.RFC3339)}
+		return adminSystemStatusCheck{ID: "metadata", Label: "Metadata", Status: "attention", Detail: fmt.Sprintf("%d metadata-configured streams need a resolver check.", summary.MetadataResolverStale), CheckedAt: now.Format(time.RFC3339)}
 	}
-	if summary.MetadataEnabledStreams > 0 && summary.LastMetadataResolverCheckAt == nil {
+	if summary.MetadataConfiguredStreams > 0 && summary.LastMetadataResolverCheckAt == nil {
 		return adminSystemStatusCheck{ID: "metadata", Label: "Metadata", Status: "attention", Detail: "No metadata resolver check has been recorded yet.", CheckedAt: now.Format(time.RFC3339)}
 	}
 	return adminSystemStatusCheck{ID: "metadata", Label: "Metadata", Status: "operational", Detail: "Metadata resolver checks are current.", CheckedAt: now.Format(time.RFC3339)}

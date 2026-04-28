@@ -3,9 +3,10 @@ package metadata
 import "strings"
 
 const (
-	ResolverNone   = "none"
-	ResolverServer = "server"
-	ResolverClient = "client"
+	ResolverNone    = "none"
+	ResolverServer  = "server"
+	ResolverClient  = "client"
+	ResolverUnknown = "unknown"
 
 	DeliveryNone       = "none"
 	DeliverySSE        = "sse"
@@ -17,6 +18,7 @@ const (
 	PressureServerLive = "server-live"
 
 	PlanReasonDisabled              = "disabled"
+	PlanReasonUnclassified          = "unclassified"
 	PlanReasonServerDefault         = "server-default"
 	PlanReasonBrowserReadableStream = "browser-readable-stream"
 	PlanReasonBrowserMetadataURL    = "browser-readable-metadata-endpoint"
@@ -107,6 +109,9 @@ func BuildStreamPlan(in StreamPlanInput) StreamPlan {
 			}
 			return plan
 		}
+	case ResolverUnknown:
+		plan.Reason = PlanReasonUnclassified
+		return plan
 	}
 
 	if kind == "hls" {
@@ -126,10 +131,12 @@ func normalizeResolver(enabled bool, resolver string) string {
 	switch strings.ToLower(strings.TrimSpace(resolver)) {
 	case ResolverClient:
 		return ResolverClient
+	case ResolverServer:
+		return ResolverServer
 	case ResolverNone:
 		return ResolverNone
 	default:
-		return ResolverServer
+		return ResolverUnknown
 	}
 }
 

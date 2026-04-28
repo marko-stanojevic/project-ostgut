@@ -41,7 +41,7 @@ export interface AdminStream {
     loudness_sample_duration_seconds?: number
     loudness_measured_at?: string
     loudness_measurement_status?: string
-    metadata_enabled: boolean
+    metadata_mode: 'auto' | 'off'
     metadata_type: string
     metadata_source?: string
     metadata_url?: string
@@ -49,12 +49,12 @@ export interface AdminStream {
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string
-    metadata_resolver?: 'none' | 'server' | 'client'
+    metadata_resolver?: 'unknown' | 'none' | 'server' | 'client'
     metadata_resolver_checked_at?: string
     metadata_provider?: SupplementalMetadataProvider
     metadata_provider_config?: Record<string, unknown>
     metadata_plan?: {
-        resolver: 'none' | 'server' | 'client'
+        resolver: 'unknown' | 'none' | 'server' | 'client'
         delivery: 'none' | 'sse' | 'client-poll' | 'hls-id3'
         preferred_strategy: string
         supports_client: boolean
@@ -109,7 +109,7 @@ export interface StationStreamPayload {
     url: string
     priority: number
     bitrate?: number
-    metadata_enabled: boolean
+    metadata_mode: 'auto' | 'off'
     metadata_provider?: SupplementalMetadataProvider
     metadata_provider_config?: Record<string, unknown>
 }
@@ -262,7 +262,7 @@ function parseAdminStream(payload: unknown, field: string): AdminStream {
         loudness_sample_duration_seconds: requireNumber(stream.loudness_sample_duration_seconds, `${field}.loudness_sample_duration_seconds`, EDITOR_STATIONS_CONTRACT),
         loudness_measured_at: optionalDateString(stream.loudness_measured_at, `${field}.loudness_measured_at`, EDITOR_STATIONS_CONTRACT),
         loudness_measurement_status: requireString(stream.loudness_measurement_status, `${field}.loudness_measurement_status`, EDITOR_STATIONS_CONTRACT),
-        metadata_enabled: requireBoolean(stream.metadata_enabled, `${field}.metadata_enabled`, EDITOR_STATIONS_CONTRACT),
+        metadata_mode: requireMetadataMode(stream.metadata_mode, `${field}.metadata_mode`),
         metadata_type: requireString(stream.metadata_type, `${field}.metadata_type`, EDITOR_STATIONS_CONTRACT),
         metadata_source: optionalString(stream.metadata_source, `${field}.metadata_source`, EDITOR_STATIONS_CONTRACT),
         metadata_url: optionalString(stream.metadata_url, `${field}.metadata_url`, EDITOR_STATIONS_CONTRACT),
@@ -282,11 +282,19 @@ function parseAdminStream(payload: unknown, field: string): AdminStream {
 }
 
 function requireMetadataResolver(value: unknown, field: string): NonNullable<AdminStream['metadata_resolver']> {
-    if (value === 'none' || value === 'server' || value === 'client') {
+    if (value === 'unknown' || value === 'none' || value === 'server' || value === 'client') {
         return value
     }
 
-    throw new Error(`Invalid ${EDITOR_STATIONS_CONTRACT}: ${field} must be none, server, or client`)
+    throw new Error(`Invalid ${EDITOR_STATIONS_CONTRACT}: ${field} must be unknown, none, server, or client`)
+}
+
+function requireMetadataMode(value: unknown, field: string): NonNullable<AdminStream['metadata_mode']> {
+    if (value === 'auto' || value === 'off') {
+        return value
+    }
+
+    throw new Error(`Invalid ${EDITOR_STATIONS_CONTRACT}: ${field} must be auto or off`)
 }
 
 function parseMetadataPlan(value: unknown, field: string): AdminStream['metadata_plan'] {

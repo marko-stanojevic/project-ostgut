@@ -15,7 +15,7 @@ export interface StationStream {
     channels?: number
     priority: number
     isActive: boolean
-    metadataEnabled?: boolean
+    metadataMode?: 'auto' | 'off'
     metadataType?: string
     metadataSource?: string
     metadataUrl?: string
@@ -23,7 +23,7 @@ export interface StationStream {
     metadataError?: string
     metadataErrorCode?: string
     metadataLastFetchedAt?: string
-    metadataResolver?: 'none' | 'server' | 'client'
+    metadataResolver?: 'unknown' | 'none' | 'server' | 'client'
     metadataResolverCheckedAt?: string
     metadataPlan?: MetadataPlan
     healthScore: number
@@ -37,7 +37,7 @@ export interface StationStream {
 }
 
 export interface MetadataPlan {
-    resolver: 'none' | 'server' | 'client'
+    resolver: 'unknown' | 'none' | 'server' | 'client'
     delivery: 'none' | 'sse' | 'client-poll' | 'hls-id3'
     preferredStrategy: string
     supportsClient: boolean
@@ -214,7 +214,7 @@ function parsePersistedStream(value: unknown): StationStream | null {
         channels: readNumber(value.channels),
         priority,
         isActive,
-        metadataEnabled: readBoolean(value.metadataEnabled),
+        metadataMode: readMetadataMode(value.metadataMode),
         metadataType: readString(value.metadataType) || undefined,
         metadataSource: readString(value.metadataSource) || undefined,
         metadataUrl: readString(value.metadataUrl) || undefined,
@@ -256,8 +256,13 @@ function parseStringArray(value: unknown): string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
+function readMetadataMode(value: unknown): StationStream['metadataMode'] {
+    if (value === 'auto' || value === 'off') return value
+    return undefined
+}
+
 function readMetadataResolver(value: unknown): StationStream['metadataResolver'] {
-    if (value === 'none' || value === 'server' || value === 'client') return value
+    if (value === 'unknown' || value === 'none' || value === 'server' || value === 'client') return value
     return undefined
 }
 

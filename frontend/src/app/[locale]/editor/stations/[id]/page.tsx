@@ -39,7 +39,7 @@ interface StreamFormEntry {
     url: string
     priority: number
     bitrate: string
-    metadata_enabled: boolean
+    metadata_mode: 'auto' | 'off'
     metadata_provider: '' | SupplementalMetadataProvider
     metadata_provider_value: string
 }
@@ -125,7 +125,7 @@ function StatusBadge({ item }: { item: StatusBadgeItem }) {
 }
 
 function buildMetadataDiagnosis(stream: AdminStream, formStream: StreamFormEntry): MetadataDiagnosis {
-    if (!formStream.metadata_enabled) {
+    if (formStream.metadata_mode === 'off') {
         return {
             primary: { label: 'Disabled', tone: 'warning' },
             detail: 'Metadata is turned off for this stream and the player will not request now-playing data.',
@@ -227,7 +227,7 @@ function buildMetadataHealthBadge(
     metadataDiagnosis: MetadataDiagnosis | null,
     validationMessage: string,
 ): StatusBadgeItem {
-    if (!stream.metadata_enabled) return { label: 'Disabled', tone: 'warning' }
+    if (stream.metadata_mode === 'off') return { label: 'Disabled', tone: 'warning' }
     if (validationMessage) return { label: 'Blocked', tone: 'danger' }
     if (!stream.url.trim()) return { label: 'Draft', tone: 'warning' }
     if (!persistedStream || !metadataDiagnosis) return { label: 'Unprobed', tone: 'warning' }
@@ -268,15 +268,17 @@ function metadataResolverLabel(resolver?: AdminStream['metadata_resolver']) {
             return 'Server'
         case 'none':
             return 'None'
+        case 'unknown':
+            return 'Unclassified'
         default:
             return 'Unknown'
     }
 }
 
-function metadataStatusTone(enabled: boolean, persistedStream: AdminStream | undefined): StatusTone {
-    if (!enabled) return 'warning'
+function metadataStatusTone(mode: 'auto' | 'off', persistedStream: AdminStream | undefined): StatusTone {
+    if (mode === 'off') return 'warning'
     if (!persistedStream) return 'warning'
-    if (persistedStream.metadata_plan?.delivery === 'none' || persistedStream.metadata_resolver === 'none') return 'warning'
+    if (persistedStream.metadata_plan?.delivery === 'none' || persistedStream.metadata_resolver === 'none' || persistedStream.metadata_resolver === 'unknown') return 'warning'
     if (persistedStream.metadata_error && persistedStream.metadata_error_code !== 'no_metadata') return 'danger'
     return 'success'
 }
@@ -286,10 +288,10 @@ function buildMetadataOpsFields(
     persistedStream: AdminStream | undefined,
     metadataDiagnosis: MetadataDiagnosis | null,
 ): MetadataOpsField[] {
-    const requestedState = formStream.metadata_enabled ? 'Enabled' : 'Disabled'
-    const persistedState = persistedStream?.metadata_enabled === undefined
+    const requestedState = formStream.metadata_mode === 'off' ? 'Disabled' : 'Auto'
+    const persistedState = persistedStream?.metadata_mode === undefined
         ? 'Unsaved'
-        : persistedStream.metadata_enabled ? 'Enabled' : 'Disabled'
+        : persistedStream.metadata_mode === 'off' ? 'Disabled' : 'Auto'
     const delivery = metadataDeliveryLabel(persistedStream?.metadata_plan?.delivery)
     const resolver = metadataResolverLabel(persistedStream?.metadata_resolver)
     const latestResult = persistedStream?.metadata_error
@@ -306,10 +308,10 @@ function buildMetadataOpsFields(
     const budget = persistedStream?.metadata_delayed ? `${METADATA_WAIT_SECONDS_DELAYED} seconds (delayed)` : `${METADATA_WAIT_SECONDS_NORMAL} seconds`
 
     return [
-        { label: 'Requested state', value: requestedState, tone: formStream.metadata_enabled ? 'success' : 'warning' },
-        { label: 'Persisted state', value: persistedState, tone: metadataStatusTone(persistedState === 'Enabled', persistedStream) },
+        { label: 'Requested mode', value: requestedState, tone: formStream.metadata_mode === 'off' ? 'warning' : 'success' },
+        { label: 'Persisted mode', value: persistedState, tone: metadataStatusTone(persistedStream?.metadata_mode ?? 'off', persistedStream) },
         { label: 'Runtime delivery', value: delivery, tone: persistedStream?.metadata_plan?.delivery === 'none' ? 'warning' : 'neutral' },
-        { label: 'Runtime resolver', value: resolver, tone: persistedStream?.metadata_resolver === 'none' ? 'warning' : 'neutral' },
+        { label: 'Runtime resolver', value: resolver, tone: persistedStream?.metadata_resolver === 'none' || persistedStream?.metadata_resolver === 'unknown' ? 'warning' : 'neutral' },
         { label: 'Route reason', value: routeReason, mono: true },
         { label: 'Latest result', value: latestResult, tone: persistedStream?.metadata_error && persistedStream.metadata_error_code !== 'no_metadata' ? 'danger' : 'neutral' },
         { label: 'Latest fetch', value: formatTimestamp(persistedStream?.metadata_last_fetched_at) },
@@ -534,7 +536,7 @@ function createEmptyStream(priority: number): StreamFormEntry {
         url: '',
         priority,
         bitrate: '',
-        metadata_enabled: true,
+        metadata_mode: 'auto',
         metadata_provider: '',
         metadata_provider_value: '',
     }
@@ -559,7 +561,7 @@ function toStreamFormEntry(stream: AdminStream, fallbackPriority: number): Strea
         url: stream.url,
         priority: stream.priority || fallbackPriority,
         bitrate: stream.bitrate > 0 ? String(stream.bitrate) : '',
-        metadata_enabled: true,
+        metadata_mode: stream.metadata_mode,
         metadata_provider: stream.metadata_provider ?? '',
         metadata_provider_value: metadataProviderValue(stream),
     }
@@ -748,7 +750,7 @@ export default function StationEditorPage() {
                         url: s.url.trim(),
                         priority: s.priority || i + 1,
                         bitrate: Number.isFinite(parsedBitrate) && parsedBitrate > 0 ? parsedBitrate : undefined,
-                        metadata_enabled: true,
+                        metadata_mode: s.metadata_mode,
                         metadata_provider: s.metadata_provider || undefined,
                         metadata_provider_config: metadataProviderPayload(s),
                     }
@@ -863,11 +865,11 @@ export default function StationEditorPage() {
                 loudnessSampleDurationSeconds: savedStream?.loudness_sample_duration_seconds,
                 loudnessMeasuredAt: savedStream?.loudness_measured_at,
                 loudnessMeasurementStatus: savedStream?.loudness_measurement_status,
-                metadataEnabled: true,
+                metadataMode: savedStream?.metadata_mode ?? 'auto',
                 metadataType: savedStream?.metadata_type ?? 'auto',
                 metadataSource: savedStream?.metadata_source,
                 metadataUrl: savedStream?.metadata_url,
-                metadataResolver: savedStream?.metadata_resolver ?? 'server',
+                metadataResolver: savedStream?.metadata_resolver ?? 'unknown',
                 metadataResolverCheckedAt: savedStream?.metadata_resolver_checked_at,
                 metadataPlan: savedStream?.metadata_plan ? {
                     resolver: savedStream.metadata_plan.resolver,

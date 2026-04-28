@@ -11,7 +11,7 @@ const NTS_LIVE_CONTRACT = 'NTS live response'
 
 export type ClientMetadataStream = Pick<
   StationStream,
-  'id' | 'url' | 'resolvedUrl' | 'kind' | 'metadataEnabled' | 'metadataType' | 'metadataUrl' | 'metadataResolver'
+  'id' | 'url' | 'resolvedUrl' | 'kind' | 'metadataMode' | 'metadataType' | 'metadataUrl' | 'metadataResolver'
 >
 
 type SupplementalMetadataProvider = {

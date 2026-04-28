@@ -52,7 +52,7 @@ export async function fetchClientNowPlaying(
   stream: ClientMetadataStream,
   outerSignal?: AbortSignal,
 ): Promise<NowPlaying | null> {
-  if (!stream.metadataEnabled) {
+  if (stream.metadataMode === 'off') {
     metadataDebugLog('client-skip-disabled', { streamId: stream.id })
     return null
   }

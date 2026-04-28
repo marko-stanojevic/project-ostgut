@@ -137,10 +137,10 @@ function getPlaybackStationSnapshot(next: Station, current: Station | null): Sta
   const nextHasStreams = (next.streams?.length ?? 0) > 0
   const currentHasStreams = (current.streams?.length ?? 0) > 0
   const nextHasMetadata = Boolean(
-    next.streams?.some((stream) => typeof stream.metadataEnabled === 'boolean' || Boolean(stream.metadataSource)),
+    next.streams?.some((stream) => typeof stream.metadataMode === 'string' || Boolean(stream.metadataSource)),
   )
   const currentHasMetadata = Boolean(
-    current.streams?.some((stream) => typeof stream.metadataEnabled === 'boolean' || Boolean(stream.metadataSource)),
+    current.streams?.some((stream) => typeof stream.metadataMode === 'string' || Boolean(stream.metadataSource)),
   )
 
   return {

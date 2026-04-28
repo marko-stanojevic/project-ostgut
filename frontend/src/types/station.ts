@@ -20,7 +20,7 @@ export interface ApiStream {
     loudness_sample_duration_seconds?: number
     loudness_measured_at?: string
     loudness_measurement_status?: string
-    metadata_enabled: boolean
+    metadata_mode: 'auto' | 'off'
     metadata_type: string
     metadata_source?: string
     metadata_url?: string
@@ -28,10 +28,10 @@ export interface ApiStream {
     metadata_error?: string
     metadata_error_code?: string
     metadata_last_fetched_at?: string
-    metadata_resolver?: 'none' | 'server' | 'client'
+    metadata_resolver?: 'unknown' | 'none' | 'server' | 'client'
     metadata_resolver_checked_at?: string
     metadata_plan?: {
-        resolver: 'none' | 'server' | 'client'
+        resolver: 'unknown' | 'none' | 'server' | 'client'
         delivery: 'none' | 'sse' | 'client-poll' | 'hls-id3'
         preferred_strategy: string
         supports_client: boolean

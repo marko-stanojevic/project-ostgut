@@ -132,56 +132,12 @@ func (h *Handler) adminStationWithStreams(ctx context.Context, s *store.Station)
 	return toAdminStationResponse(s, streamMap[s.ID]), nil
 }
 
-func shouldRefreshMetadataRoutingForEditor(stream *store.StationStream) bool {
-	if stream == nil {
-		return false
-	}
-	if !metadataEnabledForResponse(stream) {
-		return false
-	}
-	return stream.MetadataResolverCheckedAt == nil
-}
-
-func (h *Handler) refreshEditorStreamMetadataRouting(ctx context.Context, stream *store.StationStream) error {
-	if !shouldRefreshMetadataRoutingForEditor(stream) {
-		return nil
-	}
-	if metadataEnabledForResponse(stream) && !stream.MetadataEnabled {
-		if err := h.admin.streams.UpdateMetadataEnabled(context.WithoutCancel(ctx), stream.ID, true); err != nil {
-			return err
-		}
-		stream.MetadataEnabled = true
-	}
-
-	streamURL := strings.TrimSpace(stream.ResolvedURL)
-	if streamURL == "" {
-		streamURL = strings.TrimSpace(stream.URL)
-	}
-	if streamURL == "" {
-		return nil
-	}
-
-	routing := h.admin.metadataRouter.Classify(ctx, radio.MetadataRouteInput{
-		StreamURL:       streamURL,
-		MetadataURLHint: stringValue(stream.MetadataURL),
-		Kind:            stream.Kind,
-		Container:       stream.Container,
-		MetadataEnabled: metadataEnabledForResponse(stream),
-		MetadataType:    stream.MetadataType,
-	})
-	return h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(ctx), stream.ID, store.MetadataResolverSnapshot{
-		Resolver:    routing.Resolver,
-		MetadataURL: routing.MetadataURL,
-		CheckedAt:   &routing.CheckedAt,
-	})
-}
-
 type adminStreamRequest struct {
 	URL                    string          `json:"url"`
 	Priority               int             `json:"priority"`
 	IsActive               *bool           `json:"is_active"`
 	Bitrate                *int            `json:"bitrate"`
-	MetadataEnabled        *bool           `json:"metadata_enabled"`
+	MetadataMode           *string         `json:"metadata_mode"`
 	MetadataType           *string         `json:"metadata_type"`
 	MetadataProvider       *string         `json:"metadata_provider"`
 	MetadataProviderConfig json.RawMessage `json:"metadata_provider_config"`
@@ -193,6 +149,10 @@ func toAdminStationResponse(s *store.Station, streams []streamResponse) adminSta
 		Status:          s.Status,
 		InternalNotes:   s.InternalNotes,
 	}
+}
+
+func stationAllowsPersistedNowPlaying(station *store.Station) bool {
+	return station != nil && strings.EqualFold(strings.TrimSpace(station.Status), "approved")
 }
 
 // AdminCreateStation handles POST /editor/stations.
@@ -309,7 +269,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		return
 	}
 
-	_, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), stationID)
+	station, err := h.admin.stations.GetByIDAdmin(c.Request.Context(), stationID)
 	if errors.Is(err, store.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "station not found"})
 		return
@@ -351,6 +311,9 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 	resolvedURL := strings.TrimSpace(target.ResolvedURL)
 	resolvedKind := target.Kind
 	resolvedContainer := target.Container
+	var qualityUpdate *store.StreamQualityUpdate
+	var loudnessUpdate *store.StreamLoudnessUpdate
+	var metadataUpdate *store.StreamMetadataUpdate
 
 	if scope == "full" || scope == "quality" || scope == "loudness" {
 		probeCtx, cancel := context.WithTimeout(c.Request.Context(), 12*time.Second)
@@ -365,14 +328,13 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 		}
 		nextProbeAt := radio.NextProbeAt(probe.LastCheckedAt, probe.LastErrorCode)
 
-		update := store.ProbeUpdate{
+		qualityUpdate = &store.StreamQualityUpdate{
 			ResolvedURL:          probe.ResolvedURL,
 			Kind:                 probe.Kind,
 			Container:            probe.Container,
 			Transport:            probe.Transport,
 			MimeType:             probe.MimeType,
 			Codec:                probe.Codec,
-			Bitrate:              probe.Bitrate,
 			BitDepth:             probe.BitDepth,
 			SampleRateHz:         probe.SampleRateHz,
 			SampleRateConfidence: probe.SampleRateConfidence,
@@ -384,18 +346,13 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			LastErrorCode:        probe.LastErrorCode,
 		}
 		if scope == "full" || scope == "loudness" {
-			update.IncludeLoudness = true
-			update.LoudnessIntegratedLUFS = probe.LoudnessIntegratedLUFS
-			update.LoudnessPeakDBFS = probe.LoudnessPeakDBFS
-			update.LoudnessSampleDuration = probe.LoudnessSampleDuration
-			update.LoudnessMeasuredAt = probe.LoudnessMeasuredAt
-			update.LoudnessStatus = probe.LoudnessStatus
-		}
-
-		if err := h.admin.streams.UpdateProbeResult(context.WithoutCancel(c.Request.Context()), target.ID, update); err != nil {
-			h.log.Error("admin probe stream update probe", "stream_id", target.ID, "scope", scope, "error", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-			return
+			loudnessUpdate = &store.StreamLoudnessUpdate{
+				IntegratedLUFS: probe.LoudnessIntegratedLUFS,
+				PeakDBFS:       probe.LoudnessPeakDBFS,
+				SampleDuration: probe.LoudnessSampleDuration,
+				MeasuredAt:     probe.LoudnessMeasuredAt,
+				Status:         probe.LoudnessStatus,
+			}
 		}
 
 		if strings.TrimSpace(probe.ResolvedURL) != "" {
@@ -415,15 +372,7 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 			metadataURL = target.URL
 		}
 		hintedMetadataURL := stringValue(target.MetadataURL)
-		metadataEnabled := metadataEnabledForResponse(target)
-		if metadataEnabled && !target.MetadataEnabled {
-			if err := h.admin.streams.UpdateMetadataEnabled(context.WithoutCancel(c.Request.Context()), target.ID, true); err != nil {
-				h.log.Error("admin probe stream enable metadata", "stream_id", target.ID, "scope", scope, "error", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-				return
-			}
-			target.MetadataEnabled = true
-		}
+		metadataEnabled := metadataModeEnabled(target.MetadataMode)
 		routing := h.admin.metadataRouter.Classify(c.Request.Context(), radio.MetadataRouteInput{
 			StreamURL:       metadataURL,
 			MetadataURLHint: hintedMetadataURL,
@@ -454,42 +403,59 @@ func (h *Handler) AdminProbeStationStream(c *gin.Context) {
 				ErrorCode:   optionalString(np.ErrorCode),
 				FetchedAt:   np.FetchedAt,
 			}
-			if err := h.admin.nowPlaying.Upsert(context.WithoutCancel(c.Request.Context()), snap); err != nil {
-				h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-				return
+			if stationAllowsPersistedNowPlaying(station) {
+				if err := h.admin.nowPlaying.Upsert(context.WithoutCancel(c.Request.Context()), snap); err != nil {
+					h.log.Error("admin probe stream update metadata", "stream_id", target.ID, "scope", scope, "error", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+					return
+				}
 			}
 			if np.ErrorCode == metadata.ErrorCodeNoMeta && routing.Resolver != metadata.ResolverClient {
 				routing.Resolver = metadata.ResolverNone
 				routing.MetadataURL = nil
 			}
-			// Persist discovered source / URL hints back to the editorial row.
-			if np.Source != "" || np.MetadataURL != "" {
-				src := optionalString(np.Source)
-				url := optionalString(np.MetadataURL)
-				nextMetadataDelayed = ev.DelayedICY || nextMetadataDelayed
-				delayed := ev.DelayedICY
-				_ = h.admin.streams.UpdateMetadataDetection(context.WithoutCancel(c.Request.Context()), target.ID, src, url, &delayed)
-				if hinted := strings.TrimSpace(np.MetadataURL); hinted != "" && !strings.EqualFold(hinted, hintedMetadataURL) {
-					hintedMetadataURL = hinted
-					routing = h.admin.metadataRouter.Classify(c.Request.Context(), radio.MetadataRouteInput{
-						StreamURL:       metadataURL,
-						MetadataURLHint: hintedMetadataURL,
-						Kind:            resolvedKind,
-						Container:       resolvedContainer,
-						MetadataEnabled: metadataEnabled,
-						MetadataType:    target.MetadataType,
-					})
-				}
+			if hinted := strings.TrimSpace(np.MetadataURL); hinted != "" && !strings.EqualFold(hinted, hintedMetadataURL) {
+				hintedMetadataURL = hinted
+				routing = h.admin.metadataRouter.Classify(c.Request.Context(), radio.MetadataRouteInput{
+					StreamURL:       metadataURL,
+					MetadataURLHint: hintedMetadataURL,
+					Kind:            resolvedKind,
+					Container:       resolvedContainer,
+					MetadataEnabled: metadataEnabled,
+					MetadataType:    target.MetadataType,
+				})
+			}
+			nextMetadataDelayed = ev.DelayedICY || nextMetadataDelayed
+			metadataURLValue := optionalString(np.MetadataURL)
+			if metadataURLValue == nil {
+				metadataURLValue = routing.MetadataURL
+			}
+			metadataUpdate = &store.StreamMetadataUpdate{
+				Source:            optionalString(np.Source),
+				URL:               metadataURLValue,
+				Delayed:           &nextMetadataDelayed,
+				IncludeResolver:   true,
+				Resolver:          routing.Resolver,
+				ResolverCheckedAt: &routing.CheckedAt,
+			}
+		} else {
+			metadataUpdate = &store.StreamMetadataUpdate{
+				URL:               routing.MetadataURL,
+				Delayed:           &nextMetadataDelayed,
+				IncludeResolver:   true,
+				Resolver:          routing.Resolver,
+				ResolverCheckedAt: &routing.CheckedAt,
 			}
 		}
-		if err := h.admin.streams.UpdateMetadataResolver(context.WithoutCancel(c.Request.Context()), target.ID, store.MetadataResolverSnapshot{
-			Resolver:    routing.Resolver,
-			MetadataURL: routing.MetadataURL,
-			CheckedAt:   &routing.CheckedAt,
-			Delayed:     &nextMetadataDelayed,
+	}
+
+	if qualityUpdate != nil || loudnessUpdate != nil || metadataUpdate != nil {
+		if err := h.admin.streams.ApplyDiagnosticsUpdate(context.WithoutCancel(c.Request.Context()), target.ID, store.StreamDiagnosticsUpdate{
+			Quality:  qualityUpdate,
+			Loudness: loudnessUpdate,
+			Metadata: metadataUpdate,
 		}); err != nil {
-			h.log.Error("admin probe stream update metadata resolver", "stream_id", target.ID, "scope", scope, "error", err)
+			h.log.Error("admin probe stream apply diagnostics", "stream_id", target.ID, "scope", scope, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
@@ -568,18 +534,6 @@ func (h *Handler) AdminGetStation(c *gin.Context) {
 		h.log.Error("admin get station", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
-	}
-
-	streams, err := h.admin.streams.ListByStationID(c.Request.Context(), s.ID)
-	if err != nil {
-		h.log.Error("admin get station streams for metadata refresh", "station_id", s.ID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
-	}
-	for _, stream := range streams {
-		if err := h.refreshEditorStreamMetadataRouting(c.Request.Context(), stream); err != nil {
-			h.log.Warn("admin get station metadata refresh", "station_id", s.ID, "stream_id", stream.ID, "error", err)
-		}
 	}
 
 	resp, err := h.adminStationWithStreams(c.Request.Context(), s)
@@ -827,6 +781,21 @@ func normalizeMetadataType(raw string) string {
 	}
 }
 
+func normalizeMetadataMode(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "auto":
+		return "auto"
+	case "off":
+		return "off"
+	default:
+		return ""
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
 func normalizeAdminStreams(raw []adminStreamRequest) []adminStreamRequest {
 	streams := make([]adminStreamRequest, 0, len(raw))
 	for _, stream := range raw {
@@ -838,7 +807,7 @@ func normalizeAdminStreams(raw []adminStreamRequest) []adminStreamRequest {
 			Priority:               stream.Priority,
 			IsActive:               stream.IsActive,
 			Bitrate:                stream.Bitrate,
-			MetadataEnabled:        stream.MetadataEnabled,
+			MetadataMode:           stringPtr(normalizeMetadataMode(stringValue(stream.MetadataMode))),
 			MetadataType:           stream.MetadataType,
 			MetadataProvider:       stream.MetadataProvider,
 			MetadataProviderConfig: stream.MetadataProviderConfig,
@@ -898,7 +867,13 @@ func (h *Handler) buildStationStreams(raw []adminStreamRequest) ([]store.Station
 		if stream.IsActive != nil {
 			isActive = *stream.IsActive
 		}
-		metadataEnabled := true
+		metadataMode := "auto"
+		if stream.MetadataMode != nil {
+			metadataMode = normalizeMetadataMode(*stream.MetadataMode)
+			if metadataMode == "" {
+				return nil, fmt.Errorf("stream %d metadata mode is invalid", i+1)
+			}
+		}
 		metadataType := "auto"
 		if stream.MetadataType != nil {
 			metadataType = normalizeMetadataType(*stream.MetadataType)
@@ -931,7 +906,7 @@ func (h *Handler) buildStationStreams(raw []adminStreamRequest) ([]store.Station
 			LoudnessSampleDuration: probe.LoudnessSampleDuration,
 			LoudnessMeasuredAt:     probe.LoudnessMeasuredAt,
 			LoudnessStatus:         probe.LoudnessStatus,
-			MetadataEnabled:        metadataEnabled,
+			MetadataMode:           metadataMode,
 			MetadataType:           metadataType,
 			MetadataProvider:       metadataProvider,
 			MetadataProviderConfig: metadataProviderConfig,

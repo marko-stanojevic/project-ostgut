@@ -72,9 +72,8 @@ func NewSyncer(s *store.StationStore, streamStore *store.StationStreamStore, log
 	}
 }
 
-// Run blocks, syncing immediately then on SyncInterval.
+// Run blocks, syncing on SyncInterval.
 func (s *Syncer) Run(ctx context.Context) {
-	s.runOnce(ctx)
 	ticker := time.NewTicker(SyncInterval)
 	defer ticker.Stop()
 	for {

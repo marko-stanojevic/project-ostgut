@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -259,8 +260,8 @@ func buildAdminOverviewStationHealth(
 			hasStaleProbe = true
 		}
 
-		if stream.MetadataEnabled {
-			if strings.EqualFold(strings.TrimSpace(stream.MetadataResolver), "none") {
+		if metadataModeEnabled(stream.MetadataMode) {
+			if metadataResolverBlocked(stream.MetadataResolver) {
 				hasMetadataBlocked = true
 			}
 			if stream.MetadataResolverCheckedAt == nil || now.Sub(stream.MetadataResolverCheckedAt.UTC()) > adminOverviewMetadataStaleAfter {
@@ -314,7 +315,7 @@ func buildAdminOverviewStationHealth(
 
 func anyStreamHasMetadataDisabled(streams []*store.StationStream) bool {
 	for _, stream := range streams {
-		if stream.IsActive && !stream.MetadataEnabled {
+		if stream.IsActive && !metadataModeEnabled(stream.MetadataMode) {
 			return true
 		}
 	}
@@ -323,11 +324,20 @@ func anyStreamHasMetadataDisabled(streams []*store.StationStream) bool {
 
 func anyStreamHasResolverNone(streams []*store.StationStream) bool {
 	for _, stream := range streams {
-		if stream.IsActive && strings.EqualFold(strings.TrimSpace(stream.MetadataResolver), "none") {
+		if stream.IsActive && metadataResolverBlocked(stream.MetadataResolver) {
 			return true
 		}
 	}
 	return false
+}
+
+func metadataResolverBlocked(resolver string) bool {
+	switch strings.ToLower(strings.TrimSpace(resolver)) {
+	case "", metadata.ResolverUnknown, metadata.ResolverNone:
+		return true
+	default:
+		return false
+	}
 }
 
 func hasIssueCategory(issues []adminOverviewIssue, codes ...string) bool {

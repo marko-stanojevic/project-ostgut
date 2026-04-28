@@ -45,7 +45,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 		c.JSON(http.StatusOK, &Snapshot{Status: "unsupported", ErrorCode: metadata.ErrorCodeNoMeta, FetchedAt: time.Now().UTC()})
 		return
 	}
-	metadataEnabled := metadataEnabledForResponse(selectedStream)
+	metadataEnabled := metadataModeEnabled(selectedStream.MetadataMode)
 	plan := metadata.BuildStreamPlan(metadata.StreamPlanInput{
 		Enabled:     metadataEnabled,
 		Type:        selectedStream.MetadataType,
@@ -57,7 +57,7 @@ func (h *Handler) GetNowPlaying(c *gin.Context) {
 		StreamURL:   firstNonEmpty(selectedStream.ResolvedURL, selectedStream.URL),
 	})
 
-	if !metadataEnabled || plan.Resolver == metadata.ResolverNone {
+	if !metadataEnabled || plan.Delivery == metadata.DeliveryNone {
 		status := "unsupported"
 		errorCode := metadata.ErrorCodeNoMeta
 		if !metadataEnabled {
@@ -124,11 +124,11 @@ func (h *Handler) StreamNowPlaying(c *gin.Context) {
 	}
 
 	selectedStream := resolveStream(c, h, station, requestedStreamID)
-	if selectedStream == nil || !metadataEnabledForResponse(selectedStream) {
+	if selectedStream == nil || !metadataModeEnabled(selectedStream.MetadataMode) {
 		c.JSON(http.StatusOK, gin.H{"error": "metadata not available for this stream"})
 		return
 	}
-	metadataEnabled := metadataEnabledForResponse(selectedStream)
+	metadataEnabled := metadataModeEnabled(selectedStream.MetadataMode)
 	plan := metadata.BuildStreamPlan(metadata.StreamPlanInput{
 		Enabled:     metadataEnabled,
 		Type:        selectedStream.MetadataType,

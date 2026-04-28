@@ -1,19 +1,14 @@
 package handler
 
-import (
-	"testing"
-	"time"
+import "testing"
 
-	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
-)
-
-func TestBuildStationStreamsAlwaysEnablesMetadata(t *testing.T) {
+func TestBuildStationStreamsKeepsExplicitMetadataMode(t *testing.T) {
 	h := &Handler{}
 
 	streams, err := h.buildStationStreams([]adminStreamRequest{{
-		URL:             "https://somafm.example/groovesalad",
-		Priority:        1,
-		MetadataEnabled: boolPtr(false),
+		URL:          "https://somafm.example/groovesalad",
+		Priority:     1,
+		MetadataMode: stringPtr("off"),
 	}})
 	if err != nil {
 		t.Fatalf("build station streams: %v", err)
@@ -21,45 +16,25 @@ func TestBuildStationStreamsAlwaysEnablesMetadata(t *testing.T) {
 	if len(streams) != 1 {
 		t.Fatalf("expected one stream, got %d", len(streams))
 	}
-	if !streams[0].MetadataEnabled {
-		t.Fatal("expected editor stream rebuild to keep metadata enabled")
+	if streams[0].MetadataMode != "off" {
+		t.Fatalf("expected editor stream rebuild to preserve metadata mode off, got %q", streams[0].MetadataMode)
 	}
 }
 
-func boolPtr(value bool) *bool {
-	return &value
-}
+func TestBuildStationStreamsDefaultsMetadataModeToAuto(t *testing.T) {
+	h := &Handler{}
 
-func TestShouldRefreshMetadataRoutingForEditorRequiresEnabledActiveUnclassifiedStream(t *testing.T) {
-	stream := &store.StationStream{
-		IsActive:        true,
-		MetadataEnabled: true,
+	streams, err := h.buildStationStreams([]adminStreamRequest{{
+		URL:      "https://somafm.example/dronezone",
+		Priority: 1,
+	}})
+	if err != nil {
+		t.Fatalf("build station streams: %v", err)
 	}
-	if !shouldRefreshMetadataRoutingForEditor(stream) {
-		t.Fatal("expected active metadata-enabled stream without resolver check to refresh")
+	if len(streams) != 1 {
+		t.Fatalf("expected one stream, got %d", len(streams))
 	}
-
-	stream.MetadataResolverCheckedAt = timePtr()
-	if shouldRefreshMetadataRoutingForEditor(stream) {
-		t.Fatal("expected already-classified stream to skip refresh")
+	if streams[0].MetadataMode != "auto" {
+		t.Fatalf("expected default metadata mode auto, got %q", streams[0].MetadataMode)
 	}
-}
-
-func TestShouldRefreshMetadataRoutingForEditorRecoversPersistedDisabledStream(t *testing.T) {
-	stream := &store.StationStream{
-		MetadataEnabled: false,
-		MetadataURL:     testStringPtr("https://somafm.example/status-json.xsl"),
-	}
-	if !shouldRefreshMetadataRoutingForEditor(stream) {
-		t.Fatal("expected recoverable metadata-disabled stream without resolver check to refresh")
-	}
-}
-
-func timePtr() *time.Time {
-	now := time.Now().UTC()
-	return &now
-}
-
-func testStringPtr(value string) *string {
-	return &value
 }

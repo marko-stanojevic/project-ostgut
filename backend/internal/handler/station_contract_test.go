@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/marko-stanojevic/project-ostgut/backend/internal/metadata"
 	"github.com/marko-stanojevic/project-ostgut/backend/internal/store"
 )
 
@@ -47,29 +48,19 @@ func TestToStationResponsePublishesEditorialReviewNotInternalNotes(t *testing.T)
 	}
 }
 
-func TestMetadataResolverForResponseRecoversClientResolverFromBrowserReadableHint(t *testing.T) {
+func TestMetadataResolverForResponseReturnsUnknownForUnclassifiedStream(t *testing.T) {
 	stream := &store.StationStream{
-		MetadataEnabled:  true,
-		MetadataResolver: "none",
-		MetadataURL:      stringPtr("https://somafm.example/status-json.xsl"),
+		MetadataMode: "auto",
 	}
 
-	if got := metadataResolverForResponse(stream); got != "client" {
-		t.Fatalf("expected client resolver from browser-readable metadata hint, got %q", got)
+	if got := metadataResolverForResponse(stream); got != metadata.ResolverUnknown {
+		t.Fatalf("expected unknown resolver for unclassified stream, got %q", got)
 	}
 }
 
-func TestMetadataEnabledForResponseRecoversDisabledStreamFromMetadataHint(t *testing.T) {
-	stream := &store.StationStream{
-		MetadataEnabled: false,
-		MetadataURL:     stringPtr("https://somafm.example/status-json.xsl"),
+func TestNormalizeMetadataModeForResponseReflectsExplicitOffState(t *testing.T) {
+	stream := &store.StationStream{MetadataMode: "off"}
+	if got := normalizeMetadataModeForResponse(stream); got != "off" {
+		t.Fatalf("expected off metadata mode, got %q", got)
 	}
-
-	if !metadataEnabledForResponse(stream) {
-		t.Fatal("expected browser-readable metadata hint to recover metadata enabled state")
-	}
-}
-
-func stringPtr(value string) *string {
-	return &value
 }

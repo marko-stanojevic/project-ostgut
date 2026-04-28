@@ -33,7 +33,7 @@ export function useNowPlaying(
   const streamURL = stream?.resolvedUrl || stream?.url || ''
   const streamMetadataType = stream?.metadataType || ''
   const streamKind = stream?.kind || ''
-  const streamMetadataEnabled = Boolean(stream?.metadataEnabled)
+  const streamMetadataMode = stream?.metadataMode || 'auto'
   const streamMetadataErrorCode = stream?.metadataErrorCode || ''
   const streamMetadataDelivery = stream?.metadataPlan?.delivery || metadataDeliveryFromResolver(stream?.metadataResolver, streamKind)
   const streamMetadataResolver = stream?.metadataPlan?.resolver || stream?.metadataResolver
@@ -49,13 +49,13 @@ export function useNowPlaying(
             url: streamRawURL,
             resolvedUrl: streamURL,
             kind: streamKind,
-            metadataEnabled: streamMetadataEnabled,
+            metadataMode: streamMetadataMode,
             metadataType: streamMetadataType,
             metadataUrl: stream?.metadataUrl || '',
             metadataResolver: streamMetadataDelivery === 'client-poll' || streamMetadataDelivery === 'hls-id3' ? 'client' : streamMetadataResolver,
           }
         : null,
-    [streamObjectID, streamRawURL, streamURL, streamKind, streamId, streamMetadataEnabled, streamMetadataType, stream?.metadataUrl, streamMetadataResolver, streamMetadataDelivery],
+    [streamObjectID, streamRawURL, streamURL, streamKind, streamId, streamMetadataMode, streamMetadataType, stream?.metadataUrl, streamMetadataResolver, streamMetadataDelivery],
   )
   // Clear track immediately on station change so stale data never shows.
   useEffect(() => {
@@ -180,7 +180,7 @@ export function useNowPlaying(
       retryLeadership()
     }
 
-    if (!streamMetadataEnabled || (streamMetadataErrorCode === 'no_metadata' && !usesClientMetadataDelivery) || streamMetadataResolver === 'none' || streamMetadataDelivery === 'none') {
+    if (streamMetadataMode === 'off' || (streamMetadataErrorCode === 'no_metadata' && !usesClientMetadataDelivery) || streamMetadataResolver === 'none' || streamMetadataDelivery === 'none') {
       setNowPlaying(null)
       setSettled(true)
       return () => {
@@ -441,7 +441,7 @@ export function useNowPlaying(
     streamURL,
     streamKind,
     streamMetadataType,
-    streamMetadataEnabled,
+    streamMetadataMode,
     streamMetadataErrorCode,
     streamMetadataResolver,
     streamMetadataDelivery,
@@ -467,7 +467,7 @@ function metadataDeliveryFromResolver(
   resolver: StationStream['metadataResolver'],
   kind: string,
 ): NonNullable<StationStream['metadataPlan']>['delivery'] {
-  if (resolver === 'none') return 'none'
+  if (resolver === 'none' || resolver === 'unknown' || !resolver) return 'none'
   if (resolver === 'client') return kind === 'hls' ? 'hls-id3' : 'client-poll'
   return 'sse'
 }

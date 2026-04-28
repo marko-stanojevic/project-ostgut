@@ -111,3 +111,20 @@ func TestBuildStreamPlanDirectResolverNoneUsesMetadataUnavailableReason(t *testi
 		t.Fatalf("expected metadata-unavailable reason, got %q", plan.Reason)
 	}
 }
+
+func TestBuildStreamPlanUnknownResolverUsesUnclassifiedReason(t *testing.T) {
+	plan := BuildStreamPlan(StreamPlanInput{
+		Enabled:   true,
+		Resolver:  ResolverUnknown,
+		Kind:      "direct",
+		Container: "none",
+		Type:      TypeAuto,
+	})
+
+	if plan.Delivery != DeliveryNone {
+		t.Fatalf("expected none delivery, got %q", plan.Delivery)
+	}
+	if plan.Reason != PlanReasonUnclassified {
+		t.Fatalf("expected unclassified reason, got %q", plan.Reason)
+	}
+}

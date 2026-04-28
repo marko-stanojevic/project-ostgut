@@ -141,7 +141,7 @@ function parsePublicStream(payload: unknown, field: string): ApiStream {
     loudness_sample_duration_seconds: optionalNumber(stream.loudness_sample_duration_seconds, `${field}.loudness_sample_duration_seconds`, STATION_CONTRACT),
     loudness_measured_at: optionalString(stream.loudness_measured_at, `${field}.loudness_measured_at`, STATION_CONTRACT),
     loudness_measurement_status: optionalString(stream.loudness_measurement_status, `${field}.loudness_measurement_status`, STATION_CONTRACT),
-    metadata_enabled: requireBoolean(stream.metadata_enabled, `${field}.metadata_enabled`, STATION_CONTRACT),
+    metadata_mode: requireMetadataMode(stream.metadata_mode, `${field}.metadata_mode`),
     metadata_type: requireString(stream.metadata_type, `${field}.metadata_type`, STATION_CONTRACT),
     metadata_source: optionalString(stream.metadata_source, `${field}.metadata_source`, STATION_CONTRACT),
     metadata_url: optionalString(stream.metadata_url, `${field}.metadata_url`, STATION_CONTRACT),
@@ -154,10 +154,18 @@ function parsePublicStream(payload: unknown, field: string): ApiStream {
   }
 }
 
-function requireMetadataResolver(value: unknown, field: string): 'none' | 'server' | 'client' {
-  if (value === 'none' || value === 'server' || value === 'client') {
+function requireMetadataMode(value: unknown, field: string): 'auto' | 'off' {
+  if (value === 'auto' || value === 'off') {
     return value
   }
 
-  throw new Error(`Invalid ${STATION_CONTRACT}: ${field} must be none, server, or client`)
+  throw new Error(`Invalid ${STATION_CONTRACT}: ${field} must be auto or off`)
+}
+
+function requireMetadataResolver(value: unknown, field: string): 'unknown' | 'none' | 'server' | 'client' {
+  if (value === 'unknown' || value === 'none' || value === 'server' || value === 'client') {
+    return value
+  }
+
+  throw new Error(`Invalid ${STATION_CONTRACT}: ${field} must be unknown, none, server, or client`)
 }

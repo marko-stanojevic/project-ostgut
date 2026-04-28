@@ -61,7 +61,7 @@ type streamResponse struct {
 	LoudnessSampleDuration    float64             `json:"loudness_sample_duration_seconds"`
 	LoudnessMeasuredAt        *string             `json:"loudness_measured_at,omitempty"`
 	LoudnessStatus            string              `json:"loudness_measurement_status"`
-	MetadataEnabled           bool                `json:"metadata_enabled"`
+	MetadataMode              string              `json:"metadata_mode"`
 	MetadataType              string              `json:"metadata_type"`
 	MetadataSource            *string             `json:"metadata_source,omitempty"`
 	MetadataURL               *string             `json:"metadata_url,omitempty"`
@@ -80,7 +80,7 @@ type streamResponse struct {
 }
 
 func toStreamResponse(s *store.StationStream, nowPlaying *store.StreamNowPlaying) streamResponse {
-	metadataEnabled := metadataEnabledForResponse(s)
+	metadataEnabled := metadataModeEnabled(s.MetadataMode)
 	var lastCheckedAt *string
 	if s.LastCheckedAt != nil {
 		formatted := s.LastCheckedAt.UTC().Format(time.RFC3339)
@@ -127,7 +127,7 @@ func toStreamResponse(s *store.StationStream, nowPlaying *store.StreamNowPlaying
 		LoudnessSampleDuration:    s.LoudnessSampleDuration,
 		LoudnessMeasuredAt:        loudnessMeasuredAt,
 		LoudnessStatus:            s.LoudnessStatus,
-		MetadataEnabled:           metadataEnabled,
+		MetadataMode:              normalizeMetadataModeForResponse(s),
 		MetadataType:              s.MetadataType,
 		MetadataSource:            s.MetadataSource,
 		MetadataURL:               s.MetadataURL,
@@ -156,19 +156,18 @@ func toStreamResponse(s *store.StationStream, nowPlaying *store.StreamNowPlaying
 	}
 }
 
-func metadataEnabledForResponse(s *store.StationStream) bool {
+func metadataModeEnabled(mode string) bool {
+	return strings.ToLower(strings.TrimSpace(mode)) != "off"
+}
+
+func normalizeMetadataModeForResponse(s *store.StationStream) string {
 	if s == nil {
-		return false
+		return "auto"
 	}
-	if s.MetadataEnabled {
-		return true
+	if !metadataModeEnabled(s.MetadataMode) {
+		return "off"
 	}
-	return metadata.HasRecoverableMetadataCapability(
-		stringValue(s.MetadataURL),
-		stringValue(s.MetadataProvider),
-		stringValue(s.MetadataSource),
-		s.MetadataResolver,
-	)
+	return "auto"
 }
 
 var publicStationListQueryParams = map[string]struct{}{
@@ -194,19 +193,18 @@ var publicStationSearchQueryParams = map[string]struct{}{
 }
 
 func metadataResolverForResponse(s *store.StationStream) string {
-	if s == nil || !metadataEnabledForResponse(s) {
+	if s == nil || !metadataModeEnabled(s.MetadataMode) {
 		return metadata.ResolverNone
 	}
 	switch strings.ToLower(strings.TrimSpace(s.MetadataResolver)) {
 	case metadata.ResolverClient:
 		return metadata.ResolverClient
+	case metadata.ResolverServer:
+		return metadata.ResolverServer
 	case metadata.ResolverNone:
-		if metadata.IsBrowserReadableMetadataURLHint(stringValue(s.MetadataURL)) {
-			return metadata.ResolverClient
-		}
 		return metadata.ResolverNone
 	default:
-		return metadata.ResolverServer
+		return metadata.ResolverUnknown
 	}
 }
 

@@ -34,7 +34,7 @@ type StationStream struct {
 	LoudnessSampleDuration    float64
 	LoudnessMeasuredAt        *time.Time
 	LoudnessStatus            string
-	MetadataEnabled           bool
+	MetadataMode              string
 	MetadataType              string
 	MetadataSource            *string
 	MetadataURL               *string
@@ -71,7 +71,7 @@ type StationStreamInput struct {
 	LoudnessSampleDuration    float64
 	LoudnessMeasuredAt        *time.Time
 	LoudnessStatus            string
-	MetadataEnabled           bool
+	MetadataMode              string
 	MetadataType              string
 	MetadataSource            *string
 	MetadataURL               *string
@@ -87,19 +87,12 @@ type StationStreamInput struct {
 	LastErrorCode             string
 }
 
-type MetadataResolverSnapshot struct {
-	Resolver    string
-	MetadataURL *string
-	CheckedAt   *time.Time
-	Delayed     *bool
-}
-
 // StationStreamJobSummary contains approved stream worker freshness metrics for admin diagnostics.
 type StationStreamJobSummary struct {
 	ActiveStreams               int
 	ProbeCheckedStreams         int
 	ProbeDueStreams             int
-	MetadataEnabledStreams      int
+	MetadataConfiguredStreams   int
 	MetadataResolverChecked     int
 	MetadataResolverStale       int
 	LastProbeCheckedAt          *time.Time
@@ -124,12 +117,12 @@ func (s *StationStreamStore) AdminJobSummary(ctx context.Context, metadataStaleA
 			COUNT(*)::int,
 			COUNT(*) FILTER (WHERE ss.last_checked_at IS NOT NULL)::int,
 			COUNT(*) FILTER (WHERE ss.next_probe_at <= NOW())::int,
-			COUNT(*) FILTER (WHERE ss.metadata_enabled = true)::int,
-			COUNT(*) FILTER (WHERE ss.metadata_enabled = true AND ss.metadata_resolver_checked_at IS NOT NULL)::int,
-			COUNT(*) FILTER (WHERE ss.metadata_enabled = true AND (ss.metadata_resolver_checked_at IS NULL OR ss.metadata_resolver_checked_at < NOW() - $1::interval))::int,
+			COUNT(*) FILTER (WHERE ss.metadata_mode = 'auto')::int,
+			COUNT(*) FILTER (WHERE ss.metadata_mode = 'auto' AND ss.metadata_resolver_checked_at IS NOT NULL)::int,
+			COUNT(*) FILTER (WHERE ss.metadata_mode = 'auto' AND (ss.metadata_resolver_checked_at IS NULL OR ss.metadata_resolver_checked_at < NOW() - $1::interval))::int,
 			MAX(ss.last_checked_at),
 			MIN(ss.last_checked_at) FILTER (WHERE ss.last_checked_at IS NOT NULL),
-			MAX(ss.metadata_resolver_checked_at) FILTER (WHERE ss.metadata_enabled = true)
+			MAX(ss.metadata_resolver_checked_at) FILTER (WHERE ss.metadata_mode = 'auto')
 		FROM station_streams ss
 		JOIN stations st ON st.id = ss.station_id
 		WHERE ss.is_active = true
@@ -140,7 +133,7 @@ func (s *StationStreamStore) AdminJobSummary(ctx context.Context, metadataStaleA
 		&summary.ActiveStreams,
 		&summary.ProbeCheckedStreams,
 		&summary.ProbeDueStreams,
-		&summary.MetadataEnabledStreams,
+		&summary.MetadataConfiguredStreams,
 		&summary.MetadataResolverChecked,
 		&summary.MetadataResolverStale,
 		&summary.LastProbeCheckedAt,
@@ -184,7 +177,7 @@ func scanStationStreamRow(row Scanner) (*StationStream, error) {
 		&s.LoudnessSampleDuration,
 		&s.LoudnessMeasuredAt,
 		&s.LoudnessStatus,
-		&s.MetadataEnabled,
+		&s.MetadataMode,
 		&s.MetadataType,
 		&s.MetadataSource,
 		&s.MetadataURL,
@@ -289,7 +282,7 @@ func sanitizeStreamInput(in StationStreamInput, fallbackPriority int) StationStr
 		LoudnessSampleDuration:    maxFloat64(in.LoudnessSampleDuration, 0),
 		LoudnessMeasuredAt:        in.LoudnessMeasuredAt,
 		LoudnessStatus:            normalizeLoudnessStatus(in.LoudnessStatus),
-		MetadataEnabled:           in.MetadataEnabled,
+		MetadataMode:              normalizeMetadataMode(in.MetadataMode),
 		MetadataType:              metadataType,
 		MetadataSource:            metadataSource,
 		MetadataURL:               metadataURL,
@@ -398,12 +391,21 @@ func normalizeMetadataURL(v *string) *string {
 	return &trimmed
 }
 
+func normalizeMetadataMode(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "off":
+		return "off"
+	default:
+		return "auto"
+	}
+}
+
 func normalizeMetadataResolver(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "server", "client", "none":
+	case "unknown", "server", "client", "none":
 		return strings.ToLower(strings.TrimSpace(v))
 	default:
-		return ""
+		return "unknown"
 	}
 }
 
@@ -447,7 +449,7 @@ func (s *StationStreamStore) ListByStationID(ctx context.Context, stationID stri
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, metadata_provider, metadata_provider_config, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_mode, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, metadata_provider, metadata_provider_config, health_score,
 			next_probe_at, last_checked_at, last_error, last_probe_error_code
 		FROM station_streams
 		WHERE station_id = $1
@@ -479,7 +481,7 @@ func (s *StationStreamStore) ListByStationIDs(ctx context.Context, stationIDs []
 		SELECT
 			id, station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
-			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, metadata_provider, metadata_provider_config, health_score,
+			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status, metadata_mode, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, metadata_provider, metadata_provider_config, health_score,
 			next_probe_at, last_checked_at, last_error, last_probe_error_code
 		FROM station_streams
 		WHERE station_id = ANY($1::uuid[])
@@ -536,7 +538,7 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 				station_id, url, resolved_url, kind, container, transport,
 				mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 				priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
-				metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, metadata_provider, metadata_provider_config, health_score,
+				metadata_mode, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, metadata_provider, metadata_provider_config, health_score,
 				next_probe_at, last_checked_at, last_error, last_probe_error_code, updated_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6,
@@ -565,7 +567,7 @@ func (s *StationStreamStore) ReplaceForStation(ctx context.Context, stationID st
 			in.LoudnessSampleDuration,
 			in.LoudnessMeasuredAt,
 			in.LoudnessStatus,
-			in.MetadataEnabled,
+			in.MetadataMode,
 			in.MetadataType,
 			in.MetadataSource,
 			in.MetadataURL,
@@ -607,7 +609,7 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 			station_id, url, resolved_url, kind, container, transport,
 			mime_type, codec, bitrate, bit_depth, sample_rate_hz, sample_rate_confidence, channels,
 			priority, is_active, loudness_integrated_lufs, loudness_peak_dbfs, loudness_sample_duration_seconds, loudness_measured_at, loudness_measurement_status,
-			metadata_enabled, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, metadata_provider, metadata_provider_config, health_score,
+			metadata_mode, metadata_type, metadata_source, metadata_url, metadata_resolver, metadata_resolver_checked_at, metadata_delayed, metadata_provider, metadata_provider_config, health_score,
 			next_probe_at, last_checked_at, last_error, last_probe_error_code, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
@@ -618,40 +620,124 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		)
 		ON CONFLICT (station_id, priority) DO UPDATE SET
 			url = EXCLUDED.url,
-			resolved_url = EXCLUDED.resolved_url,
-			kind = EXCLUDED.kind,
-			container = EXCLUDED.container,
-			transport = EXCLUDED.transport,
-			mime_type = EXCLUDED.mime_type,
-			codec = EXCLUDED.codec,
-			bitrate = EXCLUDED.bitrate,
-			bit_depth = EXCLUDED.bit_depth,
-			sample_rate_hz = EXCLUDED.sample_rate_hz,
-			sample_rate_confidence = EXCLUDED.sample_rate_confidence,
-			channels = EXCLUDED.channels,
+			resolved_url = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.resolved_url
+				ELSE station_streams.resolved_url
+			END,
+			kind = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.kind
+				ELSE station_streams.kind
+			END,
+			container = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.container
+				ELSE station_streams.container
+			END,
+			transport = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.transport
+				ELSE station_streams.transport
+			END,
+			mime_type = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.mime_type
+				ELSE station_streams.mime_type
+			END,
+			codec = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.codec
+				ELSE station_streams.codec
+			END,
+			bitrate = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.bitrate
+				ELSE station_streams.bitrate
+			END,
+			bit_depth = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.bit_depth
+				ELSE station_streams.bit_depth
+			END,
+			sample_rate_hz = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.sample_rate_hz
+				ELSE station_streams.sample_rate_hz
+			END,
+			sample_rate_confidence = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.sample_rate_confidence
+				ELSE station_streams.sample_rate_confidence
+			END,
+			channels = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.channels
+				ELSE station_streams.channels
+			END,
 			is_active = EXCLUDED.is_active,
-			loudness_integrated_lufs = EXCLUDED.loudness_integrated_lufs,
-			loudness_peak_dbfs = EXCLUDED.loudness_peak_dbfs,
-			loudness_sample_duration_seconds = EXCLUDED.loudness_sample_duration_seconds,
-			loudness_measured_at = EXCLUDED.loudness_measured_at,
-			loudness_measurement_status = EXCLUDED.loudness_measurement_status,
-			metadata_enabled = EXCLUDED.metadata_enabled,
-			metadata_type = EXCLUDED.metadata_type,
-			metadata_source = EXCLUDED.metadata_source,
-			metadata_url = EXCLUDED.metadata_url,
-			metadata_resolver = EXCLUDED.metadata_resolver,
-			metadata_resolver_checked_at = EXCLUDED.metadata_resolver_checked_at,
-			metadata_delayed = EXCLUDED.metadata_delayed,
-			metadata_provider = EXCLUDED.metadata_provider,
-			metadata_provider_config = EXCLUDED.metadata_provider_config,
+			loudness_integrated_lufs = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.loudness_integrated_lufs
+				ELSE station_streams.loudness_integrated_lufs
+			END,
+			loudness_peak_dbfs = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.loudness_peak_dbfs
+				ELSE station_streams.loudness_peak_dbfs
+			END,
+			loudness_sample_duration_seconds = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.loudness_sample_duration_seconds
+				ELSE station_streams.loudness_sample_duration_seconds
+			END,
+			loudness_measured_at = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.loudness_measured_at
+				ELSE station_streams.loudness_measured_at
+			END,
+			loudness_measurement_status = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.loudness_measurement_status
+				ELSE station_streams.loudness_measurement_status
+			END,
+			metadata_mode = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_mode
+				ELSE station_streams.metadata_mode
+			END,
+			metadata_type = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_type
+				ELSE station_streams.metadata_type
+			END,
+			metadata_source = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_source
+				ELSE station_streams.metadata_source
+			END,
+			metadata_url = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_url
+				ELSE station_streams.metadata_url
+			END,
+			metadata_resolver = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_resolver
+				ELSE station_streams.metadata_resolver
+			END,
+			metadata_resolver_checked_at = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_resolver_checked_at
+				ELSE station_streams.metadata_resolver_checked_at
+			END,
+			metadata_delayed = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_delayed
+				ELSE station_streams.metadata_delayed
+			END,
+			metadata_provider = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_provider
+				ELSE station_streams.metadata_provider
+			END,
+			metadata_provider_config = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.metadata_provider_config
+				ELSE station_streams.metadata_provider_config
+			END,
 			health_score = EXCLUDED.health_score,
 			next_probe_at = CASE
 				WHEN station_streams.url != EXCLUDED.url THEN NOW()
 				ELSE station_streams.next_probe_at
 			END,
-			last_checked_at = EXCLUDED.last_checked_at,
-			last_error = EXCLUDED.last_error,
-			last_probe_error_code = EXCLUDED.last_probe_error_code,
+			last_checked_at = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.last_checked_at
+				ELSE station_streams.last_checked_at
+			END,
+			last_error = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.last_error
+				ELSE station_streams.last_error
+			END,
+			last_probe_error_code = CASE
+				WHEN station_streams.url IS DISTINCT FROM EXCLUDED.url THEN EXCLUDED.last_probe_error_code
+				ELSE station_streams.last_probe_error_code
+			END,
 			updated_at = NOW()`,
 		stationID,
 		n.URL,
@@ -671,7 +757,7 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 		n.LoudnessSampleDuration,
 		n.LoudnessMeasuredAt,
 		n.LoudnessStatus,
-		n.MetadataEnabled,
+		n.MetadataMode,
 		n.MetadataType,
 		n.MetadataSource,
 		n.MetadataURL,
@@ -695,37 +781,6 @@ func (s *StationStreamStore) UpsertPrimaryForStation(ctx context.Context, statio
 	return nil
 }
 
-// ProbeUpdate carries the fields written back after a live HTTP probe.
-type ProbeUpdate struct {
-	ResolvedURL               string
-	Kind                      string
-	Container                 string
-	Transport                 string
-	MimeType                  string
-	Codec                     string
-	Bitrate                   int
-	BitDepth                  int
-	SampleRateHz              int
-	SampleRateConfidence      string
-	Channels                  int
-	IncludeLoudness           bool
-	LoudnessIntegratedLUFS    *float64
-	LoudnessPeakDBFS          *float64
-	LoudnessSampleDuration    float64
-	LoudnessMeasuredAt        *time.Time
-	LoudnessStatus            string
-	HealthScore               *float64
-	IncludeMetadataResolver   bool
-	MetadataResolver          string
-	MetadataURL               *string
-	MetadataResolverCheckedAt *time.Time
-	MetadataDelayed           *bool
-	NextProbeAt               *time.Time
-	LastCheckedAt             time.Time
-	LastError                 *string
-	LastErrorCode             string
-}
-
 // ListDueActiveForApprovedStations returns active streams for approved stations
 // whose next_probe_at has arrived, ordered by next probe time and then stale
 // probe evidence so the recurring worker spends its budget on due listener-facing streams first.
@@ -737,7 +792,7 @@ func (s *StationStreamStore) ListDueActiveForApprovedStations(ctx context.Contex
 		SELECT
 			ss.id, ss.station_id, ss.url, ss.resolved_url, ss.kind, ss.container, ss.transport,
 			ss.mime_type, ss.codec, ss.bitrate, ss.bit_depth, ss.sample_rate_hz, ss.sample_rate_confidence, ss.channels,
-			ss.priority, ss.is_active, ss.loudness_integrated_lufs, ss.loudness_peak_dbfs, ss.loudness_sample_duration_seconds, ss.loudness_measured_at, ss.loudness_measurement_status, ss.metadata_enabled, ss.metadata_type, ss.metadata_source, ss.metadata_url, ss.metadata_resolver, ss.metadata_resolver_checked_at, ss.metadata_delayed, ss.metadata_provider, ss.metadata_provider_config, ss.health_score,
+			ss.priority, ss.is_active, ss.loudness_integrated_lufs, ss.loudness_peak_dbfs, ss.loudness_sample_duration_seconds, ss.loudness_measured_at, ss.loudness_measurement_status, ss.metadata_mode, ss.metadata_type, ss.metadata_source, ss.metadata_url, ss.metadata_resolver, ss.metadata_resolver_checked_at, ss.metadata_delayed, ss.metadata_provider, ss.metadata_provider_config, ss.health_score,
 			ss.next_probe_at, ss.last_checked_at, ss.last_error, ss.last_probe_error_code
 		FROM station_streams ss
 		JOIN stations st ON st.id = ss.station_id
@@ -763,25 +818,24 @@ func (s *StationStreamStore) ListDueActiveForApprovedStations(ctx context.Contex
 	return out, rows.Err()
 }
 
-// ListActiveMetadataEnabledForApprovedStations returns all active metadata-enabled
-// streams attached to approved active stations. This powers explicit admin
-// metadata coverage checks, independent of listener-driven polling state.
-func (s *StationStreamStore) ListActiveMetadataEnabledForApprovedStations(ctx context.Context) ([]*StationStream, error) {
+// ListActiveForApprovedStations returns all active streams attached to approved
+// active stations. Admin maintenance jobs use this authoritative listener-facing
+// scope for re-probing and metadata fetches.
+func (s *StationStreamStore) ListActiveForApprovedStations(ctx context.Context) ([]*StationStream, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT
 			ss.id, ss.station_id, ss.url, ss.resolved_url, ss.kind, ss.container, ss.transport,
 			ss.mime_type, ss.codec, ss.bitrate, ss.bit_depth, ss.sample_rate_hz, ss.sample_rate_confidence, ss.channels,
-			ss.priority, ss.is_active, ss.loudness_integrated_lufs, ss.loudness_peak_dbfs, ss.loudness_sample_duration_seconds, ss.loudness_measured_at, ss.loudness_measurement_status, ss.metadata_enabled, ss.metadata_type, ss.metadata_source, ss.metadata_url, ss.metadata_resolver, ss.metadata_resolver_checked_at, ss.metadata_delayed, ss.metadata_provider, ss.metadata_provider_config, ss.health_score,
+			ss.priority, ss.is_active, ss.loudness_integrated_lufs, ss.loudness_peak_dbfs, ss.loudness_sample_duration_seconds, ss.loudness_measured_at, ss.loudness_measurement_status, ss.metadata_mode, ss.metadata_type, ss.metadata_source, ss.metadata_url, ss.metadata_resolver, ss.metadata_resolver_checked_at, ss.metadata_delayed, ss.metadata_provider, ss.metadata_provider_config, ss.health_score,
 			ss.next_probe_at, ss.last_checked_at, ss.last_error, ss.last_probe_error_code
 		FROM station_streams ss
 		JOIN stations st ON st.id = ss.station_id
 		WHERE ss.is_active = true
-		  AND ss.metadata_enabled = true
 		  AND st.is_active = true
 		  AND st.status = 'approved'
 		ORDER BY st.name ASC, ss.priority ASC, ss.created_at ASC`)
 	if err != nil {
-		return nil, fmt.Errorf("list active metadata-enabled approved station streams: %w", err)
+		return nil, fmt.Errorf("list active approved station streams: %w", err)
 	}
 	defer rows.Close()
 
@@ -789,217 +843,9 @@ func (s *StationStreamStore) ListActiveMetadataEnabledForApprovedStations(ctx co
 	for rows.Next() {
 		ss, err := scanStationStreamRow(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan active metadata-enabled approved station stream: %w", err)
+			return nil, fmt.Errorf("scan active approved station stream: %w", err)
 		}
 		out = append(out, ss)
 	}
 	return out, rows.Err()
-}
-
-// UpdateProbeResult writes back the fields discovered by a live HTTP probe.
-// Bitrate is intentionally not updated here; it is set once at editorial save
-// time and kept stable afterward.
-func (s *StationStreamStore) UpdateProbeResult(ctx context.Context, id string, u ProbeUpdate) error {
-	_, err := s.pool.Exec(ctx, `
-		UPDATE station_streams SET
-			resolved_url   = $1,
-			kind           = $2,
-			container      = $3,
-			transport      = $4,
-			mime_type      = $5,
-			codec          = CASE WHEN trim($6) <> '' THEN $6 ELSE codec END,
-			bit_depth      = CASE WHEN $7 > 0       THEN $7 ELSE bit_depth END,
-			sample_rate_hz = CASE WHEN $8 > 0       THEN $8 ELSE sample_rate_hz END,
-			sample_rate_confidence = CASE
-				WHEN trim($9) = '' OR trim($9) = 'unknown' THEN sample_rate_confidence
-				ELSE $9
-			END,
-			channels       = CASE WHEN $10 > 0       THEN $10 ELSE channels END,
-			loudness_integrated_lufs = CASE
-				WHEN $11::boolean THEN $12
-				ELSE loudness_integrated_lufs
-			END,
-			loudness_peak_dbfs = CASE
-				WHEN $11::boolean THEN $13
-				ELSE loudness_peak_dbfs
-			END,
-			loudness_sample_duration_seconds = CASE
-				WHEN NOT $11::boolean THEN loudness_sample_duration_seconds
-				WHEN $14::double precision < 0 THEN 0
-				ELSE $14::double precision
-			END,
-			loudness_measured_at = CASE
-				WHEN $11::boolean THEN $15
-				ELSE loudness_measured_at
-			END,
-			loudness_measurement_status = CASE
-				WHEN $11::boolean THEN $16
-				ELSE loudness_measurement_status
-			END,
-			metadata_resolver = CASE
-				WHEN $17::boolean THEN $18
-				ELSE metadata_resolver
-			END,
-			metadata_resolver_checked_at = CASE
-				WHEN $17::boolean THEN $19
-				ELSE metadata_resolver_checked_at
-			END,
-			metadata_url = CASE
-				WHEN $17::boolean AND $20::text IS NOT NULL AND trim($20::text) <> '' THEN $20
-				ELSE metadata_url
-			END,
-			metadata_delayed = CASE
-				WHEN $17::boolean AND $21::boolean IS NOT NULL THEN $21
-				ELSE metadata_delayed
-			END,
-			last_checked_at = $22,
-			last_error     = $23,
-			last_probe_error_code = $24,
-			next_probe_at = COALESCE($25, next_probe_at),
-			health_score   = CASE
-				WHEN $26::double precision IS NULL THEN health_score
-				WHEN $26::double precision < 0 THEN 0
-				WHEN $26::double precision > 1 THEN 1
-				ELSE $26::double precision
-			END,
-			updated_at     = NOW()
-		WHERE id = $27`,
-		u.ResolvedURL,
-		u.Kind,
-		u.Container,
-		u.Transport,
-		u.MimeType,
-		u.Codec,
-		u.BitDepth,
-		u.SampleRateHz,
-		normalizeSampleRateConfidence(u.SampleRateConfidence),
-		u.Channels,
-		u.IncludeLoudness,
-		u.LoudnessIntegratedLUFS,
-		u.LoudnessPeakDBFS,
-		maxFloat64(u.LoudnessSampleDuration, 0),
-		u.LoudnessMeasuredAt,
-		normalizeLoudnessStatus(u.LoudnessStatus),
-		u.IncludeMetadataResolver,
-		normalizeMetadataResolver(u.MetadataResolver),
-		u.MetadataResolverCheckedAt,
-		normalizeMetadataURL(u.MetadataURL),
-		u.MetadataDelayed,
-		u.LastCheckedAt,
-		u.LastError,
-		normalizeProbeErrorCode(u.LastErrorCode),
-		u.NextProbeAt,
-		u.HealthScore,
-		id,
-	)
-	if err != nil {
-		return fmt.Errorf("update probe result: %w", err)
-	}
-	var stationID string
-	if err := s.pool.QueryRow(ctx, `SELECT station_id FROM station_streams WHERE id = $1`, id).Scan(&stationID); err != nil {
-		return fmt.Errorf("load stream station: %w", err)
-	}
-	if err := s.syncStationReliability(ctx, s.pool, stationID); err != nil {
-		return err
-	}
-	return nil
-}
-
-// UpdateMetadataDetection writes the detected metadata source + URL hint back
-// to the editorial row. Live now-playing data lives in stream_now_playing and
-// is not touched here.
-func (s *StationStreamStore) UpdateMetadataDetection(
-	ctx context.Context,
-	id string,
-	metadataSource *string,
-	metadataURL *string,
-	metadataDelayed *bool,
-) error {
-	src := normalizeMetadataSource(metadataSource)
-	url := normalizeMetadataURL(metadataURL)
-	_, err := s.pool.Exec(ctx, `
-		UPDATE station_streams
-		SET
-			metadata_source = COALESCE($1, metadata_source),
-			metadata_url    = COALESCE($2, metadata_url),
-			metadata_delayed = CASE
-				WHEN $3::boolean IS NOT NULL THEN $3
-				ELSE metadata_delayed
-			END,
-			updated_at      = NOW()
-		WHERE id = $4
-		  AND (
-			($1::text IS NOT NULL AND metadata_source IS DISTINCT FROM $1)
-			OR ($2::text IS NOT NULL AND metadata_url IS DISTINCT FROM $2)
-			OR ($3::boolean IS NOT NULL AND metadata_delayed IS DISTINCT FROM $3)
-		  )`,
-		src,
-		url,
-		metadataDelayed,
-		id,
-	)
-	if err != nil {
-		return fmt.Errorf("update metadata detection: %w", err)
-	}
-	return nil
-}
-
-func (s *StationStreamStore) UpdateMetadataResolver(
-	ctx context.Context,
-	id string,
-	snapshot MetadataResolverSnapshot,
-) error {
-	resolver := normalizeMetadataResolver(snapshot.Resolver)
-	metadataURL := normalizeMetadataURL(snapshot.MetadataURL)
-	_, err := s.pool.Exec(ctx, `
-		UPDATE station_streams
-		SET
-			metadata_resolver = $1,
-			metadata_url = CASE
-				WHEN $2::text IS NOT NULL AND trim($2::text) <> '' THEN $2
-				ELSE metadata_url
-			END,
-			metadata_resolver_checked_at = $3,
-			metadata_delayed = CASE
-				WHEN $4::boolean IS NOT NULL THEN $4
-				ELSE metadata_delayed
-			END,
-			updated_at = NOW()
-		WHERE id = $5
-		  AND (
-			metadata_resolver IS DISTINCT FROM $1
-			OR (
-				$2::text IS NOT NULL AND trim($2::text) <> ''
-				AND metadata_url IS DISTINCT FROM $2
-			)
-			OR metadata_resolver_checked_at IS DISTINCT FROM $3
-			OR ($4::boolean IS NOT NULL AND metadata_delayed IS DISTINCT FROM $4)
-		  )`,
-		resolver,
-		metadataURL,
-		snapshot.CheckedAt,
-		snapshot.Delayed,
-		id,
-	)
-	if err != nil {
-		return fmt.Errorf("update metadata resolver: %w", err)
-	}
-	return nil
-}
-
-func (s *StationStreamStore) UpdateMetadataEnabled(ctx context.Context, id string, enabled bool) error {
-	_, err := s.pool.Exec(ctx, `
-		UPDATE station_streams
-		SET
-			metadata_enabled = $1,
-			updated_at = NOW()
-		WHERE id = $2
-		  AND metadata_enabled IS DISTINCT FROM $1`,
-		enabled,
-		id,
-	)
-	if err != nil {
-		return fmt.Errorf("update metadata enabled: %w", err)
-	}
-	return nil
 }

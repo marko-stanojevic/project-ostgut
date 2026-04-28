@@ -27,7 +27,7 @@ export function toStation(s: ApiStation): Station {
             channels: st.channels,
             priority: st.priority,
             isActive: st.is_active,
-            metadataEnabled: st.metadata_enabled,
+            metadataMode: st.metadata_mode,
             metadataType: st.metadata_type,
             metadataSource: st.metadata_source,
             metadataUrl: st.metadata_url,

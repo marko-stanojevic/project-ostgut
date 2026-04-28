@@ -171,7 +171,8 @@ func (p *MetadataPoller) BulkFetchIsRunning() bool {
 }
 
 // TriggerApprovedMetadataFetch starts an explicit admin-requested metadata
-// coverage pass over every active metadata-enabled stream on approved stations.
+// coverage pass over every active stream on approved stations whose editorial
+// metadata mode allows probing.
 // It reuses the poller's global upstream fetch slots so this diagnostic job
 // cannot starve listener-driven polling.
 func (p *MetadataPoller) TriggerApprovedMetadataFetch(ctx context.Context) bool {
@@ -196,7 +197,7 @@ func (p *MetadataPoller) TriggerApprovedMetadataFetch(ctx context.Context) bool 
 }
 
 func (p *MetadataPoller) fetchApprovedMetadata(ctx context.Context) {
-	streams, err := p.streams.ListActiveMetadataEnabledForApprovedStations(ctx)
+	streams, err := p.streams.ListActiveForApprovedStations(ctx)
 	if err != nil {
 		p.log.Error("metadata poller: list approved metadata streams", "error", err)
 		return
@@ -361,25 +362,42 @@ func (p *MetadataPoller) fetchAndPersist(ctx context.Context, stream *store.Stat
 	if err := p.now.Upsert(persistCtx, snap); err != nil {
 		p.log.Warn("metadata poller: persist snapshot failed", "stream_id", stream.ID, "error", err)
 	}
-	if np.ErrorCode == metadata.ErrorCodeNoMeta {
-		checkedAt := np.FetchedAt.UTC()
-		if checkedAt.IsZero() {
-			checkedAt = time.Now().UTC()
-		}
-		snapshot := p.metadataResolverSnapshotAfterNoMetadata(fetchCtx, stream, checkedAt, ev.DelayedICY)
-		if err := p.streams.UpdateMetadataResolver(persistCtx, stream.ID, snapshot); err != nil {
-			p.log.Warn("metadata poller: disable metadata resolver failed", "stream_id", stream.ID, "error", err)
-		}
+
+	metadataEnabled := metadataModeEnabled(stream.MetadataMode)
+
+	hintedMetadataURL := stringValue(stream.MetadataURL)
+	if hinted := strings.TrimSpace(np.MetadataURL); hinted != "" {
+		hintedMetadataURL = hinted
 	}
-	// Persist newly-discovered detection hint (source, metadata_url) back to
-	// the editorial row so future cold reads can pick the right strategy fast.
-	if np.Source != "" || np.MetadataURL != "" {
-		src := optionalString(np.Source)
-		url := optionalString(np.MetadataURL)
-		delayed := ev.DelayedICY
-		if err := p.streams.UpdateMetadataDetection(persistCtx, stream.ID, src, url, &delayed); err != nil {
-			p.log.Warn("metadata poller: update detection failed", "stream_id", stream.ID, "error", err)
-		}
+
+	routing := p.router.Classify(fetchCtx, radio.MetadataRouteInput{
+		StreamURL:       streamURL,
+		MetadataURLHint: hintedMetadataURL,
+		Kind:            stream.Kind,
+		Container:       stream.Container,
+		MetadataEnabled: metadataEnabled,
+		MetadataType:    stream.MetadataType,
+	})
+	if np.ErrorCode == metadata.ErrorCodeNoMeta && routing.Resolver != metadata.ResolverClient {
+		routing.Resolver = metadata.ResolverNone
+		routing.MetadataURL = nil
+	}
+
+	metadataURL := optionalString(np.MetadataURL)
+	if metadataURL == nil {
+		metadataURL = routing.MetadataURL
+	}
+	if err := p.streams.ApplyDiagnosticsUpdate(persistCtx, stream.ID, store.StreamDiagnosticsUpdate{
+		Metadata: &store.StreamMetadataUpdate{
+			Source:            optionalString(np.Source),
+			URL:               metadataURL,
+			Delayed:           &ev.DelayedICY,
+			IncludeResolver:   true,
+			Resolver:          routing.Resolver,
+			ResolverCheckedAt: &routing.CheckedAt,
+		},
+	}); err != nil {
+		p.log.Warn("metadata poller: apply metadata diagnostics failed", "stream_id", stream.ID, "error", err)
 	}
 
 	out := snapshotFromNowPlaying(np)
@@ -397,43 +415,6 @@ func (p *MetadataPoller) acquireFetchSlot(ctx context.Context) (func(), bool) {
 
 func isNoMetadataSnapshot(snap *Snapshot) bool {
 	return snap != nil && snap.ErrorCode == metadata.ErrorCodeNoMeta
-}
-
-func (p *MetadataPoller) metadataResolverSnapshotAfterNoMetadata(
-	ctx context.Context,
-	stream *store.StationStream,
-	checkedAt time.Time,
-	delayed bool,
-) store.MetadataResolverSnapshot {
-	snapshot := store.MetadataResolverSnapshot{
-		Resolver:  metadata.ResolverNone,
-		CheckedAt: &checkedAt,
-		Delayed:   &delayed,
-	}
-	if stream == nil || !metadataEnabledForResponse(stream) {
-		return snapshot
-	}
-
-	streamURL := strings.TrimSpace(stream.ResolvedURL)
-	if streamURL == "" {
-		streamURL = strings.TrimSpace(stream.URL)
-	}
-	if streamURL == "" {
-		return snapshot
-	}
-
-	routing := p.router.Classify(ctx, radio.MetadataRouteInput{
-		StreamURL:       streamURL,
-		MetadataURLHint: stringValue(stream.MetadataURL),
-		Kind:            stream.Kind,
-		Container:       stream.Container,
-		MetadataEnabled: metadataEnabledForResponse(stream),
-		MetadataType:    stream.MetadataType,
-	})
-	snapshot.Resolver = routing.Resolver
-	snapshot.MetadataURL = routing.MetadataURL
-	snapshot.CheckedAt = &routing.CheckedAt
-	return snapshot
 }
 
 func (p *MetadataPoller) broadcast(ch *pollerChannel, snap Snapshot) {

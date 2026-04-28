@@ -41,7 +41,7 @@ const jobActions: Array<{
     id: 'metadata-fetch',
     statusCheckID: 'metadata',
     title: 'Metadata fetch',
-    description: 'Fetch now-playing metadata across approved metadata-enabled streams without opening each station.',
+    description: 'Fetch now-playing metadata across approved active streams and refresh their metadata routing without opening each station.',
     buttonLabel: 'Fetch metadata',
   },
 ]

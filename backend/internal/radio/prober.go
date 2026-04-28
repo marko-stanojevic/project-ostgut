@@ -46,10 +46,8 @@ func NewProber(streamStore *store.StationStreamStore, log *slog.Logger, browserP
 	}
 }
 
-// Run blocks, re-probing all active streams on ReprobeInterval.
-// It probes once on startup so newly-ingested streams are classified quickly.
+// Run blocks, re-probing all active approved streams on ReprobeInterval.
 func (p *Prober) Run(ctx context.Context) {
-	p.runOnce(ctx)
 	ticker := time.NewTicker(ReprobeInterval)
 	defer ticker.Stop()
 	for {
@@ -79,7 +77,7 @@ func (p *Prober) Trigger(ctx context.Context) bool {
 	}
 	go func() {
 		defer p.mu.Unlock()
-		p.reprobeAll(ctx)
+		p.reprobeAll(ctx, true)
 	}()
 	return true
 }
@@ -90,18 +88,30 @@ func (p *Prober) runOnce(ctx context.Context) {
 		return
 	}
 	defer p.mu.Unlock()
-	p.reprobeAll(ctx)
+	p.reprobeAll(ctx, false)
 }
 
-func (p *Prober) reprobeAll(ctx context.Context) {
+func (p *Prober) reprobeAll(ctx context.Context, includeAllApproved bool) {
 	now := time.Now().UTC()
-	streams, err := p.streamStore.ListDueActiveForApprovedStations(ctx, now, reprobeBatchLimit)
+	var (
+		streams []*store.StationStream
+		err     error
+	)
+	if includeAllApproved {
+		streams, err = p.streamStore.ListActiveForApprovedStations(ctx)
+	} else {
+		streams, err = p.streamStore.ListDueActiveForApprovedStations(ctx, now, reprobeBatchLimit)
+	}
 	if err != nil {
 		p.log.Error("prober: list due active approved streams", "error", err)
 		return
 	}
 
-	p.log.Info("stream re-probe cycle started", "event", "stream_reprobe_cycle_started", "due_approved_streams", len(streams))
+	p.log.Info("stream re-probe cycle started",
+		"event", "stream_reprobe_cycle_started",
+		"trigger_scope", map[bool]string{true: "all_approved", false: "due_only"}[includeAllApproved],
+		"approved_streams", len(streams),
+	)
 	start := time.Now()
 
 	sem := make(chan struct{}, reprobeWorkers)
@@ -149,33 +159,36 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 				MetadataURLHint: derefString(stream.MetadataURL),
 				Kind:            resolverKind,
 				Container:       resolverContainer,
-				MetadataEnabled: stream.MetadataEnabled,
+				MetadataEnabled: strings.ToLower(strings.TrimSpace(stream.MetadataMode)) != "off",
 				MetadataType:    stream.MetadataType,
 			})
 			nextHealth := nextProbeHealthScore(stream.HealthScore, result.LastError == nil)
 			nextProbeAt := NextProbeAt(result.LastCheckedAt, result.LastErrorCode)
 
-			if err := p.streamStore.UpdateProbeResult(ctx, stream.ID, store.ProbeUpdate{
-				ResolvedURL:               result.ResolvedURL,
-				Kind:                      result.Kind,
-				Container:                 result.Container,
-				Transport:                 result.Transport,
-				MimeType:                  result.MimeType,
-				Codec:                     result.Codec,
-				Bitrate:                   result.Bitrate,
-				BitDepth:                  result.BitDepth,
-				SampleRateHz:              result.SampleRateHz,
-				SampleRateConfidence:      result.SampleRateConfidence,
-				Channels:                  result.Channels,
-				HealthScore:               &nextHealth,
-				IncludeMetadataResolver:   true,
-				MetadataResolver:          routing.Resolver,
-				MetadataResolverCheckedAt: &routing.CheckedAt,
-				MetadataURL:               routing.MetadataURL,
-				NextProbeAt:               &nextProbeAt,
-				LastCheckedAt:             result.LastCheckedAt,
-				LastError:                 result.LastError,
-				LastErrorCode:             result.LastErrorCode,
+			if err := p.streamStore.ApplyDiagnosticsUpdate(ctx, stream.ID, store.StreamDiagnosticsUpdate{
+				Quality: &store.StreamQualityUpdate{
+					ResolvedURL:          result.ResolvedURL,
+					Kind:                 result.Kind,
+					Container:            result.Container,
+					Transport:            result.Transport,
+					MimeType:             result.MimeType,
+					Codec:                result.Codec,
+					BitDepth:             result.BitDepth,
+					SampleRateHz:         result.SampleRateHz,
+					SampleRateConfidence: result.SampleRateConfidence,
+					Channels:             result.Channels,
+					HealthScore:          &nextHealth,
+					NextProbeAt:          &nextProbeAt,
+					LastCheckedAt:        result.LastCheckedAt,
+					LastError:            result.LastError,
+					LastErrorCode:        result.LastErrorCode,
+				},
+				Metadata: &store.StreamMetadataUpdate{
+					URL:               routing.MetadataURL,
+					IncludeResolver:   true,
+					Resolver:          routing.Resolver,
+					ResolverCheckedAt: &routing.CheckedAt,
+				},
 			}); err != nil {
 				// Graceful shutdown can cancel ctx while workers are flushing results.
 				// Treat cancellation as expected and avoid noisy WARN logs.
@@ -190,7 +203,8 @@ func (p *Prober) reprobeAll(ctx context.Context) {
 	wg.Wait()
 	p.log.Info("stream re-probe cycle completed",
 		"event", "stream_reprobe_cycle_completed",
-		"due_approved_streams", len(streams),
+		"trigger_scope", map[bool]string{true: "all_approved", false: "due_only"}[includeAllApproved],
+		"approved_streams", len(streams),
 		"duration_ms", time.Since(start).Milliseconds(),
 	)
 }
