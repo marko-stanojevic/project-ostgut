@@ -49,6 +49,25 @@ type Config struct {
 	// Defaults to "info".
 	LogLevel string
 
+	// OTelTracesExporter controls backend trace export ("none" | "stdout" | "otlp").
+	// Defaults to "none" so local development stays lightweight until enabled.
+	OTelTracesExporter string
+
+	// OTelServiceName is the OpenTelemetry service.name resource attribute.
+	OTelServiceName string
+
+	// ServiceVersion is emitted as service.version when available.
+	ServiceVersion string
+
+	// OTelExporterOTLPEndpoint is the standard OTLP base endpoint.
+	OTelExporterOTLPEndpoint string
+
+	// OTelExporterOTLPTracesEndpoint is the standard OTLP traces endpoint.
+	OTelExporterOTLPTracesEndpoint string
+
+	// OTelExporterOTLPProtocol selects the OTLP transport ("http/protobuf" | "grpc").
+	OTelExporterOTLPProtocol string
+
 	// Paddle billing configuration.
 	PaddleAPIKey        string
 	PaddleWebhookSecret string
@@ -125,27 +144,33 @@ func Load() (*Config, error) {
 	browserMetadataProbeOrigins := splitCSV(getEnv("BROWSER_METADATA_PROBE_ORIGINS", strings.Join(allowedOrigins, ",")))
 
 	cfg := &Config{
-		Port:                        port,
-		DatabaseURL:                 databaseURL,
-		JWTSecret:                   jwtSecret,
-		OAuthSharedSecret:           oauthSharedSecret,
-		PublicAPIBaseURL:            strings.TrimRight(os.Getenv("PUBLIC_API_BASE_URL"), "/"),
-		TrustedProxies:              splitCSV(os.Getenv("TRUSTED_PROXIES")),
-		AllowedOrigins:              allowedOrigins,
-		BrowserMetadataProbeOrigins: browserMetadataProbeOrigins,
-		Env:                         env,
-		LogLevel:                    getEnv("LOG_LEVEL", "info"),
-		PaddleAPIKey:                os.Getenv("PADDLE_API_KEY"),
-		PaddleWebhookSecret:         os.Getenv("PADDLE_WEBHOOK_SECRET"),
-		PaddleClientToken:           os.Getenv("PADDLE_CLIENT_TOKEN"),
-		PaddlePriceID:               os.Getenv("PADDLE_PRICE_ID"),
-		MediaUploadBaseURL:          strings.TrimRight(os.Getenv("MEDIA_UPLOAD_BASE_URL"), "/"),
-		MediaUploadSigningSecret:    getEnv("MEDIA_UPLOAD_SIGNING_SECRET", jwtSecret),
-		MediaStorageAccountName:     strings.TrimSpace(os.Getenv("MEDIA_STORAGE_ACCOUNT_NAME")),
-		MediaStorageContainerName:   strings.TrimSpace(os.Getenv("MEDIA_STORAGE_CONTAINER_NAME")),
-		MediaStorageAccountKey:      strings.TrimSpace(os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")),
-		NewRelicLicenseKey:          os.Getenv("NEW_RELIC_LICENSE_KEY"),
-		NewRelicAppName:             getEnv("NEW_RELIC_APP_NAME", "ostgut-backend"),
+		Port:                           port,
+		DatabaseURL:                    databaseURL,
+		JWTSecret:                      jwtSecret,
+		OAuthSharedSecret:              oauthSharedSecret,
+		PublicAPIBaseURL:               strings.TrimRight(os.Getenv("PUBLIC_API_BASE_URL"), "/"),
+		TrustedProxies:                 splitCSV(os.Getenv("TRUSTED_PROXIES")),
+		AllowedOrigins:                 allowedOrigins,
+		BrowserMetadataProbeOrigins:    browserMetadataProbeOrigins,
+		Env:                            env,
+		LogLevel:                       getEnv("LOG_LEVEL", "info"),
+		OTelTracesExporter:             getEnv("OTEL_TRACES_EXPORTER", "none"),
+		OTelServiceName:                getEnv("OTEL_SERVICE_NAME", "backend"),
+		ServiceVersion:                 strings.TrimSpace(os.Getenv("SERVICE_VERSION")),
+		OTelExporterOTLPEndpoint:       strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+		OTelExporterOTLPTracesEndpoint: strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")),
+		OTelExporterOTLPProtocol:       strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")),
+		PaddleAPIKey:                   os.Getenv("PADDLE_API_KEY"),
+		PaddleWebhookSecret:            os.Getenv("PADDLE_WEBHOOK_SECRET"),
+		PaddleClientToken:              os.Getenv("PADDLE_CLIENT_TOKEN"),
+		PaddlePriceID:                  os.Getenv("PADDLE_PRICE_ID"),
+		MediaUploadBaseURL:             strings.TrimRight(os.Getenv("MEDIA_UPLOAD_BASE_URL"), "/"),
+		MediaUploadSigningSecret:       getEnv("MEDIA_UPLOAD_SIGNING_SECRET", jwtSecret),
+		MediaStorageAccountName:        strings.TrimSpace(os.Getenv("MEDIA_STORAGE_ACCOUNT_NAME")),
+		MediaStorageContainerName:      strings.TrimSpace(os.Getenv("MEDIA_STORAGE_CONTAINER_NAME")),
+		MediaStorageAccountKey:         strings.TrimSpace(os.Getenv("AZURE_STORAGE_ACCOUNT_KEY")),
+		NewRelicLicenseKey:             os.Getenv("NEW_RELIC_LICENSE_KEY"),
+		NewRelicAppName:                getEnv("NEW_RELIC_APP_NAME", "ostgut-backend"),
 	}
 
 	if err := validatePaddleConfig(cfg); err != nil {

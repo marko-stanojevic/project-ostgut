@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -33,7 +34,10 @@ func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 		if requestID == "" {
 			requestID = newRequestID()
 		}
-		traceID := traceIDFromTraceparent(c.GetHeader("traceparent"))
+		traceID := activeTraceID(c.Request.Context())
+		if traceID == "" {
+			traceID = traceIDFromTraceparent(c.GetHeader("traceparent"))
+		}
 
 		c.Set(ctxKeyRequestID, requestID)
 		if traceID != "" {
@@ -104,10 +108,21 @@ func RequestIDFromContext(ctx context.Context) string {
 
 // TraceIDFromContext retrieves the W3C trace ID from a standard context.
 func TraceIDFromContext(ctx context.Context) string {
+	if traceID := activeTraceID(ctx); traceID != "" {
+		return traceID
+	}
 	if id, ok := ctx.Value(traceIDContextKey).(string); ok {
 		return id
 	}
 	return ""
+}
+
+func activeTraceID(ctx context.Context) string {
+	spanContext := oteltrace.SpanContextFromContext(ctx)
+	if !spanContext.IsValid() || !spanContext.HasTraceID() {
+		return ""
+	}
+	return spanContext.TraceID().String()
 }
 
 func requestIDFromHeader(value string) string {

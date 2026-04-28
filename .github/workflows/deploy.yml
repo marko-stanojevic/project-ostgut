@@ -183,10 +183,12 @@ jobs:
             -target=azurerm_postgresql_flexible_server_firewall_rule.azure_services \
             -target=azurerm_container_registry.main \
             -target=azurerm_log_analytics_workspace.main \
+            -target=azurerm_application_insights.main \
             -target=azurerm_user_assigned_identity.backend \
             -target=azurerm_role_assignment.acr_pull \
             -target=azurerm_user_assigned_identity.frontend \
-            -target=azurerm_role_assignment.acr_pull_frontend
+            -target=azurerm_role_assignment.acr_pull_frontend \
+            -target=azapi_update_resource.container_app_environment_telemetry
 
       - name: Read tofu outputs
         id: tofu-output

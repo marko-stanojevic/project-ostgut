@@ -125,6 +125,16 @@ resource "azurerm_log_analytics_workspace" "main" {
   tags                = local.common_tags
 }
 
+# Workspace-based Application Insights for application traces and log correlation.
+resource "azurerm_application_insights" "main" {
+  name                = "appi-${local.prefix}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  workspace_id        = azurerm_log_analytics_workspace.main.id
+  application_type    = "web"
+  tags                = local.common_tags
+}
+
 # ──────────────────────────────────────────────
 # Container Apps Environment
 # ──────────────────────────────────────────────
@@ -134,6 +144,38 @@ resource "azurerm_container_app_environment" "main" {
   location                   = azurerm_resource_group.main.location
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
   tags                       = local.common_tags
+}
+
+# The managed Container Apps OpenTelemetry agent receives app OTLP signals and
+# forwards traces/logs to Application Insights. The agent injects the OTLP gRPC
+# endpoint into container apps at runtime.
+resource "azapi_update_resource" "container_app_environment_telemetry" {
+  name      = azurerm_container_app_environment.main.name
+  parent_id = azurerm_resource_group.main.id
+  type      = "Microsoft.App/managedEnvironments@2023-11-02-preview"
+
+  body = jsonencode({
+    properties = {
+      appInsightsConfiguration = {
+        connectionString = azurerm_application_insights.main.connection_string
+      }
+      appLogsConfiguration = {
+        destination = "log-analytics"
+        logAnalyticsConfiguration = {
+          customerId = azurerm_log_analytics_workspace.main.workspace_id
+          sharedKey  = azurerm_log_analytics_workspace.main.primary_shared_key
+        }
+      }
+      openTelemetryConfiguration = {
+        tracesConfiguration = {
+          destinations = ["appInsights"]
+        }
+        logsConfiguration = {
+          destinations = ["appInsights"]
+        }
+      }
+    }
+  })
 }
 
 # ──────────────────────────────────────────────
@@ -243,6 +285,18 @@ resource "azurerm_container_app" "backend" {
         # reachable except through that ingress.
         name  = "TRUSTED_PROXIES"
         value = "0.0.0.0/0,::/0"
+      }
+      env {
+        name  = "OTEL_TRACES_EXPORTER"
+        value = "otlp"
+      }
+      env {
+        name  = "OTEL_SERVICE_NAME"
+        value = "backend"
+      }
+      env {
+        name  = "SERVICE_VERSION"
+        value = var.backend_image_tag
       }
       env {
         name        = "PADDLE_API_KEY"
